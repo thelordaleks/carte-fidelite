@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carte de fidélité</title>
+  <style>
+    body {
+      background-color: #ececec;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .card {
+      width: 340px;
+      height: 200px;
+      background: linear-gradient(145deg, #f9d423, #ff4e50);
+      border-radius: 20px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      color: white;
+      padding: 20px;
+      position: relative;
+    }
+    .logo {
+      font-weight: bold;
+      font-size: 18px;
+      text-align: right;
+    }
+    .name {
+      margin-top: 30px;
+      font-size: 22px;
+    }
+    .barcode {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: white;
+      padding: 5px;
+      border-radius: 5px;
+    }
+    img {
+      height: 40px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">★ MDL Vaillant</div>
+    <div class="name"><%= carte.prenom %> <%= carte.nom %></div>
+    <div class="barcode">
+      <img src="https://barcode.tec-it.com/barcode.ashx?data=<%= carte.code %>&code=Code128&translate-esc=off" />
+    </div>
+  </div>
+</body>
+</html>
