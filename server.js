@@ -96,6 +96,24 @@ app.get("/new", (req, res) => {
   `);
 });
 
+app.get("/", (req, res) => {
+  res.send(`
+    <html>
+      <head><title>Serveur Carte Fidélité MDL</title></head>
+      <body style="font-family:Arial;text-align:center;padding:40px">
+        <h2>✅ Serveur MDL en ligne</h2>
+        <p>Les routes disponibles :</p>
+        <ul style="list-style:none">
+          <li><a href="/new">/new</a> — Test carte</li>
+          <li>/api/create-card — API pour Excel</li>
+          <li>/card/:id — Afficher une carte générée</li>
+        </ul>
+      </body>
+    </html>
+  `);
+});
+
+
 // Lancement du serveur
 app.listen(PORT, () => {
   console.log(`🚀 Serveur lancé sur le port ${PORT}`);
