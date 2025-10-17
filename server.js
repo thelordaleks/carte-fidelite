@@ -20,13 +20,13 @@ app.use(express.json());
 // Fichiers statiques (images, etc.)
 app.use("/static", express.static(path.join(__dirname, "static")));
 
-// Trace chaque requête (utile pour diagnostiquer les 404)
+// Trace chaque requête (diagnostic)
 app.use((req, _res, next) => {
   console.log(`[TRACE] ${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
   next();
 });
 
-// Active EJS si /views existe (optionnel)
+// Active EJS (si /views existe)
 try {
   app.set("view engine", "ejs");
   app.set("views", path.join(__dirname, "views"));
@@ -37,6 +37,9 @@ const cartes = {};
 
 // ===== Santé =====
 app.get("/health", (_req, res) => res.send("OK"));
+
+// ===== Favicon (évite un 404 bruyant) =====
+app.get("/favicon.ico", (_req, res) => res.status(204).end());
 
 // ===== Page d'accueil =====
 app.get("/", (_req, res) => {
@@ -84,11 +87,11 @@ app.post("/api/create-card", (req, res) => {
 
   const url = `${PUBLIC_HOST}/card/${id}`;
   console.log(`✅ Carte générée : ${nom} ${prenom} → ${url}`);
-  // { url, id } pour rester compatible avec ta macro
+  // Garde le format { url } pour rester compatible avec ta macro actuelle
   res.json({ url, id });
 });
 
-// GET sur l’API → 405 explicite (évite le 404 trompeur)
+// GET sur /api/create-card -> aide (405)
 app.get("/api/create-card", (_req, res) => {
   res.status(405).json({ error: "Utilise POST sur /api/create-card" });
 });
@@ -103,9 +106,12 @@ app.get("/card/:id", (req, res) => {
 
   // Si EJS est dispo et que views/card.ejs existe, on l'utilise
   if (app.get("view engine") === "ejs") {
-    try {
-      return res.render("card", { carte });
-    } catch { /* si pas de template, on tombe en fallback */ }
+    const timestamp = Date.now();
+    return res.render("card", {
+      carte,
+      baseUrl: PUBLIC_HOST, // nécessaire pour card.ejs
+      timestamp             // cache-busting ?t=...
+    });
   }
 
   // Fallback HTML inline si EJS absent
