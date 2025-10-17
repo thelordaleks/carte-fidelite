@@ -1,103 +1,147 @@
 // ======== Dépendances ========
 const express = require("express");
-const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
 const bwipjs = require("bwip-js");
 
-// jsonwebtoken (optionnel au démarrage pour éviter un crash si non installé)
+// jsonwebtoken est optionnel: on ne plante pas si non installé
 let jwt = null;
-try { jwt = require("jsonwebtoken"); } catch (e) {
-  console.warn("⚠️ jsonwebtoken non installé — liens signés désactivés (temporaire)");
-}
+try { jwt = require("jsonwebtoken"); } catch { /* noop */ }
 
 // ======== Configuration ========
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET = process.env.SECRET || "dev-secret-change-me";
 
-// ✅ JSON
+// ======== Middlewares ========
 app.use(express.json());
+app.use("/static", express.static(path.join(__dirname, "static"))); // mets carte-mdl.png ici
 
-// Static
-app.use("/static", express.static(path.join(__dirname, "static")));
-
-// Vérif fichiers
-["logo-mdl.png", "carte-mdl.png"].forEach((f) => {
-  const p = path.join(__dirname, "static", f);
-  console.log(fs.existsSync(p) ? "✅ Fichier présent:" : "⚠️  Fichier manquant:", f);
-});
-
-// Mémoire (compat)
-const cartes = {};
-
-// ======== API appelée depuis Excel ========
-app.post("/api/create-card", (req, res) => {
-  if (!req.body) return res.status(400).json({ error: "Requête vide" });
-
-  const { nom, prenom, email, code } = req.body || {};
-  if (!nom || !prenom || !code) return res.status(400).json({ error: "Champs manquants" });
-
-  const id = uuidv4();
-  cartes[id] = { nom, prenom, email, code };
-
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host;
-  const protocol = host && host.includes("localhost") ? "http" : "https";
-
-  let urlSigned = null;
-  if (jwt) {
-    const token = jwt.sign({ nom, prenom, email: email || null, code }, SECRET, { expiresIn: "365d" });
-    urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
+// ======== Helpers ========
+// Récupère une query num (ex: ybar=42) avec défaut si NaN
+function num(q, def) {
+  const v = Number(q);
+  return Number.isFinite(v) ? v : def;
+}
+// Construit l'objet "carte" depuis token JWT ou query
+function buildCarteFromTokenOrQuery(req, token) {
+  let payload = {};
+  if (jwt && token) {
+    try { payload = jwt.verify(token, SECRET); } catch { /* token invalide */ }
   }
-  const urlLegacy = `${protocol}://${host}/card/${id}`;
+  const carte = {
+    prenom: (req.query.prenom ?? payload.prenom ?? "").toString(),
+    nom: (req.query.nom ?? payload.nom ?? "").toString(),
+    code: (req.query.code ?? payload.code ?? token ?? "").toString(),
+  };
+  return carte;
+}
 
-  console.log(`✅ Carte générée : ${nom} ${prenom} → ${urlSigned || urlLegacy}`);
-  res.json({ url: urlSigned || urlLegacy, legacy: urlLegacy, signed: Boolean(jwt) });
+// ======== Routes ========
+
+// Accueil simple
+app.get("/", (_req, res) => {
+  res.send(`<!doctype html><meta charset="utf-8">
+  <style>body{font-family:system-ui,Segoe UI,Arial;margin:0;padding:40px;color:#1c2434}</style>
+  <h2>✅ Serveur MDL en ligne</h2>
+  <ul>
+    <li>Carte via JWT: <code>/card/t/&lt;token&gt;</code></li>
+    <li>Carte legacy: <code>/card/legacy/&lt;id&gt;?prenom=...&amp;nom=...</code></li>
+    <li>Barcode: <code>/barcode/&lt;code&gt;?scale=4&amp;height=12&amp;text=1</code> (texte intégré off par défaut)</li>
+  </ul>`);
 });
 
-// ======== Code-barres ========
-// Paramètres facultatifs:
-//   ?scale=4 (densité, 2..8)
-//   ?height=14 (hauteur, 8..30)
-//   ?text=1 (afficher le texte)
-//   ?textsize=14 (taille du texte)
-app.get("/barcode/:code", (req, res) => {
+// --------- Générateur de code-barres PNG ---------
+app.get("/barcode/:code", async (req, res) => {
+  const code = (req.params.code || "").toString();
+  const scale = num(req.query.scale, 4);     // densité
+  const height = num(req.query.height, 12);  // hauteur barres (en "lignes")
+  const textsize = num(req.query.textsize, 12);
+  const includeText = req.query.text === "1"; // par défaut: pas de texte intégré
+
+  if (!code) return res.status(400).send("Missing code");
+
   try {
-    const includeText = req.query.text === "1";
-    const scale = Math.max(2, Math.min(8, parseInt(req.query.scale || "4", 10)));
-    const height = Math.max(8, Math.min(30, parseInt(req.query.height || "14", 10)));
-    const textsize = Math.max(8, Math.min(24, parseInt(req.query.textsize || "14", 10)));
-    bwipjs.toBuffer(
-      {
-        bcid: "code128",
-        text: req.params.code,
-        scale,
-        height,
-        includetext: includeText,
-        textxalign: "center",
-        textsize,
-        backgroundcolor: "FFFFFF",
-      },
-      (err, png) => {
-        if (err) return res.status(500).send("Erreur génération code-barres");
-        res.type("image/png").send(png);
-      }
-    );
+    const png = await bwipjs.toBuffer({
+      bcid: "code128",     // type
+      text: code,
+      scale: scale,        // 3..6
+      height: height,      // 10..20
+      includetext: includeText,
+      textxalign: "center",
+      textsize: textsize,
+      textyoffset: 2,
+      backgroundcolor: "FFFFFF",
+      paddingwidth: 0,
+      paddingheight: 0,
+    });
+    res.type("png").send(png);
   } catch (e) {
-    res.status(500).send("Erreur serveur");
+    console.error("bwip error:", e);
+    res.status(500).send("barcode generation failed");
   }
 });
 
-// ======== Affichage carte — LIEN SIGNÉ (JWT) ========
+// --------- Carte via TOKEN (JWT si dispo) ---------
 app.get("/card/t/:token", (req, res) => {
-  if (!jwt) return res.status(503).send("<h1>JWT indisponible sur ce déploiement</h1>");
-  let carte;
-  try {
-    carte = jwt.verify(req.params.token, SECRET);
-  } catch (e) {
-    return res.status(404).send("<h1>Carte introuvable ❌</h1>");
-  }
-  res.send(`<!doctype html>
+  const carte = buildCarteFromTokenOrQuery(req, req.params.token);
+
+  // Valeurs par défaut + overrides via query
+  const cssVars = {
+    ybar: num(req.query.ybar, 42),
+    yprenom: num(req.query.yprenom, 74),
+    ynom: num(req.query.ynom, 84),
+    xpad: num(req.query.xpad, 7),
+    barleft: num(req.query.barleft, 8),
+    barright: num(req.query.barright, 8),
+    bars: num(req.query.bars, 4),
+    barh: num(req.query.barh, 12),
+    bartxt: num(req.query.bartxt, 12),
+  };
+
+  res.send(renderCarteHTML(carte, cssVars));
+});
+
+// --------- Carte legacy (sans JWT) ---------
+app.get("/card/legacy/:id", (req, res) => {
+  const carte = {
+    prenom: (req.query.prenom || "").toString(),
+    nom: (req.query.nom || "").toString(),
+    code: (req.query.code || req.params.id || "").toString(),
+  };
+
+  const cssVars = {
+    ybar: num(req.query.ybar, 42),
+    yprenom: num(req.query.yprenom, 74),
+    ynom: num(req.query.ynom, 84),
+    xpad: num(req.query.xpad, 7),
+    barleft: num(req.query.barleft, 8),
+    barright: num(req.query.barright, 8),
+    bars: num(req.query.bars, 4),
+    barh: num(req.query.barh, 12),
+    bartxt: num(req.query.bartxt, 12),
+  };
+
+  res.send(renderCarteHTML(carte, cssVars));
+});
+
+// ======== Lancement ========
+app.listen(PORT, () => {
+  console.log(`🚀 Serveur démarré sur http://localhost:${PORT}`);
+  if (jwt) console.log("✅ jsonwebtoken présent"); else console.log("ℹ️ jsonwebtoken non installé — /card/t utilisera surtout la query");
+});
+
+// ======== Template HTML/CSS/JS ========
+function renderCarteHTML(carte, vars) {
+  // échappes simples
+  const esc = (s) => String(s ?? "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  const prenom = esc(carte.prenom);
+  const nom = esc(carte.nom);
+  const code = esc(carte.code);
+
+  return `<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -106,10 +150,26 @@ app.get("/card/t/:token", (req, res) => {
 <style>
 :root{
   --maxw: 600px;
-  /* Ajuste ces positions pour caler pile avec ton visuel (en %) */
-  --y-prenom: 64%;
-  --y-nom:    76%;
-  --y-bar:    36%;
+
+  /* Positions par défaut (en %) — ajustables par URL */
+  --y-bar: ${vars.ybar}%;
+  --y-prenom: ${vars.yprenom}%;
+  --y-nom: ${vars.ynom}%;
+
+  /* Marges latérales et largeur du code-barres */
+  --x-pad: ${vars.xpad}%;
+  --bar-left: ${vars.barleft}%;
+  --bar-right: ${vars.barright}%;
+
+  /* Taille du code-barres */
+  --bar-scale: ${vars.bars};
+  --bar-height: ${vars.barh};
+  --bar-textsize: ${vars.bartxt};
+
+  /* Style textes */
+  --prenom-size: clamp(18px, 5vw, 36px);
+  --nom-size:    clamp(20px, 5.6vw, 40px);
+  --human-size:  clamp(12px, 2.6vw, 16px);
 }
 *{box-sizing:border-box}
 body{
@@ -129,46 +189,37 @@ body{
   border-radius:16px; overflow:hidden;
   aspect-ratio: 5 / 3;
 }
-.overlay{ position:absolute; inset:0; padding:6% 7%; }
+.overlay{ position:absolute; inset:0; padding:6% var(--x-pad); }
 .line{
-  position:absolute; left:8%; right:8%;
+  position:absolute; left:var(--bar-left); right:var(--bar-right);
   letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
   overflow:hidden; white-space:nowrap; text-overflow:ellipsis;
 }
+.barcode{ top: var(--y-bar); }
+.code-wrap{ width:100%; }
+.code-wrap img{
+  width:100%; height:auto; display:block;
+  max-height: min(22vh, 28%); /* garde-fou */
+}
+.code-human{
+  text-align:center; margin-top:4px; color:#1a2740; font-weight:600;
+  font-size: var(--human-size);
+  letter-spacing: .06em;
+}
 .prenom{
   top: var(--y-prenom);
-  font-weight:700;
-  font-size: clamp(18px, 5vw, 36px);
+  font-weight:800; font-size: var(--prenom-size); color:#1a2740;
 }
 .nom{
   top: var(--y-nom);
-  font-weight:800;
-  font-size: clamp(20px, 5.6vw, 40px);
-  letter-spacing:.3px;
+  font-weight:900; font-size: var(--nom-size); color:#0d2a4a;
 }
-.barcode{
-  position:absolute; left:8%; right:8%;
-  top: var(--y-bar);
+.grid-guide{position:absolute;inset:0;pointer-events:none;display:none;background:
+  linear-gradient(to right, rgba(0,0,0,.08) 1px, transparent 1px) 0 0/10% 100%,
+  linear-gradient(to bottom, rgba(0,0,0,.08) 1px, transparent 1px) 0 0/100% 10%;
 }
-.code-wrap{ width:100%; }
-.code-wrap img{ width:100%; height:auto; display:block; filter: drop-shadow(0 1px 0 rgba(0,0,0,.05)); }
-.foot{ margin-top:12px; text-align:center; color:#5b6575; font-size:13px; }
-@media (min-width:700px){ :root{ --maxw: 720px; } }
+.grid-guide.on{display:block}
 </style>
-<script>
-const dpr = Math.min(3, Math.max(1, Math.round(window.devicePixelRatio || 1)));
-const params = new URLSearchParams({
-  scale: String(3 + dpr),
-  height: String(14 + dpr*2),
-  text: "1",
-  textsize: String(12 + dpr*2)
-});
-window.addEventListener('DOMContentLoaded', () => {
-  const img = document.getElementById('barcode-img');
-  const code = ${JSON.stringify(String((carte && carte.code) || ""))};
-  img.src = '/barcode/' + encodeURIComponent(code) + '?' + params.toString();
-});
-</script>
 </head>
 <body>
   <div class="wrap">
@@ -176,72 +227,50 @@ window.addEventListener('DOMContentLoaded', () => {
       <div class="overlay">
         <div class="line barcode">
           <div class="code-wrap">
-            <img id="barcode-img" alt="Code-barres ${String((carte && carte.code) || "")}" loading="eager" decoding="async"/>
+            <img id="barcode-img" alt="Code-barres" loading="eager" decoding="async"/>
+            <div id="barcode-human" class="code-human"></div>
           </div>
         </div>
-        <div class="line prenom">${(carte.prenom || "").trim()}</div>
-        <div class="line nom">${(carte.nom || "").toUpperCase().trim()}</div>
+        <div class="line prenom">${prenom}</div>
+        <div class="line nom">${nom.toUpperCase()}</div>
       </div>
+      <div id="grid-guide" class="grid-guide"></div>
     </div>
-    <div class="foot">MDL — Carte de fidélité</div>
+    <div class="foot" style="margin-top:12px;text-align:center;color:#5b6575;font-size:13px">
+      MDL — Carte de fidélité
+    </div>
   </div>
+
+<script>
+(function(){
+  const code = ${JSON.stringify(code)};
+  const img = document.getElementById('barcode-img');
+  const codeHuman = document.getElementById('barcode-human');
+
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const styles = getComputedStyle(document.documentElement);
+  const scale = Number(styles.getPropertyValue('--bar-scale')) || 4;
+  const height = Number(styles.getPropertyValue('--bar-height')) || 12;
+  const textsize = Number(styles.getPropertyValue('--bar-textsize')) || 12;
+
+  const params = new URLSearchParams({
+    scale: String(scale + Math.max(0, dpr-1)),
+    height: String(height),
+    text: "0",          // pas de texte intégré
+    textsize: String(textsize)
+  });
+
+  img.src = '/barcode/' + encodeURIComponent(code) + '?' + params.toString();
+  codeHuman.textContent = code || '';
+
+  // G = grille
+  window.addEventListener('keydown', (e)=>{
+    if(e.key.toLowerCase()==='g'){
+      document.getElementById('grid-guide').classList.toggle('on');
+    }
+  });
+})();
+</script>
 </body>
-</html>`);
-});
-
-// ======== Affichage carte — ANCIEN LIEN (mémoire) ========
-app.get("/card/:id", (req, res) => {
-  const id = req.params.id;
-  const carte = cartes[id];
-  if (!carte) return res.status(404).send("<h1>Carte introuvable ❌</h1>");
-  if (!jwt) {
-    return res.redirect(302, `/card/legacy/${encodeURIComponent(id)}`);
-  }
-  const token = jwt.sign(carte, SECRET, { expiresIn: "365d" });
-  res.redirect(302, `/card/t/${encodeURIComponent(token)}`);
-});
-
-// ======== Affichage carte legacy (sans JWT) ========
-app.get("/card/legacy/:id", (req, res) => {
-  const id = req.params.id;
-  const carte = cartes[id];
-  if (!carte) return res.status(404).send("<h1>Carte introuvable ❌</h1>");
-  // Rend avec le même template que /card/t mais sans vérif
-  res.redirect(302, `/card/t/${Buffer.from(JSON.stringify(carte)).toString("base64url")}`);
-});
-
-// ======== Page d’accueil et test ========
-app.get("/new", (_req, res) => {
-  res.send(`<html><head><title>Test Carte MDL</title></head>
-  <body style="text-align:center;font-family:Arial;">
-    <h2>Carte de fidélité test MDL</h2>
-    <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;">
-  </body></html>`);
-});
-
-app.get("/", (req, res) => {
-  res.send(`<html><head><title>Serveur Carte Fidélité MDL</title></head>
-  <body style="font-family:Arial;text-align:center;padding:40px">
-    <h2>✅ Serveur MDL en ligne</h2>
-    <ul style="list-style:none">
-      <li>/api/create-card — API pour Excel (retourne url signé si JWT dispo)</li>
-      <li>/card/t/:token — Afficher une carte (stateless, JWT)</li>
-      <li>/card/legacy/:id — Afficher une carte sans JWT (fallback)</li>
-      <li>/barcode/:code — Générer un code-barres (?text=1&scale=6&height=18&textsize=16)</li>
-    </ul>
-  </body></html>`);
-});
-
-// ======== Lancement ========
-app.listen(PORT, () => {
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME || "localhost:" + PORT;
-  const protocol = host.includes("localhost") ? "http" : "https";
-  console.log(`🚀 Serveur démarré sur ${protocol}://${host}`);
-  try {
-    require.resolve("jsonwebtoken");
-    console.log("✅ jsonwebtoken présent");
-  } catch (e) {
-    console.error("❌ jsonwebtoken manquant — vérifier package.json/lockfile");
-  }
-  console.log("Node:", process.version);
-});
+</html>`;
+}
