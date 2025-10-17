@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Erreur</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; color: #800; }
+    .box { border: 1px solid #f4c6c6; background: #fff7f7; padding: 20px; max-width:600px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Erreur</h1>
+    <p><%= message || 'Une erreur est survenue' %></p>
+    <p>Si le problème persiste, vérifie que la variable d'environnement SECRET est définie sur Render.</p>
+  </div>
+</body>
+</html>

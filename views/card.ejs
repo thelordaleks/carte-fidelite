@@ -1,142 +1,37 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Carte fidélité - <%= prenom %> <%= nom %></title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Carte fidélité</title>
   <style>
-    :root{
-      /* Ajuste ces valeurs pour déplacer les éléments (unités en % de la carte) */
-      --x-prenom: 10%;  /* distance depuis la gauche de la carte */
-      --y-prenom: 18%;  /* distance depuis le haut de la carte */
-      --prenom-size: 4.2vw; /* taille responsive, change si besoin */
-      --x-nom: 10%;
-      --y-nom: 25%;
-      --nom-size: 4.2vw;
-      --x-barcode: 50%;
-      --y-barcode: 68%;
-      --barcode-width: 72%; /* largeur relative à la carte */
-      --card-aspect: 1.6; /* width / height aspect ratio for fallback sizing */
-    }
-
-    html,body{height:100%;margin:0;}
-    body{
-      font-family: Arial, Helvetica, sans-serif;
-      display:flex;
-      justify-content:center;
-      align-items:center;
-      background:#f5f5f5;
-      padding:20px;
-    }
-
-    .card-container{
-      width: min(420px, 92vw);
-    }
-
-    .card{
-      position:relative;
-      width:100%;
-      /* hauteur calculée pour conserver ratio visuel */
-      aspect-ratio: var(--card-aspect);
-      background-image: url('/static/carte-mdl.png?t=1760732894411');
-      background-size: cover;
-      background-position: center;
-      border-radius:12px;
-      overflow:hidden;
-      box-shadow:0 6px 20px rgba(0,0,0,0.12);
-    }
-
-    /* Conteneur pour les éléments placés au-dessus de la carte */
-    .overlay{
-      position:absolute;
-      inset:0; /* top:0;left:0;right:0;bottom:0 */
-      pointer-events:none; /* clics passent à travers si nécessaire */
-    }
-
-    /* Styles pour prénom / nom */
-    .prenom, .nom {
-      position:absolute;
-      left:var(--x-prenom);
-      transform: translateX(-0%); /* change si tu veux centrer par rapport à la variable x */
-      color: #0f1724;
-      text-shadow: 0 1px 0 rgba(255,255,255,0.6);
-      font-weight:700;
-      letter-spacing: .6px;
-      pointer-events:auto;
-      white-space:nowrap;
-    }
-
-    .prenom{
-      left: var(--x-prenom);
-      top: var(--y-prenom);
-      font-size: var(--prenom-size);
-    }
-
-    .nom{
-      left: var(--x-nom);
-      top: var(--y-nom);
-      font-size: var(--nom-size);
-      font-weight:600;
-    }
-
-    /* Zone du code barre - on centre la barre par rapport au point (x-barcode,y-barcode) */
-    .barcode-wrap{
-      position:absolute;
-      left: var(--x-barcode);
-      top: var(--y-barcode);
-      transform: translate(-50%, -50%); /* centre la boîte sur le point */
-      width: var(--barcode-width);
-      text-align:center;
-      pointer-events:auto;
-    }
-
-    .barcode-wrap img{
-      width:100%;
-      height:auto;
-      max-height: 12vh; /* limite la hauteur pour ne pas déborder */
-      object-fit:contain;
-      display:block;
-      margin:0 auto;
-      background:rgba(255,255,255,0.0);
-      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15));
-    }
-
-    /* Texte du code humain sous le code‑barres */
-    .code-text{
-      margin-top:6px;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-      font-size: 3.4vw;
-      color:#0b273d;
-      font-weight:600;
-      letter-spacing: .8px;
-    }
-
-    /* Small screens adjustments */
-    @media (max-width:420px){
-      :root{
-        --prenom-size: 5.6vw;
-        --nom-size: 5.6vw;
-        --barcode-width: 82%;
-      }
-      .code-text{font-size:4.6vw;}
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .card { border: 1px solid #ddd; padding: 20px; width: 360px; }
+    .barcode { margin-top: 12px; max-width: 100%; }
+    .meta { color: #555; margin-top: 6px; }
   </style>
 </head>
 <body>
-  <div class="card-container">
-    <div class="card" role="img" aria-label="Carte fidelité">
-      <div class="overlay">
-        <!-- Prénom et Nom (positionnés au-dessus de l'image) -->
-        <div class="prenom"><%= prenom %></div>
-        <div class="nom"><%= nom %></div>
+  <div class="card" role="main" aria-live="polite">
+    <h1>Carte fidélité</h1>
 
-        <!-- Zone du code-barres (change la source selon ton retour serveur) -->
-        <div class="barcode-wrap">
-          <img src="/barcode/<%= code %>?t=<%= timestamp || Date.now() %>" alt="code barre <%= code %>" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x80?text=barcode';">
-          <div class="code-text"><%= code %></div>
-        </div>
-      </div>
+    <p><strong>Prénom :</strong> <%= typeof prenom !== 'undefined' ? prenom : '' %></p>
+    <p><strong>Nom :</strong> <%= typeof nom !== 'undefined' ? nom : '' %></p>
+    <p class="meta"><strong>Code :</strong> <%= typeof code !== 'undefined' ? code : '' %></p>
+
+    <!-- Exemple d'image barre (si tu as un endpoint /barcode/:code) -->
+    <div>
+      <img
+        class="barcode"
+        src="<%= (baseUrl || '') %>/barcode/<%= typeof code !== 'undefined' ? encodeURIComponent(code) : '' %>?t=<%= timestamp %>"
+        alt="code-barres"
+        onerror="this.style.display='none';"
+      />
     </div>
+
+    <p class="meta">Généré le <%= new Date(timestamp).toLocaleString('fr-FR') %></p>
   </div>
+
+  <!-- Eviter JS inline complexe pour ne pas casser le render côté serveur -->
 </body>
 </html>
