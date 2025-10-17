@@ -1,62 +1,68 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-  <title>Carte Fidélité - <%= carte.prenom %> <%= carte.nom %></title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carte de fidélité - <%= carte.nom %> <%= carte.prenom %></title>
   <style>
     body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
       margin: 0;
-      background-color: #f5f5f5;
-      font-family: Arial, sans-serif;
     }
-    .card {
-      width: 350px;
-      height: 200px;
-      background-image: url('/static/carte-mdl.png');
-      background-size: cover;
+    .card-container {
+      background: white;
       border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
       padding: 20px;
-      color: #333;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-      position: relative;
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
     }
     .logo {
-      text-align: center;
-      margin-bottom: 10px;
+      margin-bottom: 20px;
     }
     .logo img {
-      height: 40px;
+      max-height: 80px;
     }
-    .client-info {
-      background-color: rgba(255,255,255,0.8);
-      padding: 8px 12px;
-      border-radius: 8px;
-      margin-top: 10px;
-      font-size: 14px;
+    .card {
+      background-image: url('<%= cardBgUrl %>');
+      background-size: cover;
+      background-position: center;
+      border-radius: 10px;
+      padding: 20px;
+      color: #333;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
     .barcode {
-      margin-top: 15px;
-      text-align: center;
+      margin-top: 20px;
     }
     .barcode img {
-      height: 40px;
+      width: 100%;
+      max-width: 300px;
     }
   </style>
 </head>
 <body>
-  <div class="card">
+  <div class="card-container">
     <div class="logo">
-      <img src="/static/logo-mdl.png" alt="Logo MDL">
+      <img src="<%= logoUrl %>" alt="Logo MDL" onerror="this.src='https://via.placeholder.com/200x80?text=Logo+MDL'">
     </div>
-    <div class="client-info">
-      <p><strong><%= carte.prenom %> <%= carte.nom %></strong></p>
-      <p>Code: <%= carte.code %></p>
-    </div>
-    <div class="barcode">
-      <img src="<%= baseUrl %>/barcode/<%= carte.code %>" alt="Code-barres">
+    <div class="card">
+      <div>
+        <h2><%= carte.nom %> <%= carte.prenom %></h2>
+        <p>Code: <%= carte.code %></p>
+      </div>
+      <div class="barcode">
+        <img src="<%= baseUrl %>/barcode/<%= carte.code %>" alt="Code-barres">
+      </div>
     </div>
   </div>
 </body>
