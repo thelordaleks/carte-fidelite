@@ -58,42 +58,43 @@ app.get("/card/:id", (req, res) => {
   });
 });
 
-// === Code-barres local (plus fiable que tec-it) ===
-// GET /barcode?bcid=code128&text=ADH0001&scale=3&height=12&includetext=1
-app.get("/barcode", async (req, res) => {
+// Génération code‑barres: supporte /barcode/:code ET /barcode?text=CODE
+app.get(['/barcode/:code', '/barcode'], async (req, res) => {
   try {
-    const {
-      bcid = "code128",     // type de code (ex: code128, code39, qrcode, etc.)
-      text = "",
-      scale = "3",          // épaisseur des barres
-      height = "12",        // hauteur (mm virtuels)
-      includetext = "1",    // affiche le texte lisible sous le code
-      textxalign = "center",
-      paddingwidth = "6",
-      paddingheight = "4"
-    } = req.query;
+    const text =
+      req.params.code ||      // /barcode/ADH0624NPI8d
+      req.query.data ||       // /barcode?data=...
+      req.query.text;         // /barcode?text=...
 
-    if (!text) return res.status(400).send("Paramètre 'text' requis");
+    if (!text) {
+      return res.status(400).type('text').send("Paramètre manquant: code dans l'URL ou ?text=...");
+    }
+
+    const bcid = String(req.query.bcid || 'code128');
+    const scale = parseInt(req.query.scale || '3', 10);
+    const height = parseInt(req.query.height || '12', 10);
+    const includetext = req.query.includetext === '1';
+    const textxalign = String(req.query.textxalign || 'center');
 
     const png = await bwipjs.toBuffer({
       bcid,
       text,
-      scale: +scale,
-      height: +height,
-      includetext: includetext === "1",
+      scale,
+      height,
+      includetext,
       textxalign,
-      paddingwidth: +paddingwidth,
-      paddingheight: +paddingheight,
-      backgroundcolor: 'FFFFFF'
+      paddingwidth: parseInt(req.query.paddingwidth || '8', 10),
+      paddingheight: parseInt(req.query.paddingheight || '4', 10),
+      backgroundcolor: 'FFFFFF',
     });
 
-    res.type("png");
-    res.send(png);
+    res.type('png').send(png);
   } catch (err) {
-    console.error("Barcode error:", err);
-    res.status(500).send("Erreur génération code-barres");
+    console.error('Barcode error:', err);
+    res.status(500).type('text').send('Erreur génération code-barres');
   }
 });
+
 
 // Route de test rapide
 app.get("/new", (_req, res) => {
