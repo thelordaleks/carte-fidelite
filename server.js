@@ -77,13 +77,14 @@ app.get("/barcode/:code", (req, res) => {
 
 // ======== Affichage carte — LIEN SIGNÉ (recommandé) ========
 app.get("/card/t/:token", (req, res) => {
-  let payload;
+  let carte;
   try {
-    payload = jwt.verify(req.params.token, SECRET);
+    const jwt = require("jsonwebtoken");
+    const SECRET = process.env.SECRET || "dev-secret-change-me";
+    carte = jwt.verify(req.params.token, SECRET);
   } catch (e) {
     return res.status(404).send("<h1>Carte introuvable ❌</h1>");
   }
-  const carte = payload;
 
   res.send(`<!doctype html>
 <html lang="fr">
@@ -92,54 +93,87 @@ app.get("/card/t/:token", (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Carte de fidélité MDL</title>
 <style>
-:root { --maxw: 560px; }
+:root{
+  --maxw: 560px;
+  /* Ajuste ces positions pour caler pile avec ton visuel */
+  --y-prenom: 66%;  /* zone "Prénom" sur l'image */
+  --y-nom:    78%;  /* zone "Nom" sur l'image */
+  --y-bar:    36%;  /* position verticale du code-barres (ex-ancienne zone "nom") */
+}
 *{box-sizing:border-box}
 body{
-  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
   margin:0; background:#f2f2f2;
-  display:flex; align-items:center; justify-content:center; min-height:100svh; padding:16px;
+  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  min-height:100svh; display:flex; align-items:center; justify-content:center; padding:16px;
+  color:#1c2434;
 }
 .wrap{
-  width:min(92vw, var(--maxw)); background:#fff; border-radius:20px;
-  box-shadow:0 6px 24px rgba(0,0,0,.10); padding:16px; text-align:center;
+  width:min(92vw, var(--maxw));
+  background:#fff; border-radius:20px; padding:16px;
+  box-shadow:0 6px 24px rgba(0,0,0,.10);
 }
 .carte{
-  position:relative; width:100%; border-radius:16px; overflow:hidden;
+  position:relative; width:100%;
   background:#fff url('/static/carte-mdl.png') center/cover no-repeat;
-  aspect-ratio: 5 / 3; /* ajuste au besoin */
+  border-radius:16px; overflow:hidden;
+  aspect-ratio: 5 / 3;  /* ajuste si ton visuel a un autre ratio */
 }
-.overlay{ position:absolute; inset:0; padding:6% 7%; color:#1c2434; }
-.line{ position:absolute; left:8%; right:8%; font-weight:700; letter-spacing:.2px;
-       text-shadow:0 1px 0 rgba(255,255,255,.6); }
-.name{ top:36%; font-size:clamp(16px, 4.6vw, 32px); }
-.code{ top:50%; font-size:clamp(14px, 3.8vw, 26px); font-weight:600; }
+.overlay{ position:absolute; inset:0; padding:6% 7%; }
+.line{
+  position:absolute; left:8%; right:8%;
+  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
+}
+.prenom{
+  top: var(--y-prenom);
+  font-weight:700;
+  font-size: clamp(16px, 4.6vw, 32px);
+}
+.nom{
+  top: var(--y-nom);
+  font-weight:800;
+  font-size: clamp(18px, 5vw, 34px);
+}
 .barcode{
-  position:absolute; left:8%; right:8%; bottom:8%;
+  position:absolute; left:8%; right:8%;
+  top: var(--y-bar);    /* le code-barres est maintenant au milieu */
   width:84%; height:auto; background:#fff;
-  padding:clamp(4px,1vw,10px); border-radius:clamp(4px,1.2vw,12px);
+  padding: clamp(4px,1vw,10px);
+  border-radius: clamp(4px,1.2vw,12px);
   box-shadow:0 2px 8px rgba(0,0,0,.08);
 }
-.infos{ font-size:15px; color:#333; margin-top:12px; }
-.infos .nom{ font-weight:800; }
+/* (facultatif) petite ligne avec le numéro sans le mot "Code" — masquée par défaut */
+.code-digits{
+  display:none; /* passe à block si tu veux afficher les chiffres */
+  position:absolute; left:8%; right:8%;
+  top: calc(var(--y-bar) + 22%);
+  text-align:center; font-size: clamp(12px, 2.8vw, 16px); font-weight:600;
+  color:#222;
+}
+.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="carte" role="img" aria-label="Carte de fidélité de ${carte.prenom} ${carte.nom}">
       <div class="overlay">
-        <div class="line name">${carte.prenom} ${carte.nom}</div>
-        <div class="line code">Code : ${carte.code}</div>
+        <!-- Code-barres au milieu (interverti) -->
         <img class="barcode" src="/barcode/${encodeURIComponent(carte.code)}?text=0" alt="Code-barres ${carte.code}">
+        <!-- Numéro sans libellé "Code" (facultatif, masqué par défaut) -->
+        <div class="code-digits">${carte.code}</div>
+        <!-- Prénom et Nom dans leurs zones dédiées -->
+        <div class="line prenom">${carte.prenom}</div>
+        <div class="line nom">${carte.nom}</div>
       </div>
     </div>
-    <div class="infos">
-      <div class="nom">${(carte.nom || "").toUpperCase()} ${carte.prenom || ""}</div>
-      <div class="c">${carte.code}</div>
+    <div class="info">
+      <!-- Petit rappel en dessous (facultatif) -->
+      ${(carte.prenom || "")} ${(carte.nom || "").toUpperCase()}
     </div>
   </div>
 </body>
 </html>`);
 });
+
 
 // ======== Affichage carte — ANCIEN LIEN (dépend de la mémoire) ========
 app.get("/card/:id", (req, res) => {
