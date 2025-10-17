@@ -26,7 +26,7 @@ app.post("/api/create-card", (req, res) => {
   const id = uuidv4();
   cartes[id] = { nom, prenom, email, code };
 
-  const url = `https://${req.headers.host}/card/${id}`;
+  const url = `https://${process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host}/card/${id}`;
   console.log(`✅ Carte générée : ${nom} ${prenom} → ${url}`);
   res.json({ url });
 });
