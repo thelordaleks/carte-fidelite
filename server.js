@@ -139,7 +139,7 @@ body{
 .line.prenom,
 .line.nom{
   left:8%;   /* diminue (6% → 5.5% → 5%) pour aller plus à gauche */
-  right:8%;
+  right:5%;
 }
 
 .barcode{
