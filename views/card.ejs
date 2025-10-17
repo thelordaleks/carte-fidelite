@@ -1,10 +1,17 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carte fidélité - <%= carte.prenom %> <%= carte.nom %></title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Carte fidélité - <%= (carte && (carte.prenom + ' ' + (carte.nom || '').toUpperCase())) || 'Prénom NOM' %></title>
   <style>
+    :root{
+      --bg: #f5f5f5;
+      --card-bg: rgba(248,249,250,0.95);
+      --muted: #555;
+      --maxw: 420px;
+    }
+    *{box-sizing:border-box}
     body {
       font-family: Arial, sans-serif;
       display: flex;
@@ -12,21 +19,23 @@
       align-items: center;
       min-height: 100vh;
       margin: 0;
-      background-color: #f5f5f5;
+      background-color: var(--bg);
+      color: #222;
+      padding: 20px;
     }
 
     .card-container {
       background-color: white;
       border-radius: 15px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-      padding: 30px;
-      max-width: 400px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      padding: 26px;
       width: 100%;
+      max-width: var(--maxw);
     }
 
     .logo {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .logo img {
@@ -37,72 +46,102 @@
     }
 
     .card {
-      background-color: #f8f9fa;
-      background-image: url('<%= baseUrl %>/static/carte-mdl.png?t=<%= timestamp %>');
-      background-size: cover;
-      background-position: center;
+      background: var(--card-bg) center/cover no-repeat;
       border-radius: 10px;
-      padding: 25px;
-      margin: 20px 0;
-      min-height: 200px;
+      padding: 18px;
+      margin: 16px 0;
+      min-height: 180px;
       position: relative;
-      border: 1px dashed #ddd; /* Bordure de débogage */
+      overflow: hidden;
+      border: 1px solid rgba(0,0,0,0.04);
+    }
+
+    .card .bg {
+      position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0.96;
+      pointer-events:none;
     }
 
     .card-content {
-      background-color: rgba(255, 255, 255, 0.9);
-      padding: 15px;
+      position: relative;
+      z-index: 2;
+      background: rgba(255,255,255,0.85);
+      padding: 12px 14px;
       border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    }
+
+    .fullname {
+      margin: 0 0 6px 0;
+      font-weight: 700;
+      font-size: 18px;
+      color: #111;
+      word-break: break-word;
+    }
+
+    .code {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
     }
 
     .barcode {
       text-align: center;
-      margin-top: 20px;
+      margin-top: 14px;
     }
 
     .barcode img {
       max-width: 100%;
       height: auto;
-    }
-
-    h2 {
-      margin: 0 0 10px 0;
-      color: #333;
-    }
-
-    p {
-      margin: 5px 0;
-      color: #555;
+      display: inline-block;
+      border-radius: 6px;
+      background: white;
     }
 
     .fallback-image {
       color: #999;
       font-style: italic;
       text-align: center;
-      padding: 20px;
+      padding: 14px 0;
+      font-size: 13px;
+    }
+
+    @media (max-width:420px){
+      .card { min-height:160px; padding:14px; }
+      .fullname{ font-size:16px; }
     }
   </style>
 </head>
 <body>
   <div class="card-container">
     <div class="logo">
-      <!-- Image avec fallback -->
       <img
-        src="<%= baseUrl %>/static/logo-mdl.png?t=<%= timestamp %>"
+        src="<%= (baseUrl || '') + '/static/logo-mdl.png?t=' + (timestamp || Date.now()) %>"
         alt="Logo MDL"
         onerror="this.onerror=null; this.src='https://via.placeholder.com/200x80/0078D7/FFFFFF?text=MDL';"
-      >
+      />
     </div>
 
-    <div class="card">
+    <div class="card" role="img" aria-label="Carte d'adhérent">
+      <% if (baseUrl) { %>
+        <img class="bg" src="<%= baseUrl %>/static/carte-mdl.png?t=<%= timestamp %>" alt="Fond carte" />
+      <% } else { %>
+        <!-- fallback: url relative si baseUrl non défini -->
+        <img class="bg" src="/static/carte-mdl.png?t=<%= timestamp || Date.now() %>" alt="Fond carte" onerror="this.style.display='none'"/>
+      <% } %>
+
       <div class="card-content">
-        <h2><%= carte.prenom %> <%= carte.nom %></h2>
-        <p>Code: <%= carte.code %></p>
+        <div class="fullname"><%= (carte && carte.prenom) ? (carte.prenom + ' ' + (carte.nom || '').toUpperCase()) : 'Prénom NOM' %></div>
+        <p class="code">Code: <%= (carte && carte.code) ? carte.code : '—' %></p>
       </div>
     </div>
 
-    <div class="barcode">
-      <img src="<%= baseUrl %>/barcode/<%= carte.code %>?t=<%= timestamp %>" alt="Code-barres">
+    <div class="barcode" aria-hidden="false">
+      <% const code = (carte && carte.code) ? encodeURIComponent(carte.code) : 'UNKNOWN'; %>
+      <img
+        src="<%= (baseUrl || '') + '/barcode/' + code + '?includetext=1&scale=3&height=12&textxalign=center&paddingwidth=8&paddingheight=4&t=' + (timestamp || Date.now()) %>"
+        alt="Code-barres <%= (carte && carte.code) ? carte.code : '' %>"
+        onerror="this.onerror=null; this.src='https://via.placeholder.com/320x60?text=Code-barres';"
+      />
     </div>
   </div>
 </body>
