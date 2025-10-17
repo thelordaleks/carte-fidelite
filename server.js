@@ -135,6 +135,13 @@ body{
   font-weight:800;
   font-size: clamp(18px, 5vw, 34px);
 }
+  /* Ne bouger que Prénom et Nom */
+.line.prenom,
+.line.nom{
+  left:8%;   /* diminue (6% → 5.5% → 5%) pour aller plus à gauche */
+  right:8%;
+}
+
 .barcode{
   position:absolute; left:8%; right:8%;
   top: var(--y-bar);
