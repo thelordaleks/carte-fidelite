@@ -1,147 +1,141 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Carte fidélité - <%= (carte && (carte.prenom + ' ' + (carte.nom || '').toUpperCase())) || 'Prénom NOM' %></title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Carte fidélité - <%= prenom %> <%= nom %></title>
   <style>
     :root{
-      --bg: #f5f5f5;
-      --card-bg: rgba(248,249,250,0.95);
-      --muted: #555;
-      --maxw: 420px;
-    }
-    *{box-sizing:border-box}
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      background-color: var(--bg);
-      color: #222;
-      padding: 20px;
+      /* Ajuste ces valeurs pour déplacer les éléments (unités en % de la carte) */
+      --x-prenom: 10%;  /* distance depuis la gauche de la carte */
+      --y-prenom: 18%;  /* distance depuis le haut de la carte */
+      --prenom-size: 4.2vw; /* taille responsive, change si besoin */
+      --x-nom: 10%;
+      --y-nom: 25%;
+      --nom-size: 4.2vw;
+      --x-barcode: 50%;
+      --y-barcode: 68%;
+      --barcode-width: 72%; /* largeur relative à la carte */
+      --card-aspect: 1.6; /* width / height aspect ratio for fallback sizing */
     }
 
-    .card-container {
-      background-color: white;
-      border-radius: 15px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-      padding: 26px;
-      width: 100%;
-      max-width: var(--maxw);
+    html,body{height:100%;margin:0;}
+    body{
+      font-family: Arial, Helvetica, sans-serif;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      background:#f5f5f5;
+      padding:20px;
     }
 
-    .logo {
-      text-align: center;
-      margin-bottom: 18px;
+    .card-container{
+      width: min(420px, 92vw);
     }
 
-    .logo img {
-      max-width: 200px;
-      height: auto;
-      display: block;
-      margin: 0 auto;
+    .card{
+      position:relative;
+      width:100%;
+      /* hauteur calculée pour conserver ratio visuel */
+      aspect-ratio: var(--card-aspect);
+      background-image: url('/static/carte-mdl.png?t=1760732894411');
+      background-size: cover;
+      background-position: center;
+      border-radius:12px;
+      overflow:hidden;
+      box-shadow:0 6px 20px rgba(0,0,0,0.12);
     }
 
-    .card {
-      background: var(--card-bg) center/cover no-repeat;
-      border-radius: 10px;
-      padding: 18px;
-      margin: 16px 0;
-      min-height: 180px;
-      position: relative;
-      overflow: hidden;
-      border: 1px solid rgba(0,0,0,0.04);
+    /* Conteneur pour les éléments placés au-dessus de la carte */
+    .overlay{
+      position:absolute;
+      inset:0; /* top:0;left:0;right:0;bottom:0 */
+      pointer-events:none; /* clics passent à travers si nécessaire */
     }
 
-    .card .bg {
-      position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0.96;
-      pointer-events:none;
+    /* Styles pour prénom / nom */
+    .prenom, .nom {
+      position:absolute;
+      left:var(--x-prenom);
+      transform: translateX(-0%); /* change si tu veux centrer par rapport à la variable x */
+      color: #0f1724;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+      font-weight:700;
+      letter-spacing: .6px;
+      pointer-events:auto;
+      white-space:nowrap;
     }
 
-    .card-content {
-      position: relative;
-      z-index: 2;
-      background: rgba(255,255,255,0.85);
-      padding: 12px 14px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    .prenom{
+      left: var(--x-prenom);
+      top: var(--y-prenom);
+      font-size: var(--prenom-size);
     }
 
-    .fullname {
-      margin: 0 0 6px 0;
-      font-weight: 700;
-      font-size: 18px;
-      color: #111;
-      word-break: break-word;
+    .nom{
+      left: var(--x-nom);
+      top: var(--y-nom);
+      font-size: var(--nom-size);
+      font-weight:600;
     }
 
-    .code {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
+    /* Zone du code barre - on centre la barre par rapport au point (x-barcode,y-barcode) */
+    .barcode-wrap{
+      position:absolute;
+      left: var(--x-barcode);
+      top: var(--y-barcode);
+      transform: translate(-50%, -50%); /* centre la boîte sur le point */
+      width: var(--barcode-width);
+      text-align:center;
+      pointer-events:auto;
     }
 
-    .barcode {
-      text-align: center;
-      margin-top: 14px;
+    .barcode-wrap img{
+      width:100%;
+      height:auto;
+      max-height: 12vh; /* limite la hauteur pour ne pas déborder */
+      object-fit:contain;
+      display:block;
+      margin:0 auto;
+      background:rgba(255,255,255,0.0);
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.15));
     }
 
-    .barcode img {
-      max-width: 100%;
-      height: auto;
-      display: inline-block;
-      border-radius: 6px;
-      background: white;
+    /* Texte du code humain sous le code‑barres */
+    .code-text{
+      margin-top:6px;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      font-size: 3.4vw;
+      color:#0b273d;
+      font-weight:600;
+      letter-spacing: .8px;
     }
 
-    .fallback-image {
-      color: #999;
-      font-style: italic;
-      text-align: center;
-      padding: 14px 0;
-      font-size: 13px;
-    }
-
+    /* Small screens adjustments */
     @media (max-width:420px){
-      .card { min-height:160px; padding:14px; }
-      .fullname{ font-size:16px; }
+      :root{
+        --prenom-size: 5.6vw;
+        --nom-size: 5.6vw;
+        --barcode-width: 82%;
+      }
+      .code-text{font-size:4.6vw;}
     }
   </style>
 </head>
 <body>
   <div class="card-container">
-    <div class="logo">
-      <img
-        src="<%= (baseUrl || '') + '/static/logo-mdl.png?t=' + (timestamp || Date.now()) %>"
-        alt="Logo MDL"
-        onerror="this.onerror=null; this.src='https://via.placeholder.com/200x80/0078D7/FFFFFF?text=MDL';"
-      />
-    </div>
+    <div class="card" role="img" aria-label="Carte fidelité">
+      <div class="overlay">
+        <!-- Prénom et Nom (positionnés au-dessus de l'image) -->
+        <div class="prenom"><%= prenom %></div>
+        <div class="nom"><%= nom %></div>
 
-    <div class="card" role="img" aria-label="Carte d'adhérent">
-      <% if (baseUrl) { %>
-        <img class="bg" src="<%= baseUrl %>/static/carte-mdl.png?t=<%= timestamp %>" alt="Fond carte" />
-      <% } else { %>
-        <!-- fallback: url relative si baseUrl non défini -->
-        <img class="bg" src="/static/carte-mdl.png?t=<%= timestamp || Date.now() %>" alt="Fond carte" onerror="this.style.display='none'"/>
-      <% } %>
-
-      <div class="card-content">
-        <div class="fullname"><%= (carte && carte.prenom) ? (carte.prenom + ' ' + (carte.nom || '').toUpperCase()) : 'Prénom NOM' %></div>
-        <p class="code">Code: <%= (carte && carte.code) ? carte.code : '—' %></p>
+        <!-- Zone du code-barres (change la source selon ton retour serveur) -->
+        <div class="barcode-wrap">
+          <img src="/barcode/<%= code %>?t=<%= timestamp || Date.now() %>" alt="code barre <%= code %>" onerror="this.onerror=null; this.src='https://via.placeholder.com/300x80?text=barcode';">
+          <div class="code-text"><%= code %></div>
+        </div>
       </div>
-    </div>
-
-    <div class="barcode" aria-hidden="false">
-      <% const code = (carte && carte.code) ? encodeURIComponent(carte.code) : 'UNKNOWN'; %>
-      <img
-        src="<%= (baseUrl || '') + '/barcode/' + code + '?includetext=1&scale=3&height=12&textxalign=center&paddingwidth=8&paddingheight=4&t=' + (timestamp || Date.now()) %>"
-        alt="Code-barres <%= (carte && carte.code) ? carte.code : '' %>"
-        onerror="this.onerror=null; this.src='https://via.placeholder.com/320x60?text=Code-barres';"
-      />
     </div>
   </div>
 </body>
