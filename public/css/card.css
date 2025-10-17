@@ -10,8 +10,8 @@
 :root{
   --x-pad: 12%;     /* marge latérale commune */
   --y-badge: 39%;   /* bandeau avec Nom/Prénom (descendu) */
-  --y-nom:   57%;   /* valeur du Nom dans le champ beige */
-  --y-pren:  64.5%; /* valeur du Prénom dans le champ beige */
+  --y-nom:   70%;   /* valeur du Nom dans le champ beige */
+  --y-pren:  70%; /* valeur du Prénom dans le champ beige */
   --y-bar:   90.5%; /* code‑barres (remonté) */
 }
 
