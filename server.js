@@ -9,20 +9,30 @@ const PORT = process.env.PORT || 3000;
 // Détecte l'URL publique Render (ou BASE_URL si fournie)
 const PUBLIC_HOST =
   process.env.BASE_URL
-    || (process.env.RENDER_EXTERNAL_HOSTNAME ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` : `http://localhost:${PORT}`);
+    || (process.env.RENDER_EXTERNAL_HOSTNAME
+          ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`
+          : `http://localhost:${PORT}`);
 
 // ===== Middlewares =====
 app.set("trust proxy", 1);
 app.use(express.json());
+
+// Fichiers statiques (images, etc.)
 app.use("/static", express.static(path.join(__dirname, "static")));
 
-// Active EJS si tu as /views/card.ejs
+// Trace chaque requête (utile pour diagnostiquer les 404)
+app.use((req, _res, next) => {
+  console.log(`[TRACE] ${new Date().toISOString()} ${req.method} ${req.originalUrl}`);
+  next();
+});
+
+// Active EJS si /views existe (optionnel)
 try {
   app.set("view engine", "ejs");
   app.set("views", path.join(__dirname, "views"));
 } catch { /* EJS optionnel */ }
 
-// ===== Mémoire temporaire (attention: perdue au redémarrage) =====
+// ===== Mémoire temporaire (perdue au redémarrage) =====
 const cartes = {};
 
 // ===== Santé =====
@@ -32,14 +42,15 @@ app.get("/health", (_req, res) => res.send("OK"));
 app.get("/", (_req, res) => {
   res.send(`
     <html>
-      <head><title>Serveur Carte Fidélité MDL</title></head>
+      <head><title>Serveur Carte Fidélité MDL</title><meta charset="utf-8"/></head>
       <body style="font-family:Arial;text-align:center;padding:40px">
         <h2>✅ Serveur MDL en ligne</h2>
-        <p>Les routes disponibles :</p>
+        <p>Routes disponibles :</p>
         <ul style="list-style:none">
           <li><a href="/new">/new</a> — Test carte (affiche l'image de fond)</li>
           <li><code>POST /api/create-card</code> — API pour Excel</li>
           <li><code>/card/:id</code> — Afficher une carte générée</li>
+          <li><a href="/routes">/routes</a> — Liste des routes montées</li>
         </ul>
       </body>
     </html>
@@ -50,11 +61,11 @@ app.get("/", (_req, res) => {
 app.get("/new", (_req, res) => {
   res.send(`
     <html>
-      <head><title>Test Carte MDL</title></head>
+      <head><title>Test Carte MDL</title><meta charset="utf-8"/></head>
       <body style="text-align:center;font-family:Arial;">
         <h2>Carte de fidélité test MDL</h2>
-        <img src="/static/card-bg.png" style="width:320px;border-radius:12px;">
-        <div style="margin-top:10px;"><img src="/static/logo.png" style="height:40px;"></div>
+        <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;">
+        <div style="margin-top:10px;"><img src="/static/logo-mdl.png" style="height:40px;"></div>
       </body>
     </html>
   `);
@@ -73,8 +84,13 @@ app.post("/api/create-card", (req, res) => {
 
   const url = `${PUBLIC_HOST}/card/${id}`;
   console.log(`✅ Carte générée : ${nom} ${prenom} → ${url}`);
-  // Garde le format { url } pour rester compatible avec ta macro actuelle
+  // { url, id } pour rester compatible avec ta macro
   res.json({ url, id });
+});
+
+// GET sur l’API → 405 explicite (évite le 404 trompeur)
+app.get("/api/create-card", (_req, res) => {
+  res.status(405).json({ error: "Utilise POST sur /api/create-card" });
 });
 
 // ===== Page carte =====
@@ -87,7 +103,9 @@ app.get("/card/:id", (req, res) => {
 
   // Si EJS est dispo et que views/card.ejs existe, on l'utilise
   if (app.get("view engine") === "ejs") {
-    return res.render("card", { carte });
+    try {
+      return res.render("card", { carte });
+    } catch { /* si pas de template, on tombe en fallback */ }
   }
 
   // Fallback HTML inline si EJS absent
@@ -105,7 +123,7 @@ app.get("/card/:id", (req, res) => {
       </head>
       <body>
         <div class="carte">
-          <img class="bg" src="/static/card-bg.png" alt="Carte fidélité">
+          <img class="bg" src="/static/carte-mdl.png" alt="Carte fidélité">
           <div class="infos">
             <p><strong>${carte.nom} ${carte.prenom}</strong></p>
             <p>Code adhérent : ${carte.code}</p>
@@ -117,6 +135,14 @@ app.get("/card/:id", (req, res) => {
       </body>
     </html>
   `);
+});
+
+// ===== Liste des routes montées (diagnostic) =====
+app.get("/routes", (_req, res) => {
+  const list = (app._router?.stack || [])
+    .filter(r => r.route)
+    .map(r => ({ path: r.route.path, methods: Object.keys(r.route.methods) }));
+  res.json(list);
 });
 
 // ===== 404 en dernier =====
