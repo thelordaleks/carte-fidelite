@@ -3,66 +3,106 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carte de fidélité - <%= carte.nom %> <%= carte.prenom %></title>
+  <title>Carte fidélité - <%= carte.prenom %> <%= carte.nom %></title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #f5f5f5;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
+      background-color: #f5f5f5;
     }
+
     .card-container {
-      background: white;
+      background-color: white;
       border-radius: 15px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-      padding: 20px;
-      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      padding: 30px;
       max-width: 400px;
       width: 100%;
     }
+
     .logo {
+      text-align: center;
       margin-bottom: 20px;
     }
+
     .logo img {
-      max-height: 80px;
+      max-width: 200px;
+      height: auto;
+      display: block;
+      margin: 0 auto;
     }
+
     .card {
-      background-image: url('<%= cardBgUrl %>');
+      background-color: #f8f9fa;
+      background-image: url('<%= baseUrl %>/static/carte-mdl.png?t=<%= timestamp %>');
       background-size: cover;
       background-position: center;
       border-radius: 10px;
-      padding: 20px;
-      color: #333;
+      padding: 25px;
+      margin: 20px 0;
       min-height: 200px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
+      position: relative;
+      border: 1px dashed #ddd; /* Bordure de débogage */
     }
+
+    .card-content {
+      background-color: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border-radius: 8px;
+    }
+
     .barcode {
+      text-align: center;
       margin-top: 20px;
     }
+
     .barcode img {
-      width: 100%;
-      max-width: 300px;
+      max-width: 100%;
+      height: auto;
+    }
+
+    h2 {
+      margin: 0 0 10px 0;
+      color: #333;
+    }
+
+    p {
+      margin: 5px 0;
+      color: #555;
+    }
+
+    .fallback-image {
+      color: #999;
+      font-style: italic;
+      text-align: center;
+      padding: 20px;
     }
   </style>
 </head>
 <body>
   <div class="card-container">
     <div class="logo">
-      <img src="<%= logoUrl %>" alt="Logo MDL" onerror="this.src='https://via.placeholder.com/200x80?text=Logo+MDL'">
+      <!-- Image avec fallback -->
+      <img
+        src="<%= baseUrl %>/static/logo-mdl.png?t=<%= timestamp %>"
+        alt="Logo MDL"
+        onerror="this.onerror=null; this.src='https://via.placeholder.com/200x80/0078D7/FFFFFF?text=MDL';"
+      >
     </div>
+
     <div class="card">
-      <div>
-        <h2><%= carte.nom %> <%= carte.prenom %></h2>
+      <div class="card-content">
+        <h2><%= carte.prenom %> <%= carte.nom %></h2>
         <p>Code: <%= carte.code %></p>
       </div>
-      <div class="barcode">
-        <img src="<%= baseUrl %>/barcode/<%= carte.code %>" alt="Code-barres">
-      </div>
+    </div>
+
+    <div class="barcode">
+      <img src="<%= baseUrl %>/barcode/<%= carte.code %>?t=<%= timestamp %>" alt="Code-barres">
     </div>
   </div>
 </body>

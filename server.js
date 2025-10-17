@@ -3,74 +3,111 @@ const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const bwipjs = require('bwip-js');
+const fs = require('fs');
 
-// Configuration Express
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'static'))); // Pour les images statiques
+// Middleware pour les fichiers statiques (images)
+app.use('/static', express.static(path.join(__dirname, 'static'), {
+  maxAge: '1d', // Cache d'1 jour pour les images
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.png')) {
+      res.type('image/png'); // Force le bon type MIME
+    }
+  }
+}));
+
+// Vérification des images au démarrage
+const checkStaticFiles = () => {
+  const staticPath = path.join(__dirname, 'static');
+  const files = ['logo-mdl.png', 'carte-mdl.png'];
+
+  files.forEach(file => {
+    const filePath = path.join(staticPath, file);
+    if (!fs.existsSync(filePath)) {
+      console.warn(`⚠️ Fichier manquant: ${filePath}`);
+    } else {
+      console.log(`✅ Fichier présent: ${file}`);
+    }
+  });
+};
+
+checkStaticFiles();
+
+// Configuration EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Base de données temporaire (remplacez par SQLite en production)
+// Base de données temporaire
 const cartes = {};
 
-// Générer un code-barres (route dynamique)
-app.get('/barcode/:code', (req, res) => {
-  const code = req.params.code;
-  bwipjs.toBuffer({
-    bcid: 'code128',       // Type de code-barres
-    text: code,           // Texte à encoder
-    scale: 3,             // Taille
-    height: 10,           // Hauteur
-    includetext: true,    // Afficher le texte sous le code
-    textxalign: 'center'  // Centrer le texte
-  }, (err, png) => {
-    if (err) {
-      console.error("Erreur génération code-barres:", err);
-      return res.status(500).send("Erreur lors de la génération du code-barres");
-    }
-    res.type('png');
-    res.send(png);
+// Route pour vérifier les images
+app.get('/check-images', (req, res) => {
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  res.json({
+    logoUrl: `${baseUrl}/static/logo-mdl.png`,
+    cardBgUrl: `${baseUrl}/static/carte-mdl.png`,
+    timestamp: Date.now()
   });
 });
 
-// Créer une carte (appelée depuis Excel)
+// Génération du code-barres
+app.get('/barcode/:code', (req, res) => {
+  bwipjs.toBuffer({
+    bcid: 'code128',
+    text: req.params.code,
+    scale: 3,
+    height: 10,
+    includetext: true,
+    textxalign: 'center'
+  }, (err, png) => {
+    if (err) return res.status(500).send("Erreur code-barres");
+    res.type('png').send(png);
+  });
+});
+
+// Création d'une carte
 app.post('/api/create-card', (req, res) => {
   const { nom, prenom, code, email } = req.body;
   if (!nom || !prenom || !code) {
-    return res.status(400).json({ error: "Champs manquants" });
+    return res.status(400).json({ error: "Données manquantes" });
   }
 
   const id = uuidv4();
   cartes[id] = { nom, prenom, code, email };
 
-  // URL absolue pour Render
   const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
-  const cardUrl = `${baseUrl}/card/${id}`;
-
-  res.json({ success: true, url: cardUrl });
-});
-
-// Afficher une carte
-app.get('/card/:id', (req, res) => {
-  const carte = cartes[req.params.id];
-  if (!carte) return res.status(404).send("Carte non trouvée");
-
-  res.render('card', {
-    carte: carte,
-    baseUrl: process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`
+  res.json({
+    success: true,
+    url: `${baseUrl}/card/${id}`,
+    cardId: id
   });
 });
 
-// Route de test
-app.get('/', (req, res) => {
-  res.send('✅ Serveur Carte Fidélité actif !');
+// Affichage de la carte
+app.get('/card/:id', (req, res) => {
+  const carte = cartes[req.params.id];
+  if (!carte) return res.status(404).send("Carte introuvable");
+
+  const baseUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  res.render('card', {
+    carte,
+    baseUrl,
+    timestamp: Date.now() // Pour forcer le rafraîchissement
+  });
 });
 
-// Démarrer le serveur
+// Route racine
+app.get('/', (req, res) => {
+  res.send(`
+    <h1>Serveur Carte Fidélité MDL</h1>
+    <p>Statut: ✅ Actif</p>
+    <p><a href="/check-images">Vérifier les images</a></p>
+  `);
+});
+
+// Démarrage
 app.listen(PORT, () => {
-  console.log(`🚀 Serveur lancé sur ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
+  console.log(`🚀 Serveur démarré sur ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
 });
