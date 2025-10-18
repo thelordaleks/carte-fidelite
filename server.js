@@ -134,12 +134,12 @@ body{
 /* Tailles “normales” (le JS ne fera que réduire si nécessaire) */
 .prenom{
   top: var(--y-prenom);
-  font-weight:700;
+  font-weight:800;
   font-size: clamp(16px, 4vw, 32px);
 }
 .nom{
   top: var(--y-nom);
-  font-weight:800;
+  font-weight:700;
   font-size: clamp(16px, 4vw, 32px);
 }
 
