@@ -218,9 +218,10 @@ body{
 
 .fitted .line{ opacity:1; }
 
-/* Mode “bord droit serré” pour la pilule du Nom (noms très longs) */
-.carte.tight-nom   { --r-nom: 12%; }     /* réduit un peu la largeur utile → fit diminue la taille */
-.carte.tighter-nom { --r-nom: 11.5%; }   /* cas extrême */
+/* Mode “bord droit serré” pour la pilule du Nom (noms très larges) */
+.carte.tight-nom   { --r-nom: 10.5%; }   /* avant 10% */
+.carte.tighter-nom { --r-nom: 12%;   }   /* avant 11.5% */
+
 
 /* Debug: cadres visibles */
 ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
@@ -315,17 +316,41 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
         });
       }
 
-      function runFit(){
-        // 1) Ajuste la marge droite (—r-nom) en fonction de la longueur du Nom
-        var carte = document.querySelector('.carte');
-        var nomEl = document.querySelector('.line.nom');
-        if (carte && nomEl) {
-          var txt = (nomEl.textContent || '').trim();
-          var spaces = (txt.match(/\\s/g) || []).length;
-          var wlen = txt.length - spaces + Math.ceil(spaces * 0.5); // espaces = 0.5
-          carte.classList.toggle('tight-nom',   wlen >= 20 && wlen < 26);
-          carte.classList.toggle('tighter-nom', wlen >= 26);
-        }
+    function runFit(){
+  var carte = document.querySelector('.carte');
+  var nomEl = document.querySelector('.line.nom');
+
+  // Fonction: est‑ce que le texte est trop proche du bord droit ?
+  // On garde un "coussin" (pad) pour ne pas mordre l’arrondi visuel de la pilule
+  function tooCloseRight(el, padPx){
+    if (!el) return false;
+    var w = el.clientWidth || el.getBoundingClientRect().width || 0;
+    // après un fit, scrollWidth ≈ largeur du texte
+    return el.scrollWidth >= Math.max(0, w - padPx);
+  }
+
+  // 1) État neutre, fit initial
+  if (carte) carte.classList.remove('tight-nom','tighter-nom');
+  fitAll();
+
+  // 2) Si le nom touche trop le bord droit → resserrer et re‑fit
+  if (carte && nomEl) {
+    var pad = 16; // coussin visuel (px) pour l’arrondi de la pilule
+    if (tooCloseRight(nomEl, pad)) {
+      carte.classList.add('tight-nom');
+      fitAll();
+
+      // 3) Encore trop proche ? on resserre davantage
+      if (tooCloseRight(nomEl, pad)) {
+        carte.classList.add('tighter-nom');
+        fitAll();
+      }
+    }
+  }
+
+  document.body.classList.add('fitted');
+}
+
 
         // 2) Fit après avoir posé la classe (largeur correcte)
         fitAll();
