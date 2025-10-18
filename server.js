@@ -289,9 +289,9 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
 
     function run(){
       // NOM: peut grandir jusqu'à +90%, petite marge à droite
-      fitOneLine(document.querySelector('.line.nom'),    { minScale:0.50, grow:1.90, padPx:7 });
+      fitOneLine(document.querySelector('.line.nom'),    { minScale:0.50, grow:1.95, padPx:9 });
       // PRÉNOM: inchangé (ne grandit pas)
-      fitOneLine(document.querySelector('.line.prenom'), { minScale:0.55, grow:1.90, padPx:7 });
+      fitOneLine(document.querySelector('.line.prenom'), { minScale:0.55, grow:1.95, padPx:9 });
 
       document.body.classList.add('fitted');
     }
