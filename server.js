@@ -140,7 +140,7 @@ app.get("/card/t/:token", (req, res) => {
 
   /* Y calés (en %) sur tes pilules */
   --y-bar:    36%;
-  --y-nom:    64.5%;  /* 62% → 60.8% : remonte un peu */
+  --y-nom:    66%;  /* 62% → 60.8% : remonte un peu */
   --y-prenom: 76%;  /* 72% → 70.8% : remonte un peu */
   --y-points: 83%;
   --y-reduc:  83%;
@@ -148,7 +148,7 @@ app.get("/card/t/:token", (req, res) => {
   /* X/largeurs calés (en %) */
   --x-nom:     24%;
   --x-prenom:  24%;
-  --r-nom:     35%;    /* marge droite par défaut (élargit la zone du Nom) */
+  --r-nom:     50%;    /* marge droite par défaut (élargit la zone du Nom) */
   --r-prenom:  35%;
 
   --x-points:  26%;
