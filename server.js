@@ -149,7 +149,7 @@ app.get("/card/t/:token", (req, res) => {
   --x-nom:     24%;
   --x-prenom:  24%;
   --r-nom:     50%;    /* marge droite par défaut (élargit la zone du Nom) */
-  --r-prenom:  50%;
+  --r-prenom:  35%;
 
   --x-points:  26%;
   --w-points:  17%;
