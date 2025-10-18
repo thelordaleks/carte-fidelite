@@ -140,15 +140,15 @@ app.get("/card/t/:token", (req, res) => {
 
   /* Y calés (en %) sur tes pilules */
   --y-bar:    36%;
-  --y-nom:    62%;
-  --y-prenom: 72%;
-  --y-points: 82.4%;
-  --y-reduc:  82.4%;
+  --y-nom:    59%;  /* 62% → 60.8% : remonte un peu */
+  --y-prenom: 70.8%;  /* 72% → 70.8% : remonte un peu */
+  --y-points: 83%;
+  --y-reduc:  83%;
 
   /* X/largeurs calés (en %) */
   --x-nom:     25.5%;
   --x-prenom:  25.5%;
-  --r-nom:     7%;    /* marge droite réduite pour plus de largeur */
+  --r-nom:     6%;    /* marge droite par défaut (élargit la zone du Nom) */
   --r-prenom:  9%;
 
   --x-points:  26%;
@@ -158,6 +158,10 @@ app.get("/card/t/:token", (req, res) => {
 
   --bar-l:      8%;
   --bar-r:      8%;
+
+  /* offsets de centrage vertical (MAJ = un chouïa plus haut visuellement) */
+  --ty-nom:    -51%;
+  --ty-prenom: -50%;
 }
 *{box-sizing:border-box}
 body{
@@ -186,15 +190,15 @@ body{
 /* Nom/Prénom: pile sur les grandes pilules */
 .line.nom{
   left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
+  transform: translateY(var(--ty-nom, -50%));
   font-weight:800;
-  font-size:clamp(18px, 4.8vw, 46px);  /* base/max plus grands */
-  letter-spacing:-0.015em;             /* légère compaction utiles en MAJ */
+  font-size:clamp(18px, 4.8vw, 46px);
+  letter-spacing:-0.015em;             /* légère compaction utile en MAJ */
   text-transform:uppercase;
-  white-space:nowrap;                   /* 1 seule ligne */
-  overflow:hidden; text-overflow:clip;
 }
 .line.prenom{
   left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
+  transform: translateY(var(--ty-prenom, -50%));
   font-weight:700;
   font-size:clamp(16px, 4.2vw, 34px);
 }
@@ -213,6 +217,10 @@ body{
 .info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
 
 .fitted .line{ opacity:1; }
+
+/* Mode “bord droit serré” pour la pilule du Nom (noms très longs) */
+.carte.tight-nom   { --r-nom: 10%; }     /* réduit un peu la largeur utile → fit diminue la taille */
+.carte.tighter-nom { --r-nom: 11.5%; }   /* cas extrême */
 
 /* Debug: cadres visibles */
 ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
@@ -308,6 +316,18 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
       }
 
       function runFit(){
+        // 1) Ajuste la marge droite (—r-nom) en fonction de la longueur du Nom
+        var carte = document.querySelector('.carte');
+        var nomEl = document.querySelector('.line.nom');
+        if (carte && nomEl) {
+          var txt = (nomEl.textContent || '').trim();
+          var spaces = (txt.match(/\\s/g) || []).length;
+          var wlen = txt.length - spaces + Math.ceil(spaces * 0.5); // espaces = 0.5
+          carte.classList.toggle('tight-nom',   wlen >= 20 && wlen < 26);
+          carte.classList.toggle('tighter-nom', wlen >= 26);
+        }
+
+        // 2) Fit après avoir posé la classe (largeur correcte)
         fitAll();
         document.body.classList.add('fitted');
       }
