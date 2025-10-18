@@ -171,7 +171,7 @@ body{
   color:#1c2434;
 }
 .wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
-.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/\${bg}') center/cover no-repeat; }
+.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
 .overlay{ position:absolute; inset:0; }
 
 /* Zones texte */
@@ -224,23 +224,23 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
 </head>
 <body>
   <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de \${prenom} \${nom}">
+    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
       <div class="overlay">
         <div class="line barcode">
-          <img src="/barcode/\${encodeURIComponent(code)}?text=0" alt="Code-barres \${code}" decoding="async" />
+          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
 
         <!-- Nom/Prénom -->
-        <div class="line nom">\${nom.toUpperCase()}</div>
-        <div class="line prenom">\${prenom}</div>
+        <div class="line nom">${nom.toUpperCase()}</div>
+        <div class="line prenom">${prenom}</div>
 
         <!-- Points / Réduction -->
-        <div class="line points">\${points}</div>
-        <div class="line reduction">\${reduction}</div>
+        <div class="line points">${points}</div>
+        <div class="line reduction">${reduction}</div>
       </div>
     </div>
     <div class="info">
-      \${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
+      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
