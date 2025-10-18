@@ -173,7 +173,7 @@ const ogImage = abs(`/static/carte-mdl-mail.png?v=2025-10-18-2`); // change le v
   --r-nom:     31%;
   --r-prenom:  31%;
   --x-points:  26%;
-  --w-points:  19%;
+  --w-points:  10%;
   --x-reduc:   45%;
   --w-reduc:   17%;
   --bar-l:      8%;
