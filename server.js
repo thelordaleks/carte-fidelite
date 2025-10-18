@@ -26,6 +26,12 @@ app.use("/static", express.static(path.join(__dirname, "static")));
 // Mémoire (compat ancien /card/:id)
 const cartes = {};
 
+// Helper d’échappement HTML (sécurité et robustesse)
+function esc(s) {
+  s = s == null ? "" : String(s);
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 // ======== API appelée depuis Excel ========
 app.post("/api/create-card", (req, res) => {
   if (!req.body) return res.status(400).json({ error: "Requête vide" });
@@ -130,224 +136,152 @@ app.get("/card/t/:token", (req, res) => {
   res.send(`<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Carte de fidélité MDL</title>
-<style>
-:root{
-  /* gabarit 1024x585 => ratio ≈ 1.75 */
-  --maxw: 980px;
+  <meta charset="utf-8">
+  <title>Carte fidélité</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --card-ratio: 1.586; /* 85.6 x 53.98 (CR80) */
+      --w: 360px;          /* largeur de rendu par défaut */
+      --pad: 16px;
+      --fg: #111;
+      --muted: #444;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;font-family: Arial, Helvetica, sans-serif;background:#f5f5f7;color:#111}
+    .wrap{display:flex;justify-content:center}
+    .carte{
+      position:relative;
+      width: min(92vw, var(--w));
+      aspect-ratio: var(--card-ratio);
+      border-radius: 14px;
+      background: #ddd url("/static/${bg}") center/cover no-repeat;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,.12);
+    }
+    .layer{position:absolute; inset:0}
+    .zone{
+      position:absolute;
+      left: var(--pad);
+      right: var(--pad);
+      color: var(--fg);
+      text-shadow: 0 0 0 rgba(0,0,0,0);
+      overflow: hidden;
+      white-space: nowrap; /* 1 ligne */
+    }
+    /* Emplacements (approximations stables; inchangés) */
+    .prenom{ top: 20%; font-weight:600; letter-spacing: .2px; opacity:.96 }
+    .nom{ top: 30%; font-weight:800; letter-spacing: .3px; text-transform: uppercase; opacity:.98 }
+    .points{ bottom: 20%; color: var(--muted); font-weight:600 }
+    .reduction{ bottom: 13%; color: var(--muted); font-weight:600 }
 
-  /* Y calés (en %) sur tes pilules */
-  --y-bar:    36%;
-  --y-nom:    66%;  /* 62% → 60.8% : remonte un peu */
-  --y-prenom: 76%;  /* 72% → 70.8% : remonte un peu */
-  --y-points: 83%;
-  --y-reduc:  83%;
+    /* Tailles de base (on ne fait varier que la font-size via JS) */
+    .line{ display:block; max-width: 100%; overflow:hidden; text-overflow: ellipsis; }
+    .line.prenom{ font-size: clamp(14px, 5vw, 22px); }
+    .line.nom{    font-size: clamp(18px, 6.2vw, 28px); } /* taille max, réduite si besoin par JS */
+    .line.points, .line.reduction{ font-size: clamp(12px, 4.4vw, 18px); }
 
-  /* X/largeurs calés (en %) */
-  --x-nom:     24%;
-  --x-prenom:  24%;
-  --r-nom:     35%;    /* marge droite par défaut (élargit la zone du Nom) */
-  --r-prenom:  35%;
+    /* Code-barres plein, dimensionné par la largeur, sans bandeau */
+    .barcode-wrap{
+      position:absolute; left: var(--pad); right: var(--pad);
+      bottom: 32%; height: 19%;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .barcode-wrap img{ width: 100%; height: 100%; object-fit: contain; }
 
-  --x-points:  26%;
-  --w-points:  17%;
-  --x-reduc:   45%;
-  --w-reduc:   17%;
+    /* Debug cadres */
+    ${debug ? `
+    .zone, .barcode-wrap{ outline: 1px dashed rgba(255,0,0,.55); }
+    .carte{ box-shadow: 0 0 0 3px rgba(255,0,0,.25) inset, 0 8px 30px rgba(0,0,0,.12); }
+    ` : ""}
 
-  --bar-l:      8%;
-  --bar-r:      8%;
-
-  /* offsets de centrage vertical (MAJ = un chouïa plus haut visuellement) */
-  --ty-nom:    -51%;
-  --ty-prenom: -50%;
-}
-*{box-sizing:border-box}
-body{
-  margin:0; background:#f2f2f2;
-  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  min-height:100svh; display:flex; align-items:center; justify-content:center; padding:16px;
-  color:#1c2434;
-}
-.wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
-.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
-.overlay{ position:absolute; inset:0; }
-
-/* Zones texte */
-.line{
-  position:absolute;
-  opacity:0; /* on montre après le fit */
-  white-space:nowrap; overflow:hidden; text-overflow:clip;
-  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
-  transition:opacity .12s ease;
-}
-
-/* Code-barres */
-.barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
-.barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
-
-/* Nom/Prénom: pile sur les grandes pilules */
-.line.nom{
-  left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
-  transform: translateY(var(--ty-nom, -50%));
-  font-weight:800;
-  font-size:clamp(18px, 4.8vw, 46px);
-  letter-spacing:-0.015em;             /* légère compaction utile en MAJ */
-  text-transform:uppercase;
-}
-.line.prenom{
-  left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
-  transform: translateY(var(--ty-prenom, -50%));
-  font-weight:700;
-  font-size:clamp(16px, 4.2vw, 34px);
-}
-
-/* Petites pilules du bas */
-.points{
-  top:var(--y-points); left:var(--x-points); width:var(--w-points);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
-}
-.reduction{
-  top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
-}
-
-/* Info sous la carte */
-.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
-
-.fitted .line{ opacity:1; }
-
-/* Mode “bord droit serré” pour la pilule du Nom (noms très larges) */
-.carte.tight-nom   { --r-nom: 10.5%; }   /* avant 10% */
-.carte.tighter-nom { --r-nom: 12%;   }   /* avant 11.5% */
-
-/* Debug: cadres visibles */
-${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
-</style>
+    /* Apparition après fit */
+    body:not(.fitted) .line{ opacity: 0; }
+    body.fitted .line{ opacity: 1; transition: opacity .15s ease-out; }
+  </style>
 </head>
-<body>
+<body class="${debug ? "debug" : ""}">
   <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
-      <div class="overlay">
-        <div class="line barcode">
-          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
+    <div class="carte">
+      <div class="layer content">
+        <!-- Lignes de texte -->
+        <div class="zone prenom">
+          <span class="line prenom" data-min-scale="0.46">${esc(prenom)}</span>
+        </div>
+        <div class="zone nom">
+          <span class="line nom" data-min-scale="0.34">${esc(nom).toUpperCase()}</span>
         </div>
 
-        <!-- 1 ligne obligatoire + réduction automatique si trop de caractères -->
-        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${nom.toUpperCase()}</div>
-        <div class="line prenom" data-min-scale="0.46">${prenom}</div>
+        <!-- Code-barres -->
+        <div class="barcode-wrap">
+          <img alt="code-barres" src="/barcode/${encodeURIComponent(code)}" />
+        </div>
 
-        <!-- Affiche TOUJOURS les deux champs (vides si Excel n’envoie rien) -->
-        <div class="line points"    data-min-scale="0.50">${points}</div>
-        <div class="line reduction" data-min-scale="0.50">${reduction}</div>
+        <!-- Infos points / réduction -->
+        <div class="zone points">
+          <span class="line points" data-min-scale="0.50">Points: ${esc(points)}</span>
+        </div>
+        <div class="zone reduction">
+          <span class="line reduction" data-min-scale="0.50">Réduction: ${esc(reduction)}</span>
+        </div>
       </div>
-    </div>
-    <div class="info">
-      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
   <script>
-    // Fit‑to‑width + préscalage par longueur de texte (1 ligne)
     (function(){
-      function fitToWidth(el, opts){
+      // Ajuste la taille de police d'un élément (1 ligne) pour que scrollWidth <= largeur disponible
+      function fitOne(el, opts){
         opts = opts || {};
-        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
-        var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
-        var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
+        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.34; // plus petit ratio autorisé
+        var precision = typeof opts.precision === 'number' ? opts.precision : 0.10; // px
 
-        // reset
+        if (!el) return;
+
+        // Reset pour repartir de la taille CSS max
         el.style.fontSize = '';
-        el.style.letterSpacing = '';
 
         var cs   = getComputedStyle(el);
         var base = parseFloat(cs.fontSize);
-        var w    = el.clientWidth || el.getBoundingClientRect().width || 0;
-        if (!w || !base) return;
+        var boxW = el.clientWidth || el.getBoundingClientRect().width || 0;
 
-        // 1) Pré‑réduction si trop de caractères (espaces pondérés 0.5)
-        var txt    = (el.textContent || '').trim();
-        var spaces = (txt.match(/\\s/g) || []).length;
-        var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5); // longueur "pondérée"
-        var pre    = 1;
-        if (wlen > charTh) pre = charTh / wlen; // ex: 30 car. → 22/30 = 0.733
-        pre = Math.max(pre, minScale);
+        if (!base || !boxW) return;
 
-        // 2) Bisection entre base*minScale et base*pre
-        var lo = base * minScale, hi = base * pre, best = lo;
+        var lo = base * minScale; // borne basse
+        var hi = base;            // borne haute
+        var best = lo;
 
+        // Si ça tient déjà à la taille de base, on garde
         el.style.fontSize = hi + 'px';
-        if (el.scrollWidth <= w) {
+        if (el.scrollWidth <= boxW) {
           best = hi;
         } else {
-          for (var i=0; i<26 && (hi - lo) > precision; i++) {
+          // Recherche dichotomique
+          for (var i = 0; i < 28 && (hi - lo) > precision; i++) {
             var mid = (hi + lo) / 2;
             el.style.fontSize = mid + 'px';
-            if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
+            if (el.scrollWidth <= boxW) { best = mid; hi = mid; } else { lo = mid; }
           }
         }
         el.style.fontSize = best + 'px';
-
-        // 3) Si ça déborde encore, resserrer l'interlettrage puis affiner la taille
-        if (el.scrollWidth > w) {
-          var ls = 0, step = 0;
-          while (el.scrollWidth > w && step < 6) { // jusqu’à ~ -1.2px
-            ls -= 0.2; step++;
-            el.style.letterSpacing = ls + 'px';
-          }
-          var guard = 0;
-          while (el.scrollWidth > w && guard < 6) {
-            var f = parseFloat(el.style.fontSize) * 0.97;
-            el.style.fontSize = f + 'px';
-            guard++;
-          }
-        }
       }
 
       function fitAll(scope){
         scope = scope || document;
         var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
         nodes.forEach(function(el){
-          var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
-          var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
-          fitToWidth(el, {minScale: ms, charThreshold: ct});
+          var ms = parseFloat(el.getAttribute('data-min-scale'));
+          if (!isFinite(ms)) {
+            // valeurs par défaut par type
+            if (el.classList.contains('nom')) ms = 0.34;
+            else if (el.classList.contains('prenom')) ms = 0.46;
+            else ms = 0.50;
+          }
+          fitOne(el, { minScale: ms });
         });
       }
 
-    function runFit(){
-  var carte = document.querySelector('.carte');
-  var nomEl = document.querySelector('.line.nom');
-
-  // Fonction: est‑ce que le texte est trop proche du bord droit ?
-  // On garde un "coussin" (pad) pour ne pas mordre l’arrondi visuel de la pilule
-  function tooCloseRight(el, padPx){
-    if (!el) return false;
-    var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-    // après un fit, scrollWidth ≈ largeur du texte
-    return el.scrollWidth >= Math.max(0, w - padPx);
-  }
-
-  // 1) État neutre, fit initial
-  if (carte) carte.classList.remove('tight-nom','tighter-nom');
-  fitAll();
-
-  // 2) Si le nom touche trop le bord droit → resserrer et re‑fit
-  if (carte && nomEl) {
-    var pad = 16; // coussin visuel (px) pour l’arrondi de la pilule
-    if (tooCloseRight(nomEl, pad)) {
-      carte.classList.add('tight-nom');
-      fitAll();
-
-      // 3) Encore trop proche ? on resserre davantage
-      if (tooCloseRight(nomEl, pad)) {
-        carte.classList.add('tighter-nom');
-        fitAll();
-      }
-    }
-  }
-
-        // 2) Fit après avoir posé la classe (largeur correcte)
+      function runFit(){
         fitAll();
         document.body.classList.add('fitted');
       }
@@ -357,6 +291,7 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
       window.addEventListener('resize', runFit);
       window.addEventListener('orientationchange', runFit);
 
+      // Expose pour debug
       window.fitNow = runFit;
     })();
   </script>
