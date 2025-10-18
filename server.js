@@ -136,8 +136,8 @@ app.get("/card/t/:token", (req, res) => {
 
   /* Y calés (en %) sur tes pilules */
   --y-bar:    36%;
-  --y-nom:    56%;
-  --y-prenom: 66%;
+  --y-nom:    62%;
+  --y-prenom: 72%;
   --y-points: 82.4%;
   --y-reduc:  82.4%;
 
