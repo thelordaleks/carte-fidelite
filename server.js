@@ -76,223 +76,240 @@ app.post("/api/create-card", (req, res) => {
     process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
   const protocol = host.includes("localhost") ? "http" : "https";
   const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
-  const urlLegacy = `${protocol}://${host}/card/${id}`;
 
-  console.log("✅ Carte générée:", prenom, nom, "→", urlSigned);
-  console.log("ℹ️ G/H reçus:", { points, reduction, keys: Object.keys(raw) });
-
-  return res.json({ url: urlSigned, legacy: urlLegacy });
+  res.json({ ok: true, url: urlSigned, id });
 });
 
 // ======== Code-barres ========
-app.get("/barcode/:code", (req, res) => {
+app.get("/barcode/:code", async (req, res) => {
   try {
-    const includeText = req.query.text === "1";
-    bwipjs.toBuffer(
-      {
-        bcid: "code128",
-        text: req.params.code,
-        scale: 3,
-        height: 10,
-        includetext: includeText,
-        textxalign: "center",
-        backgroundcolor: "FFFFFF",
-      },
-      (err, png) => {
-        if (err) return res.status(500).send("Erreur génération code-barres");
-        res.type("image/png").send(png);
-      }
-    );
+    const code = String(req.params.code || "").trim();
+    const showText = String(req.query.text || "0") === "1";
+
+    const png = await bwipjs.toBuffer({
+      bcid: "code128",
+      text: code,
+      scale: 3,
+      height: 12,
+      includetext: showText,
+      textxalign: "center",
+      textsize: 10,
+      paddingwidth: 8,
+      paddingheight: 8,
+      backgroundcolor: "FFFFFF",
+    });
+
+    res.type("png").send(png);
   } catch (e) {
-    res.status(500).send("Erreur serveur");
+    res.status(400).send("Barcode error");
   }
 });
 
-// ======== Affichage carte — LIEN SIGNÉ (recommandé) ========
+// ======== Affichage carte — LIEN SIGNÉ (stateless) ========
 app.get("/card/t/:token", (req, res) => {
-  let carte;
+  let data;
   try {
-    carte = jwt.verify(req.params.token, SECRET);
-  } catch {
-    return res.status(404).send("<h1>Carte introuvable ❌</h1>");
+    data = jwt.verify(req.params.token, SECRET);
+  } catch (e) {
+    return res.status(400).send("<h1>Token invalide ❌</h1>");
   }
 
-  const prenom = (carte.prenom || "").trim();
-  const nom = (carte.nom || "").trim();
-  const code = (carte.code || "").trim();
-  const points = (carte.points ?? "").toString().trim();
-  const reduction = (carte.reduction ?? "").toString().trim();
+  // Helpers
+  const esc = (s) =>
+    String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
 
-  const bg =
-    (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
-  const debug = req.query.debug === "1"; // ?debug=1 pour afficher les cadres
+  const nom = esc(data.nom);
+  const prenom = esc(data.prenom);
+  const email = esc(data.email || "");
+  const code = esc(data.code);
+  const points = esc(data.points || "");
+  const reduction = esc(data.reduction || "");
+
+  const bg = req.query.bg === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const debug = String(req.query.debug || "0") === "1";
 
   res.send(`<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Carte de fidélité MDL</title>
-<style>
-:root{
-  /* gabarit 1024x585 => ratio ≈ 1.75 */
-  --maxw: 980px;
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carte MDL</title>
+  <style>
+    :root{
+      --w: 960px;
+      --pad: 32px;
+      --pill-bg: #f4c98c;
+      --pill-txt: #1e1e1e;
+    }
+    html,body{ margin:0; padding:0; }
+    body{
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:#f2f3f5;
+      display:flex; align-items:flex-start; justify-content:center;
+      min-height:100vh;
+    }
+    .wrap{ padding:24px; }
+    .carte{
+      position:relative;
+      width: var(--w);
+      max-width: 100vw;
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      overflow:hidden;
+      background:#fff;
+    }
+    .bg{
+      width:100%; display:block;
+      user-select:none; pointer-events:none;
+    }
 
-  /* Y calés (en %) sur tes pilules */
-  --y-bar:    36%;
-  --y-nom:    66%;
-  --y-prenom: 76%;
-  --y-points: 83%;
-  --y-reduc:  83%;
+    .layer{ position:absolute; inset:0; padding:var(--pad); }
+    .grid{
+      position:relative; width:100%; height:100%;
+      display:grid; grid-template-rows: auto auto auto 1fr auto; gap:16px;
+    }
 
-  /* X/largeurs calés (en %) */
-  --x-nom:     24%;
-  --x-prenom:  24%;
-  --r-nom:     35%;
-  --r-prenom:  35%;
+    /* Barre code-barres */
+    .barcode{ text-align:center; margin-top:4px; }
+    .barcode img{ width:86%; max-width:820px; height:auto; }
 
-  --x-points:  26%;
-  --w-points:  17%;
-  --x-reduc:   45%;
-  --w-reduc:   17%;
+    /* Lignes Nom / Prénom */
+    .row{ display:flex; align-items:center; gap:14px; }
+    .label{
+      font-size:28px; color:#1d1d1d; font-family: "Times New Roman", serif;
+    }
+    .pill{
+      background: var(--pill-bg);
+      color: var(--pill-txt);
+      border-radius: 20px;
+      padding: 10px 16px;
+      display:inline-flex; align-items:center;
+      max-width: 720px; width: 72%;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.05);
+    }
+    .pill.small{
+      min-width: 140px; width:auto; padding:12px 18px; text-align:center;
+      font-weight:600; font-size:24px;
+    }
+    .line{ display:inline-block; white-space:nowrap; font-weight:800; letter-spacing:.3px; }
+    .line.nom{ font-size:18px; }     /* base, sera AJUSTÉE par le script */
+    .line.prenom{ font-size:36px; }  /* base, sera AJUSTÉE par le script */
 
-  --bar-l:      8%;
-  --bar-r:      8%;
+    .bottom{
+      display:flex; align-items:center; justify-content:space-between; gap:16px;
+      margin-top:6px;
+    }
 
-  /* offsets de centrage vertical */
-  --ty-nom:    -51%;
-  --ty-prenom: -50%;
-}
-*{box-sizing:border-box}
-body{
-  margin:0; background:#f2f2f2;
-  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  min-height:100svh; display:flex; align-items:center; justify-content:center; padding:16px;
-  color:#1c2434;
-}
-.wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
-.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
-.overlay{ position:absolute; inset:0; }
+    .meta{ font-size:13px; color:#3a3a3a; text-align:center; opacity:.9; padding:6px 0 14px; }
 
-/* Zones texte */
-.line{
-  position:absolute;
-  ${debug ? "" : "opacity:0;"} /* on montre après le fit */
-  white-space:nowrap; overflow:hidden; text-overflow:clip;
-  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
-  transition:opacity .12s ease;
-}
-
-/* Code-barres */
-.barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
-.barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
-
-/* Nom/Prénom: pilules */
-.line.nom{
-  left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
-  transform: translateY(var(--ty-nom, -50%));
-  font-weight:800;
-  font-size:clamp(18px, 4.8vw, 46px);
-  letter-spacing:-0.015em;
-  text-transform:uppercase;
-}
-.line.prenom{
-  left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
-  transform: translateY(var(--ty-prenom, -50%));
-  font-weight:700;
-  font-size:clamp(16px, 4.2vw, 34px);
-}
-
-/* Petites pilules du bas */
-.points{
-  top:var(--y-points); left:var(--x-points); width:var(--w-points);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
-}
-.reduction{
-  top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
-}
-
-/* Info sous la carte */
-.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
-
-.fitted .line{ opacity:1; }
-
-/* Debug: cadres visibles */
-${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
-</style>
+    /* Debug (option ?debug=1) */
+    ${debug ? `
+    .row, .pill, .barcode, .bottom{ outline:1px dashed rgba(0,128,255,.4); }
+    .line{ outline:1px dotted rgba(255,0,0,.4); }
+    ` : ``}
+  </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
-      <div class="overlay">
-        <div class="line barcode">
-          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
+    <div class="carte">
+      <img class="bg" src="/static/${bg}" alt="fond">
+      <div class="layer">
+        <div class="grid">
+          <div class="barcode">
+            <img src="/barcode/${code}?text=1" alt="code-barres">
+          </div>
+
+          <div class="row">
+            <div class="label">Nom :</div>
+            <div class="pill">
+              <span class="line nom">${nom}</span>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="label">Prénom :</div>
+            <div class="pill">
+              <span class="line prenom">${prenom}</span>
+            </div>
+          </div>
+
+          <div class="bottom">
+            <div class="pill small">${points || "&nbsp;"}</div>
+            <div class="pill small">${reduction ? esc(reduction) + " €" : "&nbsp;"}</div>
+          </div>
+
+          <div class="meta">
+            Code: ${code}${points ? " • Points: " + points : ""}${reduction ? " • Réduction: " + reduction + " €" : ""}${email ? " • " + email : ""}
+          </div>
         </div>
-
-        <!-- Nom/Prénom -->
-        <div class="line nom">${nom.toUpperCase()}</div>
-        <div class="line prenom">${prenom}</div>
-
-        <!-- Points / Réduction -->
-        <div class="line points">${points}</div>
-        <div class="line reduction">${reduction}</div>
       </div>
-    </div>
-    <div class="info">
-      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
-  <!-- ===== Fit NOMS UNIQUEMENT (pas d'autres modifs) ===== -->
+  <!-- Seule modification: ajuster UNIQUEMENT la taille de Nom/Prénom -->
   <script>
   (function(){
-    function fitOneLine(el, minScale){
+    function fitOneLine(el, opts){
+      opts = opts || {};
+      var minScale = opts.minScale || 0.5;   // réduction max autorisée
+      var grow     = opts.grow ?? 1.0;       // >1 = autorise l'agrandissement
+      var padPx    = opts.padPx || 0;        // marge de sécu à droite
+
       if(!el) return;
-      // verrouille à 1 ligne sans bouger la zone
+
+      // Limite STRICTE aux deux champs
       el.style.whiteSpace = 'nowrap';
       el.style.display = 'inline-block';
-      // largeur dispo (la zone .line a left+right, donc clientWidth est la bonne)
-      var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-      if(!w) return;
 
-      var cs = getComputedStyle(el);
-      var base = parseFloat(cs.fontSize) || 16;
-      var lo = base * (minScale || 0.5);
-      var hi = base; // ne jamais augmenter, on ne fait que réduire
-      var best = lo;
+      var parent = el.parentElement;
+      var w = (parent && parent.clientWidth ? parent.clientWidth : el.clientWidth || el.getBoundingClientRect().width || 0) - padPx;
+      if (w <= 0) return;
 
-      // Teste d'abord à la taille actuelle
+      var base = parseFloat(getComputedStyle(el).fontSize) || 16;
+      var lo = base * minScale;
+      var hi = base;
+
+      // Démarre à la taille actuelle
       el.style.fontSize = hi + 'px';
-      if (el.scrollWidth <= w) {
-        best = hi;
-      } else {
-        // recherche dichotomique
-        for (var i=0; i<30 && (hi - lo) > 0.2; i++){
-          var mid = (hi + lo) / 2;
-          el.style.fontSize = mid + 'px';
-          if (el.scrollWidth <= w) { best = mid; hi = mid; }
-          else { lo = mid; }
+
+      // Si ça tient et qu'on peut grandir → on pousse doucement jusqu'à la limite
+      if (el.scrollWidth < w && grow > 1) {
+        var hardCap = base * grow;
+        while (el.scrollWidth < w && hi < hardCap) {
+          lo = hi;
+          hi = Math.min(hardCap, hi * 1.12); // incréments ~12%
+          el.style.fontSize = hi + 'px';
         }
       }
-      el.style.fontSize = best + 'px';
+
+      // Binaire pour coller au bord sans dépasser
+      for (var i = 0; i < 28; i++){
+        var mid = (hi + lo) / 2;
+        el.style.fontSize = mid + 'px';
+        if (el.scrollWidth <= w) { lo = mid; } else { hi = mid; }
+        if (Math.abs(hi - lo) < 0.2) break;
+      }
+      el.style.fontSize = Math.max(lo, base*minScale) + 'px';
     }
 
     function run(){
-      // Ajuste seulement Nom et Prénom
-      fitOneLine(document.querySelector('.line.nom'),    0.50);
-      fitOneLine(document.querySelector('.line.prenom'), 0.55);
-
-      // Affiche le texte (rien d'autre ne change)
-      document.body.classList.add('fitted');
+      // NOM: peut grandir jusqu’à +60%, avec 8px de marge de sécu
+      fitOneLine(document.querySelector('.line.nom'),    { minScale:0.50, grow:1.60, padPx:8 });
+      // PRÉNOM: réduit si besoin, ne grandit pas
+      fitOneLine(document.querySelector('.line.prenom'), { minScale:0.55, grow:1.00, padPx:8 });
     }
 
-    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(run); }
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(run);
     window.addEventListener('load', run);
     window.addEventListener('resize', run);
     window.addEventListener('orientationchange', run);
 
-    // helper si besoin: window.fitNames()
+    // pour relancer après modif DOM si besoin
     window.fitNames = run;
   })();
   </script>
