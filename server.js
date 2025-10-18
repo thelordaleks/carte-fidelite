@@ -26,7 +26,7 @@ app.use("/static", express.static(path.join(__dirname, "static")));
 // Mémoire (compat ancien /card/:id)
 const cartes = {};
 
-// Helper d’échappement HTML (sécurité et robustesse)
+// Helper d’échappement HTML
 function esc(s) {
   s = s == null ? "" : String(s);
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -78,8 +78,7 @@ app.post("/api/create-card", (req, res) => {
   // Jeton signé (expire 365 jours)
   const token = jwt.sign(data, SECRET, { expiresIn: "365d" });
 
-  const host =
-    process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
+  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
   const protocol = host.includes("localhost") ? "http" : "https";
   const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
   const urlLegacy = `${protocol}://${host}/card/${id}`;
@@ -129,9 +128,16 @@ app.get("/card/t/:token", (req, res) => {
   const points = (carte.points ?? "").toString().trim();
   const reduction = (carte.reduction ?? "").toString().trim();
 
-  const bg =
-    (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
-  const debug = req.query.debug === "1"; // ?debug=1 pour afficher les cadres
+  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const debug = req.query.debug === "1";
+
+  // Positions par défaut (en % de la hauteur) — ajustables via query string
+  const yPrenom     = Number.parseFloat(req.query.y_prenom)     || 18;  // ex: 18%
+  const yNom        = Number.parseFloat(req.query.y_nom)        || 28;  // ex: 28%
+  const yBarcode    = Number.parseFloat(req.query.y_barcode)    || 42;  // ex: 42%
+  const hBarcode    = Number.parseFloat(req.query.h_barcode)    || 20;  // ex: 20% de la hauteur
+  const yPoints     = Number.parseFloat(req.query.y_points)     || 72;  // ex: 72%
+  const yReduction  = Number.parseFloat(req.query.y_reduction)  || 80;  // ex: 80%
 
   res.send(`<!doctype html>
 <html lang="fr">
@@ -141,8 +147,8 @@ app.get("/card/t/:token", (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
-      --card-ratio: 1.586; /* 85.6 x 53.98 (CR80) */
-      --w: 360px;          /* largeur de rendu par défaut */
+      --card-ratio: 1.586; /* CR80 85.6x53.98 */
+      --w: 360px;
       --pad: 16px;
       --fg: #111;
       --muted: #444;
@@ -158,6 +164,13 @@ app.get("/card/t/:token", (req, res) => {
       background: #ddd url("/static/${bg}") center/cover no-repeat;
       overflow: hidden;
       box-shadow: 0 8px 30px rgba(0,0,0,.12);
+      /* Variables de placement (en %) */
+      --y-prenom: ${yPrenom}%;
+      --y-nom: ${yNom}%;
+      --y-barcode: ${yBarcode}%;
+      --h-barcode: ${hBarcode}%;
+      --y-points: ${yPoints}%;
+      --y-reduction: ${yReduction}%;
     }
     .layer{position:absolute; inset:0}
     .zone{
@@ -165,37 +178,33 @@ app.get("/card/t/:token", (req, res) => {
       left: var(--pad);
       right: var(--pad);
       color: var(--fg);
-      text-shadow: 0 0 0 rgba(0,0,0,0);
       overflow: hidden;
       white-space: nowrap; /* 1 ligne */
+      z-index: 2; /* ⇧ texte AU-DESSUS du code-barres */
     }
-    /* Emplacements (approximations stables; inchangés) */
-    .prenom{ top: 20%; font-weight:600; letter-spacing: .2px; opacity:.96 }
-    .nom{ top: 30%; font-weight:800; letter-spacing: .3px; text-transform: uppercase; opacity:.98 }
-    .points{ bottom: 20%; color: var(--muted); font-weight:600 }
-    .reduction{ bottom: 13%; color: var(--muted); font-weight:600 }
+    .prenom{ top: var(--y-prenom); font-weight:600; letter-spacing:.2px; opacity:.99 }
+    .nom{ top: var(--y-nom); font-weight:800; letter-spacing:.3px; text-transform: uppercase; opacity:.99 }
+    .points{ top: var(--y-points); color: var(--muted); font-weight:700 }
+    .reduction{ top: var(--y-reduction); color: var(--muted); font-weight:700 }
 
-    /* Tailles de base (on ne fait varier que la font-size via JS) */
-    .line{ display:block; max-width: 100%; overflow:hidden; text-overflow: ellipsis; }
+    .line{ display:block; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
     .line.prenom{ font-size: clamp(14px, 5vw, 22px); }
-    .line.nom{    font-size: clamp(18px, 6.2vw, 28px); } /* taille max, réduite si besoin par JS */
+    .line.nom{    font-size: clamp(18px, 6.2vw, 28px); } /* maxi; JS réduit si nécessaire */
     .line.points, .line.reduction{ font-size: clamp(12px, 4.4vw, 18px); }
 
-    /* Code-barres plein, dimensionné par la largeur, sans bandeau */
     .barcode-wrap{
       position:absolute; left: var(--pad); right: var(--pad);
-      bottom: 32%; height: 19%;
+      top: var(--y-barcode); height: var(--h-barcode);
       display:flex; align-items:center; justify-content:center;
+      z-index: 1; /* ⇩ sous le texte */
     }
-    .barcode-wrap img{ width: 100%; height: 100%; object-fit: contain; }
+    .barcode-wrap img{ width: 100%; height: 100%; object-fit: contain; background:#fff; }
 
-    /* Debug cadres */
     ${debug ? `
     .zone, .barcode-wrap{ outline: 1px dashed rgba(255,0,0,.55); }
     .carte{ box-shadow: 0 0 0 3px rgba(255,0,0,.25) inset, 0 8px 30px rgba(0,0,0,.12); }
     ` : ""}
 
-    /* Apparition après fit */
     body:not(.fitted) .line{ opacity: 0; }
     body.fitted .line{ opacity: 1; transition: opacity .15s ease-out; }
   </style>
@@ -230,33 +239,27 @@ app.get("/card/t/:token", (req, res) => {
 
   <script>
     (function(){
-      // Ajuste la taille de police d'un élément (1 ligne) pour que scrollWidth <= largeur disponible
+      // Fit d'une ligne: ajuste uniquement font-size pour tenir en largeur
       function fitOne(el, opts){
         opts = opts || {};
-        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.34; // plus petit ratio autorisé
-        var precision = typeof opts.precision === 'number' ? opts.precision : 0.10; // px
-
+        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.34;
+        var precision = typeof opts.precision === 'number' ? opts.precision : 0.10;
         if (!el) return;
 
-        // Reset pour repartir de la taille CSS max
-        el.style.fontSize = '';
-
-        var cs   = getComputedStyle(el);
+        el.style.fontSize = ''; // repartir de la taille CSS
+        var cs = getComputedStyle(el);
         var base = parseFloat(cs.fontSize);
         var boxW = el.clientWidth || el.getBoundingClientRect().width || 0;
-
         if (!base || !boxW) return;
 
-        var lo = base * minScale; // borne basse
-        var hi = base;            // borne haute
+        var lo = base * minScale;
+        var hi = base;
         var best = lo;
 
-        // Si ça tient déjà à la taille de base, on garde
         el.style.fontSize = hi + 'px';
         if (el.scrollWidth <= boxW) {
           best = hi;
         } else {
-          // Recherche dichotomique
           for (var i = 0; i < 28 && (hi - lo) > precision; i++) {
             var mid = (hi + lo) / 2;
             el.style.fontSize = mid + 'px';
@@ -272,7 +275,6 @@ app.get("/card/t/:token", (req, res) => {
         nodes.forEach(function(el){
           var ms = parseFloat(el.getAttribute('data-min-scale'));
           if (!isFinite(ms)) {
-            // valeurs par défaut par type
             if (el.classList.contains('nom')) ms = 0.34;
             else if (el.classList.contains('prenom')) ms = 0.46;
             else ms = 0.50;
@@ -281,18 +283,13 @@ app.get("/card/t/:token", (req, res) => {
         });
       }
 
-      function runFit(){
-        fitAll();
-        document.body.classList.add('fitted');
-      }
+      function runFit(){ fitAll(); document.body.classList.add('fitted'); }
 
       if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
       window.addEventListener('load', runFit);
       window.addEventListener('resize', runFit);
       window.addEventListener('orientationchange', runFit);
-
-      // Expose pour debug
-      window.fitNow = runFit;
+      window.fitNow = runFit; // debug
     })();
   </script>
 </body>
@@ -322,7 +319,10 @@ app.get("/", (_req, res) => {
     <h2>✅ Serveur MDL en ligne</h2>
     <ul style="list-style:none">
       <li>/api/create-card — API pour Excel (retourne url signé)</li>
-      <li>/card/t/:token — Afficher une carte (stateless) — option ?bg=mail et ?debug=1</li>
+      <li>/card/t/:token — Afficher une carte (stateless) — options:
+        <br/>?bg=mail&debug=1
+        <br/>&y_prenom=18&y_nom=28&y_barcode=42&h_barcode=20&y_points=72&y_reduction=80
+      </li>
       <li>/card/:id — Ancien lien basé mémoire (redirige vers lien signé)</li>
       <li>/barcode/:code — Générer un code-barres (?text=1 pour afficher le texte)</li>
     </ul>
