@@ -30,15 +30,38 @@ const cartes = {};
 app.post("/api/create-card", (req, res) => {
   if (!req.body) return res.status(400).json({ error: "Requête vide" });
 
-  const { nom, prenom, email, code } = req.body || {};
-  if (!nom || !prenom || !code) return res.status(400).json({ error: "Champs manquants" });
+  // Ajout G/H : points & reduction (+ alias pour t'éviter de modifier Excel partout)
+  const {
+    nom,
+    prenom,
+    email,
+    code,
+    points,
+    reduction,
+    cumul,              // alias possibles pour points
+    cumul_points,       // alias possibles pour points
+    reduction_fidelite, // alias possibles pour reduction
+    reduc               // alias possibles pour reduction
+  } = req.body || {};
+
+  if (!nom || !prenom || !code) {
+    return res.status(400).json({ error: "Champs manquants (nom, prenom, code)" });
+  }
+
+  // Normalisation des valeurs transmises (on garde tel quel, string)
+  const pointsVal = (points ?? cumul ?? cumul_points ?? "").toString().trim();
+  const reductionVal = (reduction ?? reduction_fidelite ?? reduc ?? "").toString().trim();
 
   // Ancien comportement (mémoire) pour /card/:id
   const id = uuidv4();
-  cartes[id] = { nom, prenom, email, code };
+  cartes[id] = { nom, prenom, email, code, points: pointsVal, reduction: reductionVal };
 
-  // Jeton signé (expire dans 365 jours)
-  const token = jwt.sign({ nom, prenom, email: email || null, code }, SECRET, { expiresIn: "365d" });
+  // Jeton signé (expire dans 365 jours) — inclut points/reduction
+  const token = jwt.sign(
+    { nom, prenom, email: email || null, code, points: pointsVal, reduction: reductionVal },
+    SECRET,
+    { expiresIn: "365d" }
+  );
 
   const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
   const protocol = host.includes("localhost") ? "http" : "https";
@@ -46,7 +69,11 @@ app.post("/api/create-card", (req, res) => {
   const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
   const urlLegacy = `${protocol}://${host}/card/${id}`;
 
-  console.log(`✅ Carte générée : ${prenom} ${nom} → ${urlSigned}`);
+  console.log(
+    `✅ Carte générée : ${prenom} ${nom} → ${urlSigned}` +
+    (pointsVal ? ` | Points: ${pointsVal}` : "") +
+    (reductionVal ? ` | Réduction: ${reductionVal}` : "")
+  );
   res.json({ url: urlSigned, legacy: urlLegacy });
 });
 
@@ -86,6 +113,8 @@ app.get("/card/t/:token", (req, res) => {
   const prenom = (carte.prenom || "").trim();
   const nom = (carte.nom || "").trim();
   const code = (carte.code || "").trim();
+  const points = (carte.points || "").toString().trim();
+  const reduction = (carte.reduction || "").toString().trim();
 
   // HTML/Styles avec ajustement auto de la police (fit-to-width)
   res.send(`<!doctype html>
@@ -97,10 +126,12 @@ app.get("/card/t/:token", (req, res) => {
 <style>
 :root{
   --maxw: 560px;
-  /* Ajuste ces positions pour caler pile avec ton visuel */
-  --y-prenom: 72%;  /* zone "Prénom" sur l'image */
-  --y-nom:    61%;  /* zone "Nom" sur l'image */
-  --y-bar:    36%;  /* position verticale du code-barres (ex-ancienne zone "nom") */
+  /* Tes positions conservées + zones Points/Réduction */
+  --y-prenom: 72%;  /* zone "Prénom" */
+  --y-nom:    61%;  /* zone "Nom" */
+  --y-bar:    36%;  /* position verticale du code-barres */
+  --y-points: 86%;  /* zone "Cumul de points" */
+  --y-reduc:  92%;  /* zone "Réduction fidélité" */
 }
 *{box-sizing:border-box}
 body{
@@ -122,12 +153,12 @@ body{
 }
 .overlay{ position:absolute; inset:0; }
 
-/* LIGNES DE TEXTE (ajout fit-to-width: nowrap/overflow/ellipsis) */
+/* LIGNES DE TEXTE (fit-to-width) */
 .line{
   position:absolute; left:8%; right:8%;
   letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
-  white-space: nowrap; 
-  overflow: hidden; 
+  white-space: nowrap;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
 
@@ -143,13 +174,14 @@ body{
   font-size: clamp(16px, 4vw, 32px);
 }
 
-/* Largeur spécifique aux zones Prénom/Nom (garde tes valeurs) */
+/* Largeur spécifique aux zones Prénom/Nom (tes valeurs) */
 .line.prenom,
 .line.nom{
   left:23%;
   right:20%;
 }
 
+/* Code-barres */
 .barcode{
   position:absolute; left:8%; right:8%;
   top: var(--y-bar);
@@ -161,6 +193,19 @@ body{
   height:auto;
   filter: drop-shadow(0 1px 0 rgba(255,255,255,.5));
 }
+
+/* Nouvelles zones: Points et Réduction en bas de carte */
+.points{
+  top: var(--y-points);
+  font-weight:700;
+  font-size: clamp(14px, 3.8vw, 24px);
+}
+.reduction{
+  top: var(--y-reduc);
+  font-weight:700;
+  font-size: clamp(14px, 3.8vw, 24px);
+}
+
 .info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
 </style>
 </head>
@@ -171,15 +216,22 @@ body{
         <div class="line barcode">
           <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
+
         <!-- data-min-scale pour ajuster le “plancher” de réduction -->
         <div class="line prenom" data-min-scale="0.70">${prenom}</div>
         <div class="line nom"    data-min-scale="0.65">${nom.toUpperCase()}</div>
+
+        <!-- Colonnes G/H affichées si présentes -->
+        ${points ? `<div class="line points" data-min-scale="0.70">Points: ${points}</div>` : ``}
+        ${reduction ? `<div class="line reduction" data-min-scale="0.70">Réduction: ${reduction}</div>` : ``}
       </div>
     </div>
-    <div class="info">Présentez cette carte à la MDL. Code: ${code}</div>
+    <div class="info">
+      ${['Code: ' + code, points ? 'Points: ' + points : null, reduction ? 'Réduction: ' + reduction : null].filter(Boolean).join(' • ')}
+    </div>
   </div>
 
-  <!-- Script fit-to-width : coller juste avant </body> -->
+  <!-- Script fit-to-width -->
   <script>
     (function(){
       function fitToWidth(el, opts){
@@ -214,17 +266,16 @@ body{
         }
       }
 
-      function fitAllNames(scope){
+      function fitAll(scope){
         scope = scope || document;
-        var nodes = scope.querySelectorAll('.line.prenom, .line.nom');
+        var nodes = scope.querySelectorAll('.line.prenom, .line.nom, .line.points, .line.reduction');
         nodes.forEach(function(el){
           var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.6;
           fitToWidth(el, {minScale: ms});
         });
       }
 
-      function runFit(){ fitAllNames(); }
-
+      function runFit(){ fitAll(); }
       window.addEventListener('load', runFit);
       window.addEventListener('resize', runFit);
       window.addEventListener('orientationchange', runFit);
