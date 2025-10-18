@@ -3,7 +3,7 @@ const express = require("express");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const fs = require("fs");
-const bwipjs = require("bwip-js");
+const bwipjs = require("bwip-js"); // génération code-barres
 const jwt = require("jsonwebtoken");
 
 // ======== Configuration ========
@@ -23,7 +23,7 @@ app.use("/static", express.static(path.join(__dirname, "static")));
   console.log(fs.existsSync(p) ? "✅ Fichier présent:" : "⚠️  Fichier manquant:", f);
 });
 
-// Mémoire (compat ancien /card/:id)
+// ======== Mémoire (compat ancien /card/:id) ========
 const cartes = {};
 
 // ======== API appelée depuis Excel ========
@@ -79,32 +79,37 @@ app.post("/api/create-card", (req, res) => {
   const urlLegacy = `${protocol}://${host}/card/${id}`;
 
   console.log("✅ Carte générée:", prenom, nom, "→", urlSigned);
-  console.log("ℹ️ G/H reçus:", { points, reduction, keys: Object.keys(raw) });
 
-  return res.json({ url: urlSigned, legacy: urlLegacy });
+  return res.status(201).json({
+    ok: true,
+    url: urlSigned,
+    legacy: urlLegacy,
+  });
 });
 
-// ======== Code-barres ========
-app.get("/barcode/:code", (req, res) => {
+// ======== Génération code-barres ========
+app.get("/barcode/:code", async (req, res) => {
   try {
-    const includeText = req.query.text === "1";
-    bwipjs.toBuffer(
-      {
-        bcid: "code128",
-        text: req.params.code,
-        scale: 3,
-        height: 10,
-        includetext: includeText,
-        textxalign: "center",
-        backgroundcolor: "FFFFFF",
-      },
-      (err, png) => {
-        if (err) return res.status(500).send("Erreur génération code-barres");
-        res.type("image/png").send(png);
-      }
-    );
+    const code = String(req.params.code || "");
+    const withText = req.query.text === "1";
+    const png = await bwipjs.toBuffer({
+      bcid: "code128",
+      text: code,
+      scale: 3,        // ajustable
+      height: 28,      // ajustable
+      includetext: !!withText,
+      textxalign: "center",
+      textsize: 12,
+      paddingwidth: 6,
+      paddingheight: 6,
+      backgroundcolor: "FFFFFF",
+      monochrome: true,
+    });
+    res.set("Content-Type", "image/png");
+    res.send(png);
   } catch (e) {
-    res.status(500).send("Erreur serveur");
+    console.error("Barcode error:", e);
+    res.status(400).send("Bad barcode");
   }
 });
 
@@ -123,9 +128,12 @@ app.get("/card/t/:token", (req, res) => {
   const points = (carte.points ?? "").toString().trim();
   const reduction = (carte.reduction ?? "").toString().trim();
 
-  const bg =
-    (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
-  const debug = req.query.debug === "1"; // ?debug=1 pour afficher les cadres
+  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const debug = req.query.debug === "1";
+
+  // Protection XSS simple
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  const nomUpper = nom.toUpperCase();
 
   res.send(`<!doctype html>
 <html lang="fr">
@@ -135,20 +143,18 @@ app.get("/card/t/:token", (req, res) => {
 <title>Carte de fidélité MDL</title>
 <style>
 :root{
-  /* gabarit 1024x585 => ratio ≈ 1.75 */
   --maxw: 980px;
 
-  /* Y calés (en %) sur tes pilules */
+  /* positions (% du conteneur) */
   --y-bar:    36%;
-  --y-nom:    66%;  /* 62% → 60.8% : remonte un peu */
-  --y-prenom: 76%;  /* 72% → 70.8% : remonte un peu */
+  --y-nom:    66%;
+  --y-prenom: 76%;
   --y-points: 83%;
   --y-reduc:  83%;
 
-  /* X/largeurs calés (en %) */
   --x-nom:     24%;
   --x-prenom:  24%;
-  --r-nom:     35%;    /* marge droite par défaut (élargit la zone du Nom) */
+  --r-nom:     35%;
   --r-prenom:  35%;
 
   --x-points:  26%;
@@ -156,12 +162,10 @@ app.get("/card/t/:token", (req, res) => {
   --x-reduc:   45%;
   --w-reduc:   17%;
 
-  --bar-l:      8%;
-  --bar-r:      8%;
-
-  /* offsets de centrage vertical (MAJ = un chouïa plus haut visuellement) */
-  --ty-nom:    -51%;
-  --ty-prenom: -50%;
+  --bar-l: 8%;
+  --bar-r: 8%;
+  --ty-nom:   -51%;
+  --ty-prenom:-50%;
 }
 *{box-sizing:border-box}
 body{
@@ -177,7 +181,7 @@ body{
 /* Zones texte */
 .line{
   position:absolute;
-  opacity:0; /* on montre après le fit */
+  opacity:0; /* visible après fit */
   white-space:nowrap; overflow:hidden; text-overflow:clip;
   letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
   transition:opacity .12s ease;
@@ -187,185 +191,192 @@ body{
 .barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
 .barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
 
-/* Nom/Prénom: pile sur les grandes pilules */
+/* Nom/Prénom */
 .line.nom{
   left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
-  transform: translateY(var(--ty-nom, -50%));
+  transform: translateY(var(--ty-nom));
   font-weight:800;
   font-size:clamp(18px, 4.8vw, 46px);
-  letter-spacing:-0.015em;             /* légère compaction utile en MAJ */
+  letter-spacing:-0.015em;
   text-transform:uppercase;
 }
 .line.prenom{
   left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
-  transform: translateY(var(--ty-prenom, -50%));
+  transform: translateY(var(--ty-prenom));
   font-weight:700;
   font-size:clamp(16px, 4.2vw, 34px);
 }
 
-/* Petites pilules du bas */
-.points{
+/* Petites pilules */
+.line.points{
   top:var(--y-points); left:var(--x-points); width:var(--w-points);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
+  transform: translateY(-50%);
+  font-weight:700; font-size:clamp(14px,2.6vw,24px); text-align:center;
 }
-.reduction{
+.line.reduction{
   top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
+  transform: translateY(-50%);
+  font-weight:700; font-size:clamp(14px,2.6vw,24px); text-align:center;
 }
 
-/* Info sous la carte */
 .info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
-
 .fitted .line{ opacity:1; }
 
-/* Mode “bord droit serré” pour la pilule du Nom (noms très larges) */
-.carte.tight-nom   { --r-nom: 10.5%; }   /* avant 10% */
-.carte.tighter-nom { --r-nom: 12%;   }   /* avant 11.5% */
+/* Resserrement auto bord droit Nom */
+.carte.tight-nom   { --r-nom: 10.5%; }
+.carte.tighter-nom { --r-nom: 12%;   }
 
-
-/* Debug: cadres visibles */
+/* Debug */
 ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
 </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
+    <div class="carte" role="img" aria-label="Carte de fidélité de ${esc(prenom)} ${esc(nom)}">
       <div class="overlay">
         <div class="line barcode">
-          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
+          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${esc(code)}" decoding="async" />
         </div>
 
-        <!-- 1 ligne obligatoire + réduction automatique si trop de caractères -->
-        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${nom.toUpperCase()}</div>
-        <div class="line prenom" data-min-scale="0.46">${prenom}</div>
+        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${esc(nomUpper)}</div>
+        <div class="line prenom" data-min-scale="0.46">${esc(prenom)}</div>
 
-        <!-- Affiche TOUJOURS les deux champs (vides si Excel n’envoie rien) -->
-        <div class="line points"    data-min-scale="0.50">${points}</div>
-        <div class="line reduction" data-min-scale="0.50">${reduction}</div>
+        <div class="line points"    data-min-scale="0.50">${esc(points)}</div>
+        <div class="line reduction" data-min-scale="0.50">${esc(reduction)}</div>
       </div>
     </div>
     <div class="info">
-      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
+      ${['Code: ' + esc(code), (points!=='' ? 'Points: ' + esc(points) : null), (reduction!=='' ? 'Réduction: ' + esc(reduction) : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
   <script>
-    // Fit‑to‑width + préscalage par longueur de texte (1 ligne)
-    (function(){
-      function fitToWidth(el, opts){
-        opts = opts || {};
-        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
-        var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
-        var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
+  (function(){
+    // Largeur disponible fiable (desktop/mobile) même en position:absolute
+    function availWidth(el){
+      var w = el.clientWidth || el.getBoundingClientRect().width || 0;
+      if (w && w > 2) return w;
+      var cs = getComputedStyle(el);
+      var left  = parseFloat(cs.left)  || 0;
+      var right = parseFloat(cs.right) || 0;
+      var parent = el.offsetParent || el.parentElement || document.querySelector('.carte');
+      if (parent){
+        var pw = parent.getBoundingClientRect().width || 0;
+        var cand = pw - left - right;
+        if (cand > 2) return cand;
+      }
+      return 0;
+    }
 
-        // reset
-        el.style.fontSize = '';
-        el.style.letterSpacing = '';
+    function fitToWidth(el, opts){
+      opts = opts || {};
+      var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
+      var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
+      var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
 
-        var cs   = getComputedStyle(el);
-        var base = parseFloat(cs.fontSize);
-        var w    = el.clientWidth || el.getBoundingClientRect().width || 0;
-        if (!w || !base) return;
+      el.style.fontSize = '';
+      el.style.letterSpacing = '';
 
-        // 1) Pré‑réduction si trop de caractères (espaces pondérés 0.5)
-        var txt    = (el.textContent || '').trim();
-        var spaces = (txt.match(/\\s/g) || []).length;
-        var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5); // longueur "pondérée"
-        var pre    = 1;
-        if (wlen > charTh) pre = charTh / wlen; // ex: 30 car. → 22/30 = 0.733
-        pre = Math.max(pre, minScale);
+      var cs   = getComputedStyle(el);
+      var base = parseFloat(cs.fontSize);
+      var w    = availWidth(el);
+      if (!w || !base) return;
 
-        // 2) Bisection entre base*minScale et base*pre
-        var lo = base * minScale, hi = base * pre, best = lo;
+      // Pré-réduction selon longueur pondérée (espaces = 0.5)
+      var txt    = (el.textContent || '').trim();
+      var spaces = (txt.match(/\\s/g) || []).length;
+      var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5);
+      var pre    = 1;
+      if (wlen > charTh) pre = charTh / wlen;
+      pre = Math.max(pre, minScale);
 
-        el.style.fontSize = hi + 'px';
-        if (el.scrollWidth <= w) {
-          best = hi;
-        } else {
-          for (var i=0; i<26 && (hi - lo) > precision; i++) {
-            var mid = (hi + lo) / 2;
-            el.style.fontSize = mid + 'px';
-            if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
-          }
-        }
-        el.style.fontSize = best + 'px';
-
-        // 3) Si ça déborde encore, resserrer l'interlettrage puis affiner la taille
-        if (el.scrollWidth > w) {
-          var ls = 0, step = 0;
-          while (el.scrollWidth > w && step < 6) { // jusqu’à ~ -1.2px
-            ls -= 0.2; step++;
-            el.style.letterSpacing = ls + 'px';
-          }
-          var guard = 0;
-          while (el.scrollWidth > w && guard < 6) {
-            var f = parseFloat(el.style.fontSize) * 0.97;
-            el.style.fontSize = f + 'px';
-            guard++;
-          }
+      // Bisection
+      var lo = base * minScale, hi = base * pre, best = lo;
+      el.style.fontSize = hi + 'px';
+      if (el.scrollWidth <= w) {
+        best = hi;
+      } else {
+        for (var i=0; i<26 && (hi - lo) > precision; i++) {
+          var mid = (hi + lo) / 2;
+          el.style.fontSize = mid + 'px';
+          if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
         }
       }
+      el.style.fontSize = best + 'px';
 
-      function fitAll(scope){
-        scope = scope || document;
-        var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
-        nodes.forEach(function(el){
-          var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
-          var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
-          fitToWidth(el, {minScale: ms, charThreshold: ct});
-        });
-      }
-
-    function runFit(){
-  var carte = document.querySelector('.carte');
-  var nomEl = document.querySelector('.line.nom');
-
-  // Fonction: est‑ce que le texte est trop proche du bord droit ?
-  // On garde un "coussin" (pad) pour ne pas mordre l’arrondi visuel de la pilule
-  function tooCloseRight(el, padPx){
-    if (!el) return false;
-    var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-    // après un fit, scrollWidth ≈ largeur du texte
-    return el.scrollWidth >= Math.max(0, w - padPx);
-  }
-
-  // 1) État neutre, fit initial
-  if (carte) carte.classList.remove('tight-nom','tighter-nom');
-  fitAll();
-
-  // 2) Si le nom touche trop le bord droit → resserrer et re‑fit
-  if (carte && nomEl) {
-    var pad = 16; // coussin visuel (px) pour l’arrondi de la pilule
-    if (tooCloseRight(nomEl, pad)) {
-      carte.classList.add('tight-nom');
-      fitAll();
-
-      // 3) Encore trop proche ? on resserre davantage
-      if (tooCloseRight(nomEl, pad)) {
-        carte.classList.add('tighter-nom');
-        fitAll();
+      // Ajustements fins si nécessaire
+      if (el.scrollWidth > w) {
+        var ls = 0, step = 0;
+        while (el.scrollWidth > w && step < 6) {
+          ls -= 0.2; step++;
+          el.style.letterSpacing = ls + 'px';
+        }
+        var guard = 0;
+        while (el.scrollWidth > w && guard < 6) {
+          var f = parseFloat(el.style.fontSize) * 0.97;
+          el.style.fontSize = f + 'px';
+          guard++;
+        }
       }
     }
-  }
 
-        // 2) Fit après avoir posé la classe (largeur correcte)
-        fitAll();
-        document.body.classList.add('fitted');
+    function fitAll(scope){
+      scope = scope || document;
+      var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
+      nodes.forEach(function(el){
+        var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
+        var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
+        fitToWidth(el, {minScale: ms, charThreshold: ct});
+      });
+    }
+
+    function runFit(){
+      var carte = document.querySelector('.carte');
+      var nomEl = document.querySelector('.line.nom');
+
+      function tooCloseRight(el, padPx){
+        if (!el) return false;
+        var w = availWidth(el);
+        if (!w) return false;
+        return el.scrollWidth >= Math.max(0, w - padPx);
       }
 
-      if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
-      window.addEventListener('load', runFit);
-      window.addEventListener('resize', runFit);
-      window.addEventListener('orientationchange', runFit);
+      if (carte) carte.classList.remove('tight-nom','tighter-nom');
 
-      window.fitNow = runFit;
-    })();
+      // Laisser le layout se stabiliser (important sur desktop)
+      requestAnimationFrame(function(){
+        fitAll();
+
+        if (carte && nomEl) {
+          var pad = 16; // marge de sécurité pour l'arrondi
+          if (tooCloseRight(nomEl, pad)) {
+            carte.classList.add('tight-nom');
+            fitAll();
+            if (tooCloseRight(nomEl, pad)) {
+              carte.classList.add('tighter-nom');
+              fitAll();
+            }
+          }
+        }
+
+        document.body.classList.add('fitted');
+      });
+    }
+
+    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
+    window.addEventListener('load', runFit);
+    window.addEventListener('resize', runFit);
+    window.addEventListener('orientationchange', runFit);
+
+    // Outil debug manuel
+    window.fitNow = runFit;
+  })();
   </script>
 </body>
 </html>`);
 });
 
-// ======== Affichage carte — ANCIEN LIEN (dépend de la mémoire) ========
+// ======== Affichage carte — ANCIEN LIEN (mémoire → redirection) ========
 app.get("/card/:id", (req, res) => {
   const carte = cartes[req.params.id];
   if (!carte) return res.status(404).send("<h1>Carte introuvable ❌</h1>");
