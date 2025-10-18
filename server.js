@@ -11,105 +11,114 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET = process.env.SECRET || "dev-secret-change-me";
 
-// ✅ JSON
+// ======== Middlewares ========
 app.use(express.json());
-
-// Static
 app.use("/static", express.static(path.join(__dirname, "static")));
 
-// Vérif fichiers statiques utiles
-["logo-mdl.png", "carte-mdl.png", "carte-mdl-mail.png"].forEach((f) => {
+// Vérif fichiers statiques utiles (optionnel mais pratique)
+["carte-mdl.png", "carte-mdl-mail.png", "logo-mdl.png"].forEach((f) => {
   const p = path.join(__dirname, "static", f);
   console.log(fs.existsSync(p) ? "✅ Fichier présent:" : "⚠️  Fichier manquant:", f);
 });
 
-// ======== Mémoire (compat ancien /card/:id) ========
-const cartes = {};
+// ======== Mémoire (pour ancien /card/:id) ========
+const cartes = Object.create(null);
 
-// ======== API appelée depuis Excel ========
+// ======== Utils ========
+// Base URL (support proxy) pour renvoyer des liens absolus
+function baseUrl(req) {
+  const proto = (req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0];
+  return `${proto}://${req.get("host")}`;
+}
+// Echappement HTML simple (XSS)
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+// ======== API appelée depuis Excel / Power Automate ========
 app.post("/api/create-card", (req, res) => {
-  if (!req.body) return res.status(400).json({ error: "Requête vide" });
-
-  const raw = req.body || {};
-  const { nom, prenom, email, code } = raw;
-
-  if (!nom || !prenom || !code) {
-    return res.status(400).json({ error: "Champs manquants (nom, prenom, code)" });
+  if (!req.body || typeof req.body !== "object") {
+    return res.status(400).json({ ok: false, error: "Requête JSON invalide" });
   }
 
-  // Mapping ULTRA tolérant pour colonnes G/H venant d’Excel/PowerAutomate
+  const raw = req.body;
+
+  const nom      = (raw.nom ?? raw.Nom ?? raw.NOM ?? "").toString().trim();
+  const prenom   = (raw.prenom ?? raw.Prénom ?? raw.Prenom ?? raw.PRENOM ?? "").toString().trim();
+  const email    = (raw.email ?? raw.Email ?? raw.E-mail ?? "").toString().trim();
+  const code     = (raw.code ?? raw.Code ?? raw.CODE ?? raw["Code adhérent"] ?? raw["Code"] ?? "").toString().trim();
+
+  // Tolérance colonnes points / réduction
   const pointsRaw =
-    raw.points ??
-    raw.cumul ??
-    raw.cumul_points ??
-    raw["Cumul de points"] ??
-    raw["Cumul points"] ??
-    raw["Points cumulés"] ??
-    raw["Points"] ??
-    raw["G"] ??
-    raw["g"];
+    raw.points ?? raw.cumul ?? raw.cumul_points ?? raw["Cumul de points"] ?? raw["Cumul points"] ??
+    raw["Points cumulés"] ?? raw["Points"] ?? raw["G"] ?? raw["g"] ?? "";
 
   const reductionRaw =
-    raw.reduction ??
-    raw.reduction_fidelite ??
-    raw.reduc ??
-    raw["Réduction Fidélité"] ??
-    raw["Reduction Fidélité"] ??
-    raw["Réduction fidelité"] ??
-    raw["Réduction"] ??
-    raw["Réduc"] ??
-    raw["H"] ??
-    raw["h"];
+    raw.reduction ?? raw.reduction_fidelite ?? raw.reduc ?? raw["Réduction Fidélité"] ??
+    raw["Reduction Fidélité"] ?? raw["Réduction fidelité"] ?? raw["Réduction"] ?? raw["Réduc"] ??
+    raw["H"] ?? raw["h"] ?? "";
 
-  const points = (pointsRaw ?? "").toString().trim();
-  const reduction = (reductionRaw ?? "").toString().trim();
+  const points = String(pointsRaw).trim();
+  const reduction = String(reductionRaw).trim();
 
-  // Ancien comportement (mémoire) pour /card/:id
+  if (!nom || !prenom || !code) {
+    return res.status(400).json({ ok: false, error: "Champs manquants (nom, prenom, code)" });
+  }
+
+  // Données carte
+  const carte = {
+    nom, prenom, email, code, points, reduction,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Lien signé (stateless)
+  const token = jwt.sign(carte, SECRET, { expiresIn: "365d" });
+  const signedUrl = `${baseUrl(req)}/card/t/${encodeURIComponent(token)}`;
+
+  // Compat ancien: id mémoire
   const id = uuidv4();
-  const data = { nom, prenom, email: email || null, code, points, reduction };
-  cartes[id] = data;
+  cartes[id] = carte;
 
-  // Jeton signé (expire 365 jours)
-  const token = jwt.sign(data, SECRET, { expiresIn: "365d" });
-
-  const host =
-    process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
-  const urlLegacy = `${protocol}://${host}/card/${id}`;
-
-  console.log("✅ Carte générée:", prenom, nom, "→", urlSigned);
-
-  return res.status(201).json({
+  return res.json({
     ok: true,
-    url: urlSigned,
-    legacy: urlLegacy,
+    id,
+    url: signedUrl,
+    token,
+    legacyUrl: `${baseUrl(req)}/card/${id}`,
+    data: carte,
   });
 });
 
-// ======== Génération code-barres ========
+// ======== Code-barres PNG ========
+// Ex: /barcode/ADH10249HBsD?text=1&scale=4&height=28
 app.get("/barcode/:code", async (req, res) => {
   try {
     const code = String(req.params.code || "");
-    const withText = req.query.text === "1";
+    const scale = Math.min(8, Math.max(1, parseInt(req.query.scale, 10) || 4));   // plus grand = plus net
+    const height = Math.min(60, Math.max(10, parseInt(req.query.height, 10) || 28)); // hauteur en "bar units"
+    const includeText = req.query.text === "1";
+
     const png = await bwipjs.toBuffer({
       bcid: "code128",
       text: code,
-      scale: 3,        // ajustable
-      height: 28,      // ajustable
-      includetext: !!withText,
+      scale,
+      height,
+      includetext: includeText,
       textxalign: "center",
-      textsize: 12,
-      paddingwidth: 6,
-      paddingheight: 6,
       backgroundcolor: "FFFFFF",
-      monochrome: true,
+      // padding minimal pour éviter rognage des bords
+      paddingwidth: 4,
+      paddingheight: 0,
+      textsize: 10,
+      textyoffset: 2,
     });
-    res.set("Content-Type", "image/png");
-    res.send(png);
-  } catch (e) {
-    console.error("Barcode error:", e);
-    res.status(400).send("Bad barcode");
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400"); // 1 jour
+    return res.end(png);
+  } catch (err) {
+    console.error("Erreur barcode:", err);
+    return res.status(500).send("Erreur génération code-barres");
   }
 });
 
@@ -128,29 +137,30 @@ app.get("/card/t/:token", (req, res) => {
   const points = (carte.points ?? "").toString().trim();
   const reduction = (carte.reduction ?? "").toString().trim();
 
-  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const bg = (String(req.query.bg || "")).toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
   const debug = req.query.debug === "1";
 
-  // Protection XSS simple
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
   const nomUpper = nom.toUpperCase();
 
   res.send(`<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Carte de fidélité MDL</title>
 <style>
 :root{
   --maxw: 980px;
 
-  /* positions (% du conteneur) */
-  --y-bar:    36%;
+  /* Bandeau code-barres (corrigé mobile) */
+  --y-bar: 40%;   /* position verticale du centre du bandeau */
+  --h-bar: 50%;   /* hauteur du bandeau */
+
+  /* Positions textes */
   --y-nom:    66%;
   --y-prenom: 76%;
-  --y-points: 83%;
-  --y-reduc:  83%;
+  --y-points: 86%;
+  --y-reduc:  86%;
 
   --x-nom:     24%;
   --x-prenom:  24%;
@@ -164,214 +174,218 @@ app.get("/card/t/:token", (req, res) => {
 
   --bar-l: 8%;
   --bar-r: 8%;
-  --ty-nom:   -51%;
+
+  --ty-nom:   -50%;
   --ty-prenom:-50%;
 }
+
+/* Ajuste légèrement sur petits écrans */
+@media (max-width: 480px){
+  :root{
+    --y-bar: 39%;
+    --h-bar: 24%;
+  }
+}
+
 *{box-sizing:border-box}
 body{
-  margin:0; background:#f2f2f2;
+  margin:0;
+  background:#f2f2f2;
   font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  min-height:100svh; display:flex; align-items:center; justify-content:center; padding:16px;
-  color:#1c2434;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
-.wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
-.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
-.overlay{ position:absolute; inset:0; }
+.page{
+  max-width:var(--maxw);
+  margin:16px auto;
+  padding:12px;
+}
+.carte{
+  position:relative;
+  border-radius:18px;
+  box-shadow:0 10px 26px rgba(0,0,0,.12);
+  overflow:hidden;
+  background:#fff;
+}
+.carte > img.bg{
+  display:block;
+  width:100%;
+  height:auto;
+  pointer-events:none;
+  user-select:none;
+}
 
-/* Zones texte */
+/* Code-barres — bandeau centré avec hauteur fixée */
+.barcode{
+  position:absolute;
+  left:var(--bar-l); right:var(--bar-r);
+  top:var(--y-bar);
+  height:var(--h-bar);
+  transform: translateY(-50%);
+  display:flex; align-items:center; justify-content:center;
+}
+.barcode img{
+  height:100%;
+  width:auto;
+  max-width:86%;
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,.45));
+}
+
+/* Lignes textes */
 .line{
   position:absolute;
-  opacity:0; /* visible après fit */
-  white-space:nowrap; overflow:hidden; text-overflow:clip;
-  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
-  transition:opacity .12s ease;
+  left:0; right:0;
+  padding:0 .5rem;
+  color:#1c2430;
+  text-shadow: 0 2px 0 rgba(255,255,255,.6);
+  font-weight:800;
+  letter-spacing:.5px;
+  white-space:nowrap;
+  transform: translateY(-50%);
+}
+.line .pill{
+  display:inline-block;
+  padding:.18em .4em;
+  background:rgba(255,255,255,.55);
+  backdrop-filter:saturate(1.2) blur(1px);
+  border-radius:999px;
+  box-shadow: inset 0 0 0 2px rgba(16,30,44,.18), 0 1px 0 rgba(255,255,255,.8);
 }
 
-/* Code-barres */
-.barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
-.barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
-
-/* Nom/Prénom */
+/* NOM / PRÉNOM */
 .line.nom{
-  left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
+  top:var(--y-nom);
+  left:var(--x-nom);
+  right:var(--r-nom);
   transform: translateY(var(--ty-nom));
-  font-weight:800;
-  font-size:clamp(18px, 4.8vw, 46px);
-  letter-spacing:-0.015em;
-  text-transform:uppercase;
+  font-size: clamp(14px, 5.6vw, 36px);
 }
 .line.prenom{
-  left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
+  top:var(--y-prenom);
+  left:var(--x-prenom);
+  right:var(--r-prenom);
   transform: translateY(var(--ty-prenom));
-  font-weight:700;
-  font-size:clamp(16px, 4.2vw, 34px);
+  font-size: clamp(13px, 4.8vw, 28px);
+  font-weight:900;
 }
 
-/* Petites pilules */
-.line.points{
-  top:var(--y-points); left:var(--x-points); width:var(--w-points);
+/* Points & Réduction */
+.meta{
+  position:absolute;
+  top:var(--y-points);
   transform: translateY(-50%);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px); text-align:center;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(12px, 3.2vw, 20px);
+  color:#1a2230;
+  text-shadow: 0 1px 0 rgba(255,255,255,.6);
+  white-space:nowrap;
 }
-.line.reduction{
-  top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
-  transform: translateY(-50%);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px); text-align:center;
+.meta.points{
+  left:var(--x-points);
+  width:var(--w-points);
+  text-align:center;
+}
+.meta.reduc{
+  left:var(--x-reduc);
+  width:var(--w-reduc);
+  text-align:center;
 }
 
-.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
-.fitted .line{ opacity:1; }
-
-/* Resserrement auto bord droit Nom */
-.carte.tight-nom   { --r-nom: 10.5%; }
-.carte.tighter-nom { --r-nom: 12%;   }
+/* Ligne d'info en bas */
+.footer{
+  margin:.6rem auto 0;
+  font-size:12px;
+  color:#4a5568;
+  text-align:center;
+}
 
 /* Debug */
-${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
+body.debug .barcode{ outline:1px dashed rgba(0,0,0,.35); }
+body.debug .line{ outline:1px dashed rgba(255,0,0,.35); }
+body.debug .meta{ outline:1px dashed rgba(0,128,0,.35); }
 </style>
 </head>
-<body>
-  <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${esc(prenom)} ${esc(nom)}">
-      <div class="overlay">
-        <div class="line barcode">
-          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${esc(code)}" decoding="async" />
-        </div>
+<body class="${debug ? "debug" : ""}">
+  <div class="page">
+    <div class="carte">
+      <img class="bg" src="/static/${bg}" alt="Carte MDL">
+      <div class="barcode">
+        <img src="/barcode/${encodeURIComponent(encodeURIComponent(code))}?scale=4&height=28" alt="Code-barres">
+      </div>
 
-        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${esc(nomUpper)}</div>
-        <div class="line prenom" data-min-scale="0.46">${esc(prenom)}</div>
+      <div class="line nom">
+        <span class="pill">${esc(nomUpper)}</span>
+      </div>
+      <div class="line prenom">
+        <span class="pill">${esc(prenom)}</span>
+      </div>
 
-        <div class="line points"    data-min-scale="0.50">${esc(points)}</div>
-        <div class="line reduction" data-min-scale="0.50">${esc(reduction)}</div>
+      <div class="meta points"><span>${esc(points || "0")}</span></div>
+      <div class="meta reduc" style="left:var(--x-reduc);width:var(--w-reduc);">
+        <span>${esc(reduction || "0,00 €")}</span>
       </div>
     </div>
-    <div class="info">
-      ${['Code: ' + esc(code), (points!=='' ? 'Points: ' + esc(points) : null), (reduction!=='' ? 'Réduction: ' + esc(reduction) : null)].filter(Boolean).join(' • ')}
+
+    <div class="footer">
+      Code: ${esc(code)} • Points: ${esc(points || "0")} • Réduction: ${esc(reduction || "0,00 €")}
     </div>
   </div>
 
-  <script>
-  (function(){
-    // Largeur disponible fiable (desktop/mobile) même en position:absolute
-    function availWidth(el){
-      var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-      if (w && w > 2) return w;
-      var cs = getComputedStyle(el);
-      var left  = parseFloat(cs.left)  || 0;
-      var right = parseFloat(cs.right) || 0;
-      var parent = el.offsetParent || el.parentElement || document.querySelector('.carte');
-      if (parent){
-        var pw = parent.getBoundingClientRect().width || 0;
-        var cand = pw - left - right;
-        if (cand > 2) return cand;
-      }
-      return 0;
+<script>
+// Ajustement simple pour que NOM/PRÉNOM rentrent dans leur zone
+(function(){
+  function fitToWidth(el, opts){
+    if (!el) return;
+    var minScale = (opts && opts.minScale) || 0.5;
+    var threshold = (opts && opts.charThreshold) || 22;
+    // On évite de réduire pour les noms courts
+    var text = el.textContent || "";
+    var scale = 1;
+
+    function availWidth(node){
+      var rect = node.getBoundingClientRect();
+      var left = parseFloat(getComputedStyle(node).paddingLeft) || 0;
+      var right = parseFloat(getComputedStyle(node).paddingRight) || 0;
+      return rect.width - left - right;
     }
 
-    function fitToWidth(el, opts){
-      opts = opts || {};
-      var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
-      var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
-      var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
+    // Reset
+    el.style.transform = "none";
+    el.style.transformOrigin = "left center";
 
-      el.style.fontSize = '';
-      el.style.letterSpacing = '';
+    var wAvail = availWidth(el.parentElement || el);
+    if (!wAvail) return;
 
-      var cs   = getComputedStyle(el);
-      var base = parseFloat(cs.fontSize);
-      var w    = availWidth(el);
-      if (!w || !base) return;
+    // Mesure brute
+    var scrollW = el.scrollWidth;
 
-      // Pré-réduction selon longueur pondérée (espaces = 0.5)
-      var txt    = (el.textContent || '').trim();
-      var spaces = (txt.match(/\\s/g) || []).length;
-      var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5);
-      var pre    = 1;
-      if (wlen > charTh) pre = charTh / wlen;
-      pre = Math.max(pre, minScale);
-
-      // Bisection
-      var lo = base * minScale, hi = base * pre, best = lo;
-      el.style.fontSize = hi + 'px';
-      if (el.scrollWidth <= w) {
-        best = hi;
-      } else {
-        for (var i=0; i<26 && (hi - lo) > precision; i++) {
-          var mid = (hi + lo) / 2;
-          el.style.fontSize = mid + 'px';
-          if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
-        }
-      }
-      el.style.fontSize = best + 'px';
-
-      // Ajustements fins si nécessaire
-      if (el.scrollWidth > w) {
-        var ls = 0, step = 0;
-        while (el.scrollWidth > w && step < 6) {
-          ls -= 0.2; step++;
-          el.style.letterSpacing = ls + 'px';
-        }
-        var guard = 0;
-        while (el.scrollWidth > w && guard < 6) {
-          var f = parseFloat(el.style.fontSize) * 0.97;
-          el.style.fontSize = f + 'px';
-          guard++;
-        }
+    if (scrollW > wAvail) {
+      scale = Math.max(minScale, Math.min(1, wAvail / scrollW));
+      el.style.transform = "scale(" + scale + ")";
+    } else {
+      // si très long (beaucoup de lettres), on resserre un poil
+      if (text.trim().length > threshold) {
+        scale = Math.max(minScale, 0.94);
+        el.style.transform = "scale(" + scale + ")";
       }
     }
+  }
 
-    function fitAll(scope){
-      scope = scope || document;
-      var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
-      nodes.forEach(function(el){
-        var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
-        var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
-        fitToWidth(el, {minScale: ms, charThreshold: ct});
-      });
-    }
+  function runFit(){
+    var nom = document.querySelector(".line.nom .pill");
+    var prenom = document.querySelector(".line.prenom .pill");
+    [nom, prenom].forEach(function(n){
+      fitToWidth(n, { minScale: 0.45, charThreshold: 22 });
+    });
+  }
 
-    function runFit(){
-      var carte = document.querySelector('.carte');
-      var nomEl = document.querySelector('.line.nom');
-
-      function tooCloseRight(el, padPx){
-        if (!el) return false;
-        var w = availWidth(el);
-        if (!w) return false;
-        return el.scrollWidth >= Math.max(0, w - padPx);
-      }
-
-      if (carte) carte.classList.remove('tight-nom','tighter-nom');
-
-      // Laisser le layout se stabiliser (important sur desktop)
-      requestAnimationFrame(function(){
-        fitAll();
-
-        if (carte && nomEl) {
-          var pad = 16; // marge de sécurité pour l'arrondi
-          if (tooCloseRight(nomEl, pad)) {
-            carte.classList.add('tight-nom');
-            fitAll();
-            if (tooCloseRight(nomEl, pad)) {
-              carte.classList.add('tighter-nom');
-              fitAll();
-            }
-          }
-        }
-
-        document.body.classList.add('fitted');
-      });
-    }
-
-    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
-    window.addEventListener('load', runFit);
-    window.addEventListener('resize', runFit);
-    window.addEventListener('orientationchange', runFit);
-
-    // Outil debug manuel
-    window.fitNow = runFit;
-  })();
-  </script>
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
+  window.addEventListener("load", runFit);
+  window.addEventListener("resize", runFit);
+  window.addEventListener("orientationchange", runFit);
+  window.fitNow = runFit; // debug manuel
+})();
+</script>
 </body>
 </html>`);
 });
@@ -384,22 +398,22 @@ app.get("/card/:id", (req, res) => {
   res.redirect(302, `/card/t/${encodeURIComponent(token)}`);
 });
 
-// ======== Page d’accueil et test ========
+// ======== Pages simples de test ========
 app.get("/new", (_req, res) => {
-  res.send(`<html><head><title>Test Carte MDL</title></head>
-  <body style="text-align:center;font-family:Arial;">
+  res.send(`<html><head><title>Test Carte MDL</title><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  <body style="text-align:center;font-family:Arial;margin:24px">
     <h2>Carte de fidélité test MDL</h2>
-    <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;">
+    <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.15)">
   </body></html>`);
 });
 
 app.get("/", (_req, res) => {
-  res.send(`<html><head><title>Serveur Carte Fidélité MDL</title></head>
+  res.send(`<html><head><title>Serveur Carte Fidélité MDL</title><meta name="viewport" content="width=device-width,initial-scale=1"></head>
   <body style="font-family:Arial;text-align:center;padding:40px">
     <h2>✅ Serveur MDL en ligne</h2>
-    <ul style="list-style:none">
+    <ul style="list-style:none; padding:0; line-height:1.8">
       <li>/api/create-card — API pour Excel (retourne url signé)</li>
-      <li>/card/t/:token — Afficher une carte (stateless) — option ?bg=mail et ?debug=1</li>
+      <li>/card/t/:token — Afficher une carte (stateless) — options ?bg=mail et ?debug=1</li>
       <li>/card/:id — Ancien lien basé mémoire (redirige vers lien signé)</li>
       <li>/barcode/:code — Générer un code-barres (?text=1 pour afficher le texte)</li>
     </ul>
