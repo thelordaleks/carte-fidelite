@@ -98,7 +98,7 @@ app.get("/card/t/:token", (req, res) => {
 :root{
   --maxw: 560px;
   /* Ajuste ces positions pour caler pile avec ton visuel */
-  --y-prenom: 75%;  /* zone "Prénom" sur l'image */
+  --y-prenom: 76%;  /* zone "Prénom" sur l'image */
   --y-nom:    64%;  /* zone "Nom" sur l'image */
   --y-bar:    36%;  /* position verticale du code-barres (ex-ancienne zone "nom") */
 }
