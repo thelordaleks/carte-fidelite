@@ -148,8 +148,8 @@ app.get("/card/t/:token", (req, res) => {
   /* X/largeurs calés (en %) */
   --x-nom:     24%;
   --x-prenom:  24%;
-  --r-nom:     24%;    /* marge droite par défaut (élargit la zone du Nom) */
-  --r-prenom:  24%;
+  --r-nom:     35%;    /* marge droite par défaut (élargit la zone du Nom) */
+  --r-prenom:  35%;
 
   --x-points:  26%;
   --w-points:  17%;
