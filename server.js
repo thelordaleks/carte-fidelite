@@ -135,7 +135,6 @@ app.get("/card/t/:token", (req, res) => {
 <title>Carte de fidélité MDL</title>
 <style>
 :root{
-  /* gabarit 1024x585 => ratio ≈ 1.75 */
   --maxw: 980px;
 
   /* Y calés (en %) sur tes pilules */
@@ -159,7 +158,6 @@ app.get("/card/t/:token", (req, res) => {
   --bar-l:      8%;
   --bar-r:      8%;
 
-  /* offsets de centrage vertical */
   --ty-nom:    -51%;
   --ty-prenom: -50%;
 }
@@ -174,25 +172,33 @@ body{
 .carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
 .overlay{ position:absolute; inset:0; }
 
-/* Zones texte */
+/* Zones texte (conteneurs) */
 .line{
   position:absolute;
   ${debug ? "" : "opacity:0;"} /* on montre après le fit */
-  white-space:nowrap; overflow:hidden; text-overflow:clip;
+  overflow:hidden; white-space:nowrap; text-overflow:clip;
   letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
   transition:opacity .12s ease;
+}
+
+/* L’élément texte interne que l’on ajuste */
+.line .txt{
+  display:inline-block;
+  white-space:nowrap;
+  transform-origin:left center;
 }
 
 /* Code-barres */
 .barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
 .barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
 
-/* Nom/Prénom: pilules */
+/* Nom/Prénom */
 .line.nom{
   left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
   transform: translateY(var(--ty-nom, -50%));
   font-weight:800;
-  font-size:clamp(18px, 4.8vw, 46px);
+  /* taille de base, le JS peut dépasser sans limite "max" */
+  font-size:clamp(22px, 5.0vw, 48px);
   letter-spacing:-0.015em;
   text-transform:uppercase;
 }
@@ -200,7 +206,7 @@ body{
   left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
   transform: translateY(var(--ty-prenom, -50%));
   font-weight:700;
-  font-size:clamp(16px, 4.2vw, 34px);
+  font-size:clamp(18px, 4.4vw, 36px);
 }
 
 /* Petites pilules du bas */
@@ -218,7 +224,7 @@ body{
 
 .fitted .line{ opacity:1; }
 
-/* Debug: cadres visibles */
+/* Debug */
 ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
 </style>
 </head>
@@ -230,13 +236,13 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
           <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
 
-        <!-- Nom/Prénom -->
-        <div class="line nom">${nom.toUpperCase()}</div>
-        <div class="line prenom">${prenom}</div>
+        <!-- Nom/Prénom (avec span .txt pour le fit) -->
+        <div class="line nom"><span class="txt">${nom.toUpperCase()}</span></div>
+        <div class="line prenom"><span class="txt">${prenom}</span></div>
 
         <!-- Points / Réduction -->
-        <div class="line points">${points}</div>
-        <div class="line reduction">${reduction}</div>
+        <div class="line points"><span class="txt">${points}</span></div>
+        <div class="line reduction"><span class="txt">${reduction}</span></div>
       </div>
     </div>
     <div class="info">
@@ -244,42 +250,42 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
     </div>
   </div>
 
-  <!-- ===== Fit: agrandit UNIQUEMENT le NOM si possible ===== -->
+  <!-- ===== Fit: mesure la largeur du conteneur et ajuste le span .txt ===== -->
   <script>
   (function(){
-    function fitOneLine(el, opts){
-      if(!el) return;
+    function fitOneLine(container, opts){
+      if(!container) return;
+      const el = container.querySelector('.txt') || container;
+
       opts = opts || {};
-      var minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.5;
-      var grow = typeof opts.grow === 'number' ? opts.grow : 1.0; // >1 = autorise à grandir
-      var padPx = typeof opts.padPx === 'number' ? opts.padPx : 0;
+      const minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.5;
+      const grow     = typeof opts.grow     === 'number' ? opts.grow     : 1.0; // >1 = autorise à grandir
+      const padPx    = typeof opts.padPx    === 'number' ? opts.padPx    : 0;
 
-      el.style.whiteSpace = 'nowrap';
-      el.style.display = 'inline-block';
-
-      var w = (el.clientWidth || el.getBoundingClientRect().width || 0) - padPx;
+      // largeur dispo = largeur du conteneur (pas du texte)
+      const w = Math.max(0, (container.getBoundingClientRect().width || 0) - padPx);
       if (w <= 0) return;
 
-      var base = parseFloat(getComputedStyle(el).fontSize) || 16;
-      var lo = base * minScale;
-      var hi = base;
+      // base = taille actuelle du texte
+      const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+      let lo = base * minScale;
+      let hi = base;
 
-      // Part à la taille actuelle
       el.style.fontSize = hi + 'px';
 
-      // Si ça tient et qu'on peut grandir → augmente jusqu'à frôler la limite
+      // Si ça tient et qu'on peut grandir → augmente jusqu'à la limite
       if (grow > 1 && el.scrollWidth < w) {
-        var cap = base * grow;
+        const cap = base * grow;
         while (el.scrollWidth < w && hi < cap) {
           lo = hi;
-          hi = Math.min(cap, hi * 1.12); // pas ~12%
+          hi = Math.min(cap, hi * 1.18); // pas d'environ 18%
           el.style.fontSize = hi + 'px';
         }
       }
 
       // Recherche dichotomique pour coller au bord sans déborder
-      for (var i = 0; i < 28; i++){
-        var mid = (hi + lo) / 2;
+      for (let i = 0; i < 28; i++){
+        const mid = (hi + lo) / 2;
         el.style.fontSize = mid + 'px';
         if (el.scrollWidth <= w) { lo = mid; } else { hi = mid; }
         if (Math.abs(hi - lo) < 0.2) break;
@@ -288,26 +294,29 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
     }
 
     function run(){
-      // NOM: peut grandir jusqu'à +90%, petite marge à droite
-      fitOneLine(document.querySelector('.line.nom'),    { minScale:0.50, grow:1.95, padPx:9 });
-      // PRÉNOM: inchangé (ne grandit pas)
-      fitOneLine(document.querySelector('.line.prenom'), { minScale:0.55, grow:1.95, padPx:9 });
+      // NOM : peut grandir jusqu'à x3 (≈ +200%), marge 8 px
+      fitOneLine(document.querySelector('.line.nom'),    { minScale:0.50, grow:3.00, padPx:8 });
+      // PRÉNOM : peut grandir jusqu'à x2.2
+      fitOneLine(document.querySelector('.line.prenom'), { minScale:0.55, grow:2.20, padPx:8 });
 
       document.body.classList.add('fitted');
     }
 
-    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(run); }
-    window.addEventListener('load', run);
+    // Attendre les polices et les images, et réagir aux redimensionnements
+    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve())
+      .then(() => { if (document.readyState === 'complete') run(); else window.addEventListener('load', run); });
+
     window.addEventListener('resize', run);
     window.addEventListener('orientationchange', run);
 
-    // helper si besoin
+    // helper manuel
     window.fitNames = run;
   })();
   </script>
 </body>
 </html>`);
 });
+
 
 // ======== Affichage carte — ANCIEN LIEN (dépend de la mémoire) ========
 app.get("/card/:id", (req, res) => {
