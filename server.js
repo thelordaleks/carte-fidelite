@@ -135,12 +135,12 @@ body{
 .prenom{
   top: var(--y-prenom);
   font-weight:700;
-  font-size: clamp(16px, 4.6vw, 32px);
+  font-size: clamp(16px, 4vw, 32px);
 }
 .nom{
   top: var(--y-nom);
   font-weight:800;
-  font-size: clamp(18px, 5vw, 34px);
+  font-size: clamp(16px, 4vw, 32px);
 }
 
 /* Largeur spécifique aux zones Prénom/Nom (garde tes valeurs) */
