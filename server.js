@@ -18,7 +18,7 @@ app.use(express.json());
 app.use("/static", express.static(path.join(__dirname, "static")));
 
 // Vérif fichiers statiques utiles
-["logo-mdl.png", "carte-mdl.png"].forEach((f) => {
+["logo-mdl.png", "carte-mdl.png", "carte-mdl-mail.png"].forEach((f) => {
   const p = path.join(__dirname, "static", f);
   console.log(fs.existsSync(p) ? "✅ Fichier présent:" : "⚠️  Fichier manquant:", f);
 });
@@ -30,25 +30,25 @@ const cartes = {};
 app.post("/api/create-card", (req, res) => {
   if (!req.body) return res.status(400).json({ error: "Requête vide" });
 
-  // Ajout G/H : points & reduction (+ alias pour t'éviter de modifier Excel partout)
+  // Colonnes Excel attendues:
+  // G → points (Cumul de points)
+  // H → reduction (Réduction fidélité)
+  // + alias pour t’éviter de changer tout de suite Excel
   const {
     nom,
     prenom,
     email,
     code,
-    points,
-    reduction,
-    cumul,              // alias possibles pour points
-    cumul_points,       // alias possibles pour points
-    reduction_fidelite, // alias possibles pour reduction
-    reduc               // alias possibles pour reduction
+    points,                  // recommandé (colonne G)
+    reduction,               // recommandé (colonne H)
+    cumul, cumul_points,     // alias possibles G
+    reduction_fidelite, reduc // alias possibles H
   } = req.body || {};
 
   if (!nom || !prenom || !code) {
     return res.status(400).json({ error: "Champs manquants (nom, prenom, code)" });
   }
 
-  // Normalisation des valeurs transmises (on garde tel quel, string)
   const pointsVal = (points ?? cumul ?? cumul_points ?? "").toString().trim();
   const reductionVal = (reduction ?? reduction_fidelite ?? reduc ?? "").toString().trim();
 
@@ -69,11 +69,10 @@ app.post("/api/create-card", (req, res) => {
   const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
   const urlLegacy = `${protocol}://${host}/card/${id}`;
 
-  console.log(
-    `✅ Carte générée : ${prenom} ${nom} → ${urlSigned}` +
-    (pointsVal ? ` | Points: ${pointsVal}` : "") +
-    (reductionVal ? ` | Réduction: ${reductionVal}` : "")
-  );
+  console.log(`✅ Carte générée : ${prenom} ${nom} → ${urlSigned}`);
+  if (!pointsVal) console.warn("ℹ️  Aucun 'points' reçu (colonne G).");
+  if (!reductionVal) console.warn("ℹ️  Aucun 'reduction' reçu (colonne H).");
+
   res.json({ url: urlSigned, legacy: urlLegacy });
 });
 
@@ -116,7 +115,10 @@ app.get("/card/t/:token", (req, res) => {
   const points = (carte.points || "").toString().trim();
   const reduction = (carte.reduction || "").toString().trim();
 
-  // HTML/Styles avec ajustement auto de la police (fit-to-width)
+  // Choix fond: ?bg=mail → carte-mdl-mail.png, sinon carte-mdl.png
+  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+
+  // HTML/Styles avec fit-to-width amélioré
   res.send(`<!doctype html>
 <html lang="fr">
 <head>
@@ -125,13 +127,13 @@ app.get("/card/t/:token", (req, res) => {
 <title>Carte de fidélité MDL</title>
 <style>
 :root{
-  --maxw: 560px;
-  /* Tes positions conservées + zones Points/Réduction */
-  --y-prenom: 72%;  /* zone "Prénom" */
-  --y-nom:    61%;  /* zone "Nom" */
-  --y-bar:    36%;  /* position verticale du code-barres */
-  --y-points: 86%;  /* zone "Cumul de points" */
-  --y-reduc:  92%;  /* zone "Réduction fidélité" */
+  --maxw: 920px; /* large → bon rendu PC, reste responsive */
+  /* Positions calées sur ton visuel (peux ajuster au % près) */
+  --y-bar:    36%;  /* code-barres, grand bloc au centre */
+  --y-nom:    56%;  /* première pilule (Nom) */
+  --y-prenom: 66%;  /* deuxième pilule (Prénom) */
+  --y-points: 82%;  /* petite pilule Points (gauche) */
+  --y-reduc:  82%;  /* petite pilule Réduc (droite) */
 }
 *{box-sizing:border-box}
 body{
@@ -141,47 +143,48 @@ body{
   color:#1c2434;
 }
 .wrap{
-  width:min(92vw, var(--maxw));
+  width:min(96vw, var(--maxw));
   background:#fff; border-radius:20px; padding:16px;
   box-shadow:0 6px 24px rgba(0,0,0,.10);
 }
 .carte{
   position:relative; width:100%;
-  background:#fff url('/static/carte-mdl.png') center/cover no-repeat;
   border-radius:16px; overflow:hidden;
-  aspect-ratio: 5 / 3; /* ajuste si nécessaire */
+  aspect-ratio: 16 / 9; /* proche de ton PNG 1024x585 (≈1.75) */
+  background: #fff url('/static/${bg}') center/cover no-repeat;
 }
 .overlay{ position:absolute; inset:0; }
 
-/* LIGNES DE TEXTE (fit-to-width) */
+/* Zones texte: calées sur les pilules beiges */
 .line{
-  position:absolute; left:8%; right:8%;
-  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
+  position:absolute;
+  /* on masque pendant le fit pour éviter un flash/ellipse */
+  opacity: 0;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: clip; /* pas d'ellipsis, on préfère réduire la police */
+  letter-spacing:.2px;
+  text-shadow:0 1px 0 rgba(255,255,255,.6);
+  transition: opacity .12s ease;
 }
 
-/* Tailles “normales” (le JS ne fera que réduire si nécessaire) */
-.prenom{
-  top: var(--y-prenom);
-  font-weight:700;
-  font-size: clamp(16px, 4vw, 32px);
+/* Nom/Prénom: pilules longues à droite des libellés */
+.line.nom, .line.prenom{
+  left:30%;   /* laisse la zone 'Nom :' / 'Prénom :' à gauche */
+  right:6%;   /* colle à la marge droite de la pilule */
 }
 .nom{
   top: var(--y-nom);
   font-weight:800;
-  font-size: clamp(16px, 4vw, 32px);
+  font-size: clamp(16px, 4.2vw, 36px);
+}
+.prenom{
+  top: var(--y-prenom);
+  font-weight:700;
+  font-size: clamp(16px, 4.0vw, 34px);
 }
 
-/* Largeur spécifique aux zones Prénom/Nom (tes valeurs) */
-.line.prenom,
-.line.nom{
-  left:23%;
-  right:20%;
-}
-
-/* Code-barres */
+/* Code-barres: centré */
 .barcode{
   position:absolute; left:8%; right:8%;
   top: var(--y-bar);
@@ -189,24 +192,32 @@ body{
 }
 .barcode img{
   width: 84%;
-  max-width: 420px;
+  max-width: 720px; /* PC */
   height:auto;
   filter: drop-shadow(0 1px 0 rgba(255,255,255,.5));
 }
 
-/* Nouvelles zones: Points et Réduction en bas de carte */
+/* Deux petites pilules en bas: largeur fixe en % pour tomber pile */
 .points{
   top: var(--y-points);
+  left: 36%;
+  width: 26%;
   font-weight:700;
-  font-size: clamp(14px, 3.8vw, 24px);
+  font-size: clamp(14px, 2.8vw, 26px);
 }
 .reduction{
   top: var(--y-reduc);
+  left: 65%;
+  width: 26%;
   font-weight:700;
-  font-size: clamp(14px, 3.8vw, 24px);
+  font-size: clamp(14px, 2.8vw, 26px);
 }
 
+/* Info bas de carte */
 .info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
+
+/* Une fois le fit terminé, on affiche les textes */
+.fitted .line { opacity: 1; }
 </style>
 </head>
 <body>
@@ -217,13 +228,13 @@ body{
           <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
 
-        <!-- data-min-scale pour ajuster le “plancher” de réduction -->
-        <div class="line prenom" data-min-scale="0.70">${prenom}</div>
-        <div class="line nom"    data-min-scale="0.65">${nom.toUpperCase()}</div>
+        <!-- data-min-scale: plus bas sur PC pour éviter le tronquage -->
+        <div class="line nom"    data-min-scale="0.50">${nom.toUpperCase()}</div>
+        <div class="line prenom" data-min-scale="0.55">${prenom}</div>
 
         <!-- Colonnes G/H affichées si présentes -->
-        ${points ? `<div class="line points" data-min-scale="0.70">Points: ${points}</div>` : ``}
-        ${reduction ? `<div class="line reduction" data-min-scale="0.70">Réduction: ${reduction}</div>` : ``}
+        ${points ? `<div class="line points" data-min-scale="0.55">${points}</div>` : ``}
+        ${reduction ? `<div class="line reduction" data-min-scale="0.55">${reduction}</div>` : ``}
       </div>
     </div>
     <div class="info">
@@ -231,36 +242,36 @@ body{
     </div>
   </div>
 
-  <!-- Script fit-to-width -->
+  <!-- Script fit-to-width amélioré -->
   <script>
     (function(){
       function fitToWidth(el, opts){
         opts = opts || {};
-        var minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.6;
-        var precision = typeof opts.precision === 'number' ? opts.precision : 0.2;
+        var minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.5; // plus petit que avant
+        var precision = typeof opts.precision === 'number' ? opts.precision : 0.15;
 
         // repartir de la taille CSS (clamp)
         el.style.fontSize = '';
         el.style.letterSpacing = '';
         var base = parseFloat(getComputedStyle(el).fontSize);
-        var clientWidth = el.clientWidth || el.getBoundingClientRect().width || 0;
-        if (!clientWidth || !base) return;
+        var w = el.clientWidth || el.getBoundingClientRect().width || 0;
+        if (!w || !base) return;
 
-        // si ça tient, ne rien changer
-        if (el.scrollWidth <= clientWidth) { el.style.fontSize = base + 'px'; return; }
+        // Si ça tient déjà, rien à faire
+        if (el.scrollWidth <= w) { el.style.fontSize = base + 'px'; return; }
 
-        // recherche binaire entre base*minScale et base
+        // Binaire entre base*minScale et base
         var lo = base * minScale, hi = base, best = lo;
-        while ((hi - lo) > precision) {
+        for (var i=0; i<24 && (hi - lo) > precision; i++) {
           var mid = (hi + lo) / 2;
           el.style.fontSize = mid + 'px';
-          if (el.scrollWidth <= clientWidth) { best = mid; hi = mid; }
+          if (el.scrollWidth <= w) { best = mid; hi = mid; }
           else { lo = mid; }
         }
         el.style.fontSize = best + 'px';
 
-        // filet de sécurité si ça frotte encore
-        if (el.scrollWidth > clientWidth) {
+        // filet: resserrer un peu l'espacement si besoin
+        if (el.scrollWidth > w) {
           var ls = parseFloat(getComputedStyle(el).letterSpacing || 0);
           el.style.letterSpacing = (ls - 0.2) + 'px';
         }
@@ -268,21 +279,26 @@ body{
 
       function fitAll(scope){
         scope = scope || document;
-        var nodes = scope.querySelectorAll('.line.prenom, .line.nom, .line.points, .line.reduction');
+        var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
         nodes.forEach(function(el){
-          var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.6;
+          var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.5;
           fitToWidth(el, {minScale: ms});
         });
       }
 
-      function runFit(){ fitAll(); }
+      function runFit(){
+        fitAll();
+        document.body.classList.add('fitted'); // affiche le texte
+      }
+
+      // Assure l'exécution après chargement des polices et images
+      if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
       window.addEventListener('load', runFit);
       window.addEventListener('resize', runFit);
       window.addEventListener('orientationchange', runFit);
-      if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
 
-      // Si tu modifies le texte côté client, appelle window.fitNamesNow()
-      window.fitNamesNow = runFit;
+      // Si tu modifies le texte côté client, appelle window.fitNow()
+      window.fitNow = runFit;
     })();
   </script>
 </body>
@@ -312,7 +328,7 @@ app.get("/", (_req, res) => {
     <h2>✅ Serveur MDL en ligne</h2>
     <ul style="list-style:none">
       <li>/api/create-card — API pour Excel (retourne url signé)</li>
-      <li>/card/t/:token — Afficher une carte (stateless)</li>
+      <li>/card/t/:token — Afficher une carte (stateless) — option ?bg=mail</li>
       <li>/card/:id — Ancien lien basé mémoire (redirige vers lien signé)</li>
       <li>/barcode/:code — Générer un code-barres (?text=1 pour afficher le texte)</li>
     </ul>
