@@ -146,8 +146,8 @@ body{
 /* Largeur spécifique aux zones Prénom/Nom (garde tes valeurs) */
 .line.prenom,
 .line.nom{
-  left:100%;
-  right:100%;
+  left:23%;
+  right:20%;
 }
 
 .barcode{
