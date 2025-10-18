@@ -171,7 +171,7 @@ body{
   color:#1c2434;
 }
 .wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
-.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
+.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/\${bg}') center/cover no-repeat; }
 .overlay{ position:absolute; inset:0; }
 
 /* Zones texte */
@@ -204,11 +204,11 @@ body{
 }
 
 /* Petites pilules du bas */
-.points{
+.line.points{
   top:var(--y-points); left:var(--x-points); width:var(--w-points);
   font-weight:700; font-size:clamp(14px,2.6vw,24px);
 }
-.reduction{
+.line.reduction{
   top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
   font-weight:700; font-size:clamp(14px,2.6vw,24px);
 }
@@ -224,66 +224,75 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
 </head>
 <body>
   <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
+    <div class="carte" role="img" aria-label="Carte de fidélité de \${prenom} \${nom}">
       <div class="overlay">
         <div class="line barcode">
-          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
+          <img src="/barcode/\${encodeURIComponent(code)}?text=0" alt="Code-barres \${code}" decoding="async" />
         </div>
 
         <!-- Nom/Prénom -->
-        <div class="line nom">${nom.toUpperCase()}</div>
-        <div class="line prenom">${prenom}</div>
+        <div class="line nom">\${nom.toUpperCase()}</div>
+        <div class="line prenom">\${prenom}</div>
 
         <!-- Points / Réduction -->
-        <div class="line points">${points}</div>
-        <div class="line reduction">${reduction}</div>
+        <div class="line points">\${points}</div>
+        <div class="line reduction">\${reduction}</div>
       </div>
     </div>
     <div class="info">
-      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
+      \${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
-  <!-- ===== Fit NOMS UNIQUEMENT (pas d'autres modifs) ===== -->
+  <!-- ===== Fit: agrandit UNIQUEMENT le NOM si possible ===== -->
   <script>
   (function(){
-    function fitOneLine(el, minScale){
+    function fitOneLine(el, opts){
       if(!el) return;
-      // verrouille à 1 ligne sans bouger la zone
+      opts = opts || {};
+      var minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.5;
+      var grow = typeof opts.grow === 'number' ? opts.grow : 1.0; // >1 = autorise à grandir
+      var padPx = typeof opts.padPx === 'number' ? opts.padPx : 0;
+
       el.style.whiteSpace = 'nowrap';
       el.style.display = 'inline-block';
-      // largeur dispo (la zone .line a left+right, donc clientWidth est la bonne)
-      var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-      if(!w) return;
 
-      var cs = getComputedStyle(el);
-      var base = parseFloat(cs.fontSize) || 16;
-      var lo = base * (minScale || 0.5);
-      var hi = base; // ne jamais augmenter, on ne fait que réduire
-      var best = lo;
+      var w = (el.clientWidth || el.getBoundingClientRect().width || 0) - padPx;
+      if (w <= 0) return;
 
-      // Teste d'abord à la taille actuelle
+      var base = parseFloat(getComputedStyle(el).fontSize) || 16;
+      var lo = base * minScale;
+      var hi = base;
+
+      // Part à la taille actuelle
       el.style.fontSize = hi + 'px';
-      if (el.scrollWidth <= w) {
-        best = hi;
-      } else {
-        // recherche dichotomique
-        for (var i=0; i<30 && (hi - lo) > 0.2; i++){
-          var mid = (hi + lo) / 2;
-          el.style.fontSize = mid + 'px';
-          if (el.scrollWidth <= w) { best = mid; hi = mid; }
-          else { lo = mid; }
+
+      // Si ça tient et qu'on peut grandir → augmente jusqu'à frôler la limite
+      if (grow > 1 && el.scrollWidth < w) {
+        var cap = base * grow;
+        while (el.scrollWidth < w && hi < cap) {
+          lo = hi;
+          hi = Math.min(cap, hi * 1.12); // pas ~12%
+          el.style.fontSize = hi + 'px';
         }
       }
-      el.style.fontSize = best + 'px';
+
+      // Recherche dichotomique pour coller au bord sans déborder
+      for (var i = 0; i < 28; i++){
+        var mid = (hi + lo) / 2;
+        el.style.fontSize = mid + 'px';
+        if (el.scrollWidth <= w) { lo = mid; } else { hi = mid; }
+        if (Math.abs(hi - lo) < 0.2) break;
+      }
+      el.style.fontSize = Math.max(lo, base*minScale) + 'px';
     }
 
     function run(){
-      // Ajuste seulement Nom et Prénom
-      fitOneLine(document.querySelector('.line.nom'),    0.50);
-      fitOneLine(document.querySelector('.line.prenom'), 0.55);
+      // NOM: peut grandir jusqu'à +55%, petite marge à droite
+      fitOneLine(document.querySelector('.line.nom'),    { minScale:0.50, grow:1.55, padPx:8 });
+      // PRÉNOM: inchangé (ne grandit pas)
+      fitOneLine(document.querySelector('.line.prenom'), { minScale:0.55, grow:1.00, padPx:8 });
 
-      // Affiche le texte (rien d'autre ne change)
       document.body.classList.add('fitted');
     }
 
@@ -292,7 +301,7 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
     window.addEventListener('resize', run);
     window.addEventListener('orientationchange', run);
 
-    // helper si besoin: window.fitNames()
+    // helper si besoin
     window.fitNames = run;
   })();
   </script>
