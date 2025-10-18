@@ -117,6 +117,9 @@ app.get("/card/t/:token", (req, res) => {
     return res.status(404).send("<h1>Carte introuvable ❌</h1>");
   }
 
+  const esc = (s) =>
+    String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
   const prenom = (carte.prenom || "").trim();
   const nom = (carte.nom || "").trim();
   const code = (carte.code || "").trim();
@@ -138,17 +141,17 @@ app.get("/card/t/:token", (req, res) => {
   /* gabarit 1024x585 => ratio ≈ 1.75 */
   --maxw: 980px;
 
-  /* Y calés (en %) sur tes pilules */
+  /* Y calés (en %) sur ton visuel */
   --y-bar:    36%;
-  --y-nom:    66%;  /* 62% → 60.8% : remonte un peu */
-  --y-prenom: 76%;  /* 72% → 70.8% : remonte un peu */
+  --y-nom:    66%;
+  --y-prenom: 76%;
   --y-points: 83%;
   --y-reduc:  83%;
 
-  /* X/largeurs calés (en %) */
+  /* X/largeurs (en %) */
   --x-nom:     24%;
   --x-prenom:  24%;
-  --r-nom:     35%;    /* marge droite par défaut (élargit la zone du Nom) */
+  --r-nom:     35%;
   --r-prenom:  35%;
 
   --x-points:  26%;
@@ -159,10 +162,19 @@ app.get("/card/t/:token", (req, res) => {
   --bar-l:      8%;
   --bar-r:      8%;
 
-  /* offsets de centrage vertical (MAJ = un chouïa plus haut visuellement) */
+  /* offsets de centrage vertical */
   --ty-nom:    -51%;
   --ty-prenom: -50%;
 }
+
+/* Desktop: on élargit la zone du NOM pour éviter la sortie de pilule sur PC */
+@media (min-width: 900px){
+  :root{
+    --x-nom: 22%;
+    --r-nom: 18%; /* zone plus large que sur mobile */
+  }
+}
+
 *{box-sizing:border-box}
 body{
   margin:0; background:#f2f2f2;
@@ -187,7 +199,7 @@ body{
 .barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
 .barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
 
-/* Nom/Prénom: pile sur les grandes pilules */
+/* Nom/Prénom: pas de bulles */
 .line.nom{
   left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
   transform: translateY(var(--ty-nom, -50%));
@@ -218,9 +230,9 @@ body{
 
 .fitted .line{ opacity:1; }
 
-/* Mode “bord droit serré” pour la pilule du Nom (noms très larges) */
-.carte.tight-nom   { --r-nom: 10.5%; }   /* avant 10% */
-.carte.tighter-nom { --r-nom: 12%;   }   /* avant 11.5% */
+/* Ajustements auto si ça touche encore à droite (PC et noms très longs) */
+.carte.tight-nom   { --x-nom: 21%; --r-nom: 14%; }   /* élargit encore la zone */
+.carte.tighter-nom { --x-nom: 20%; --r-nom: 10%; }   /* élargit au max sans heurter le décor */
 
 /* Debug: cadres visibles */
 ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
@@ -228,23 +240,23 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
 </head>
 <body>
   <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
+    <div class="carte" role="img" aria-label="Carte de fidélité de ${esc(prenom)} ${esc(nom)}">
       <div class="overlay">
         <div class="line barcode">
-          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
+          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${esc(code)}" decoding="async" />
         </div>
 
         <!-- 1 ligne obligatoire + réduction automatique si trop de caractères -->
-        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${nom.toUpperCase()}</div>
-        <div class="line prenom" data-min-scale="0.46">${prenom}</div>
+        <div class="line nom"    id="nom"    data-min-scale="0.50" data-char-threshold="22">${esc(nom.toUpperCase())}</div>
+        <div class="line prenom" id="prenom" data-min-scale="0.46">${esc(prenom)}</div>
 
         <!-- Affiche TOUJOURS les deux champs (vides si Excel n’envoie rien) -->
-        <div class="line points"    data-min-scale="0.50">${points}</div>
-        <div class="line reduction" data-min-scale="0.50">${reduction}</div>
+        <div class="line points"    data-min-scale="0.50">${esc(points)}</div>
+        <div class="line reduction" data-min-scale="0.50">${esc(reduction)}</div>
       </div>
     </div>
     <div class="info">
-      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
+      ${['Code: ' + esc(code), (points!=='' ? 'Points: ' + esc(points) : null), (reduction!=='' ? 'Réduction: ' + esc(reduction) : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
@@ -308,47 +320,51 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
       function fitAll(scope){
         scope = scope || document;
         var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
+        var desktop = window.matchMedia('(min-width: 900px)').matches;
+
         nodes.forEach(function(el){
           var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
           var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
+
+          // Sur PC, autorise un peu plus de réduction pour le NOM (cas "BONNIN ..." très long)
+          if (desktop && el.classList.contains('nom')) {
+            ms = Math.min(ms, 0.38); // autorise 38% du corps de base si nécessaire
+            ct = Math.max(20, ct);   // garde un pré‑scaling raisonnable
+          }
           fitToWidth(el, {minScale: ms, charThreshold: ct});
         });
       }
 
-    function runFit(){
-  var carte = document.querySelector('.carte');
-  var nomEl = document.querySelector('.line.nom');
+      function runFit(){
+        var carte = document.querySelector('.carte');
+        var nomEl = document.querySelector('.line.nom');
 
-  // Fonction: est‑ce que le texte est trop proche du bord droit ?
-  // On garde un "coussin" (pad) pour ne pas mordre l’arrondi visuel de la pilule
-  function tooCloseRight(el, padPx){
-    if (!el) return false;
-    var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-    // après un fit, scrollWidth ≈ largeur du texte
-    return el.scrollWidth >= Math.max(0, w - padPx);
-  }
+        function tooCloseRight(el, padPx){
+          if (!el) return false;
+          var w = el.clientWidth || el.getBoundingClientRect().width || 0;
+          return el.scrollWidth >= Math.max(0, w - padPx);
+        }
 
-  // 1) État neutre, fit initial
-  if (carte) carte.classList.remove('tight-nom','tighter-nom');
-  fitAll();
-
-  // 2) Si le nom touche trop le bord droit → resserrer et re‑fit
-  if (carte && nomEl) {
-    var pad = 16; // coussin visuel (px) pour l’arrondi de la pilule
-    if (tooCloseRight(nomEl, pad)) {
-      carte.classList.add('tight-nom');
-      fitAll();
-
-      // 3) Encore trop proche ? on resserre davantage
-      if (tooCloseRight(nomEl, pad)) {
-        carte.classList.add('tighter-nom');
+        // État neutre, fit initial
+        if (carte) carte.classList.remove('tight-nom','tighter-nom');
         fitAll();
-      }
-    }
-  }
 
-        // 2) Fit après avoir posé la classe (largeur correcte)
-        fitAll();
+        // Si le nom est encore trop proche du bord droit → élargir la zone et re‑fit
+        if (carte && nomEl) {
+          var desktop = window.matchMedia('(min-width: 900px)').matches;
+          var pad = desktop ? 24 : 16; // coussin plus large sur PC
+
+          if (tooCloseRight(nomEl, pad)) {
+            carte.classList.add('tight-nom');
+            fitAll();
+
+            if (tooCloseRight(nomEl, pad)) {
+              carte.classList.add('tighter-nom');
+              fitAll();
+            }
+          }
+        }
+
         document.body.classList.add('fitted');
       }
 
@@ -356,7 +372,6 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
       window.addEventListener('load', runFit);
       window.addEventListener('resize', runFit);
       window.addEventListener('orientationchange', runFit);
-
       window.fitNow = runFit;
     })();
   </script>
