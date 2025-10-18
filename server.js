@@ -218,7 +218,7 @@ body{
 .line.reduction{ top:var(--y-reduc); left:var(--x-reduc); width:var(--w-reduc); font-weight:700; font-size:clamp(14px,2.6vw,24px); }
 
 @media (max-width: 480px){
-  :root{ --y-nom: 66%; --y-prenom: 77%; }
+  :root{ --y-nom: 65.5%; --y-prenom: 76.5%; }
 }
 .info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
 .fitted .line{ opacity:1; }
