@@ -164,7 +164,7 @@ const ogImage = abs(`/static/carte-mdl-mail.png?v=2025-10-18-2`); // change le v
 :root{
   --maxw: 980px;
   --y-bar:    36%;
-  --y-nom:    66%;
+  --y-nom:    65.5%;
   --y-prenom: 76%;
   --y-points: 83%;
   --y-reduc:  83%;
@@ -173,7 +173,7 @@ const ogImage = abs(`/static/carte-mdl-mail.png?v=2025-10-18-2`); // change le v
   --r-nom:     31%;
   --r-prenom:  31%;
   --x-points:  26%;
-  --w-points:  17%;
+  --w-points:  19%;
   --x-reduc:   45%;
   --w-reduc:   17%;
   --bar-l:      8%;
