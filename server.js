@@ -99,7 +99,7 @@ app.get("/card/t/:token", (req, res) => {
   --maxw: 560px;
   /* Ajuste ces positions pour caler pile avec ton visuel */
   --y-prenom: 76%;  /* zone "Prénom" sur l'image */
-  --y-nom:    64%;  /* zone "Nom" sur l'image */
+  --y-nom:    65%;  /* zone "Nom" sur l'image */
   --y-bar:    36%;  /* position verticale du code-barres (ex-ancienne zone "nom") */
 }
 *{box-sizing:border-box}
@@ -134,12 +134,12 @@ body{
 /* Tailles “normales” (le JS ne fera que réduire si nécessaire) */
 .prenom{
   top: var(--y-prenom);
-  font-weight:800;
+  font-weight:700;
   font-size: clamp(16px, 4vw, 32px);
 }
 .nom{
   top: var(--y-nom);
-  font-weight:700;
+  font-weight:800;
   font-size: clamp(16px, 4vw, 32px);
 }
 
