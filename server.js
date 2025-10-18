@@ -129,10 +129,12 @@ app.get("/card/t/:token", (req, res) => {
   const protocol = host.includes("localhost") ? "http" : "https";
   const abs = (p) => `${protocol}://${host}${p}`;
 
-  // Image de fond et image d’aperçu (Open Graph) selon ?bg=mail
-  const isMail = String(req.query.bg || "").toLowerCase() === "mail";
-  const bgFile = isMail ? "carte-mdl-mail.png" : "carte-mdl.png";
-  const ogImage = abs(`/static/${bgFile}?v=2025-10-18`); // petit cache-busting
+  // Fond de page: selon ?bg=mail (utile pour tester visuellement)
+const isMail = String(req.query.bg || "").toLowerCase() === "mail";
+const bgFile = isMail ? "carte-mdl-mail.png" : "carte-mdl.png";
+
+// APERÇU DU LIEN: TOUJOURS l'image spéciale e‑mail (indépendant de ?bg)
+const ogImage = abs(`/static/carte-mdl-mail.png?v=2025-10-18-2`); // change le v pour forcer le cache
 
   const debug = req.query.debug === "1";
 
