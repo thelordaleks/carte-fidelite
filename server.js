@@ -1,4 +1,120 @@
-// ======== Affichage carte — LIEN SIGNÉ (recommandé) ========
+// ======== Dépendances ========
+const express = require("express");
+const { v4: uuidv4 } = require("uuid");
+const path = require("path");
+const fs = require("fs");
+const bwipjs = require("bwip-js");
+const jwt = require("jsonwebtoken");
+
+// ======== Configuration ========
+const app = express();
+const PORT = process.env.PORT || 3000;
+const SECRET = process.env.SECRET || "dev-secret-change-me";
+
+// ======== Middlewares ========
+app.use(express.json());
+app.use("/static", express.static(path.join(__dirname, "static")));
+
+// Vérification basique des assets
+["carte-mdl.png", "carte-mdl-mail.png", "logo-mdl.png"].forEach((f) => {
+  const p = path.join(__dirname, "static", f);
+  console.log(fs.existsSync(p) ? "✅ Fichier présent:" : "⚠️  Fichier manquant:", f);
+});
+
+// ======== Mémoire (legacy /card/:id) ========
+const cartes = Object.create(null);
+
+// ======== Utils ========
+function baseUrl(req) {
+  const proto = (req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0];
+  return `${proto}://${req.get("host")}`;
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+// ======== API pour Excel / Power Automate ========
+app.post("/api/create-card", (req, res) => {
+  if (!req.body || typeof req.body !== "object") {
+    return res.status(400).json({ ok: false, error: "Requête JSON invalide" });
+  }
+  const raw = req.body;
+
+  const nom    = (raw.nom ?? raw.Nom ?? raw.NOM ?? "").toString().trim();
+  const prenom = (raw.prenom ?? raw.Prénom ?? raw.Prenom ?? raw.PRENOM ?? "").toString().trim();
+  const email  = (raw.email ?? raw.Email ?? raw["E-mail"] ?? "").toString().trim();
+  const code   = (raw.code ?? raw.Code ?? raw.CODE ?? raw["Code adhérent"] ?? raw["Code"] ?? "").toString().trim();
+
+  const pointsRaw =
+    raw.points ?? raw.cumul ?? raw.cumul_points ?? raw["Cumul de points"] ?? raw["Cumul points"] ??
+    raw["Points cumulés"] ?? raw["Points"] ?? raw["G"] ?? raw["g"] ?? "";
+
+  const reducRaw =
+    raw.reduction ?? raw.reduction_fidelite ?? raw.reduc ?? raw["Réduction Fidélité"] ??
+    raw["Reduction Fidélité"] ?? raw["Réduction fidelité"] ?? raw["Réduction"] ?? raw["Réduc"] ??
+    raw["H"] ?? raw["h"] ?? "";
+
+  const points = String(pointsRaw).trim();
+  const reduction = String(reducRaw).trim();
+
+  if (!nom || !prenom || !code) {
+    return res.status(400).json({ ok: false, error: "Champs manquants (nom, prenom, code)" });
+  }
+
+  const carte = { nom, prenom, email, code, points, reduction, createdAt: new Date().toISOString() };
+
+  // Lien signé (stateless)
+  const token = jwt.sign(carte, SECRET, { expiresIn: "365d" });
+  const signedUrl = `${baseUrl(req)}/card/t/${encodeURIComponent(token)}`;
+
+  // Compat ancien: id mémoire
+  const id = uuidv4();
+  cartes[id] = carte;
+
+  return res.json({
+    ok: true,
+    id,
+    url: signedUrl,
+    token,
+    legacyUrl: `${baseUrl(req)}/card/${id}`,
+    data: carte,
+  });
+});
+
+// ======== Code‑barres PNG (classique) ========
+// Par défaut on garde un rendu "plein" comme avant (pas de contrainte CSS de hauteur).
+// Tu peux ajuster via ?scale=3&height=22 si besoin. Valeurs par défaut conservatrices.
+app.get("/barcode/:code", async (req, res) => {
+  try {
+    const code = String(req.params.code || "");
+    const scale  = Math.min(8, Math.max(1, parseInt(req.query.scale, 10) || 3));
+    const height = Math.min(60, Math.max(10, parseInt(req.query.height, 10) || 22));
+    const includeText = req.query.text === "1";
+
+    const png = await bwipjs.toBuffer({
+      bcid: "code128",
+      text: code,
+      scale,
+      height,
+      includetext: includeText,
+      textxalign: "center",
+      backgroundcolor: "FFFFFF",
+      paddingwidth: 4,
+      paddingheight: 0,
+      textsize: 10,
+      textyoffset: 2,
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    return res.end(png);
+  } catch (err) {
+    console.error("Erreur barcode:", err);
+    return res.status(500).send("Erreur génération code‑barres");
+  }
+});
+
+// ======== Affichage carte — LIEN SIGNÉ ========
 app.get("/card/t/:token", (req, res) => {
   let carte;
   try {
@@ -13,246 +129,214 @@ app.get("/card/t/:token", (req, res) => {
   const points = (carte.points ?? "").toString().trim();
   const reduction = (carte.reduction ?? "").toString().trim();
 
-  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const bg = (String(req.query.bg || "")).toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
   const debug = req.query.debug === "1";
 
-  // Petite protection XSS côté serveur
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-  const nomUpper = nom.toUpperCase();
-
+  // Pas de bulles — texte simple, une ligne, auto‑ajusté
   res.send(`<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Carte de fidélité MDL</title>
 <style>
 :root{
   --maxw: 980px;
 
-  /* positions (% du conteneur) */
-  --y-bar:    36%;
-  --y-nom:    66%;
-  --y-prenom: 76%;
-  --y-points: 83%;
-  --y-reduc:  83%;
+  /* Position du code‑barres (plein, centré) */
+  --y-bar: 45%;     /* centre vertical du code‑barres */
+  --bar-l: 7%;
+  --bar-r: 7%;
+
+  /* Positions des textes (une ligne chacun) */
+  --y-nom:     72%;
+  --y-prenom:  82%;
 
   --x-nom:     24%;
   --x-prenom:  24%;
   --r-nom:     35%;
   --r-prenom:  35%;
-
-  --x-points:  26%;
-  --w-points:  17%;
-  --x-reduc:   45%;
-  --w-reduc:   17%;
-
-  --bar-l: 8%;
-  --bar-r: 8%;
-  --ty-nom:   -51%;
-  --ty-prenom:-50%;
 }
+
+@media (max-width: 480px){
+  :root{
+    --y-bar: 46%;
+    --y-nom: 73%;
+    --y-prenom: 83%;
+  }
+}
+
 *{box-sizing:border-box}
 body{
-  margin:0; background:#f2f2f2;
+  margin:0;
+  background:#f2f2f2;
   font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  min-height:100svh; display:flex; align-items:center; justify-content:center; padding:16px;
-  color:#1c2434;
 }
-.wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
-.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
-.overlay{ position:absolute; inset:0; }
+.page{
+  max-width:var(--maxw);
+  margin:16px auto;
+  padding:12px;
+}
+.carte{
+  position:relative;
+  border-radius:18px;
+  box-shadow:0 10px 26px rgba(0,0,0,.12);
+  overflow:hidden;
+  background:#fff;
+}
+.carte > img.bg{
+  display:block;
+  width:100%;
+  height:auto;
+  pointer-events:none;
+  user-select:none;
+}
 
-/* Zones texte */
+/* Code‑barres "classique": largeur fixe, hauteur auto (plein) */
+.barcode{
+  position:absolute;
+  left:var(--bar-l); right:var(--bar-r);
+  top:var(--y-bar);
+  transform: translateY(-50%);
+  display:flex; align-items:center; justify-content:center;
+}
+.barcode img{
+  width:100%;
+  height:auto;       /* pas de limite de hauteur */
+  image-rendering:-webkit-optimize-contrast;
+}
+
+/* Lignes de texte sans bulles */
 .line{
   position:absolute;
-  opacity:0; /* visible après fit */
-  white-space:nowrap; overflow:hidden; text-overflow:clip;
-  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
-  transition:opacity .12s ease;
-}
-
-/* Code-barres */
-.barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
-.barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
-
-/* Nom/Prénom */
-.line.nom{
-  left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
-  transform: translateY(var(--ty-nom));
+  left:0; right:0;
+  padding:0 .5rem;
+  color:#1c2430;
   font-weight:800;
-  font-size:clamp(18px, 4.8vw, 46px);
-  letter-spacing:-0.015em;
-  text-transform:uppercase;
+  white-space:nowrap;
+  transform: translateY(-50%);
+  text-shadow: 0 0 2px #fff; /* petit liseré blanc pour lisibilité, sans fond */
+}
+.line.nom{
+  top:var(--y-nom);
+  left:var(--x-nom);
+  right:var(--r-nom);
+  font-size: clamp(14px, 5.6vw, 36px);
 }
 .line.prenom{
-  left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
-  transform: translateY(var(--ty-prenom));
-  font-weight:700;
-  font-size:clamp(16px, 4.2vw, 34px);
+  top:var(--y-prenom);
+  left:var(--x-prenom);
+  right:var(--r-prenom);
+  font-size: clamp(13px, 4.8vw, 28px);
+  font-weight:900;
 }
-
-/* Petites pilules */
-.points{
-  top:var(--y-points); left:var(--x-points); width:var(--w-points);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
-}
-.reduction{
-  top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
-  font-weight:700; font-size:clamp(14px,2.6vw,24px);
-}
-
-.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
-.fitted .line{ opacity:1; }
-
-/* Resserrement auto bord droit Nom */
-.carte.tight-nom   { --r-nom: 10.5%; }
-.carte.tighter-nom { --r-nom: 12%;   }
 
 /* Debug */
-${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
+body.debug .barcode{ outline:1px dashed rgba(0,0,0,.35); }
+body.debug .line{ outline:1px dashed rgba(255,0,0,.35); }
+
+/* Petit pied de page informatif (sans le mot "Code") */
+.footer{
+  margin:.6rem auto 0;
+  font-size:12px;
+  color:#4a5568;
+  text-align:center;
+}
 </style>
 </head>
-<body>
-  <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${esc(prenom)} ${esc(nom)}">
-      <div class="overlay">
-        <div class="line barcode">
-          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${esc(code)}" decoding="async" />
-        </div>
+<body class="${debug ? "debug" : ""}">
+  <div class="page">
+    <div class="carte">
+      <img class="bg" src="/static/${bg}" alt="Carte MDL">
 
-        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${esc(nomUpper)}</div>
-        <div class="line prenom" data-min-scale="0.46">${esc(prenom)}</div>
-
-        <div class="line points"    data-min-scale="0.50">${esc(points)}</div>
-        <div class="line reduction" data-min-scale="0.50">${esc(reduction)}</div>
+      <div class="barcode">
+        <img src="/barcode/${encodeURIComponent(encodeURIComponent(code))}?scale=3&height=22" alt="Code‑barres">
       </div>
+
+      <div class="line nom" id="nom">${esc(nom.toUpperCase())}</div>
+      <div class="line prenom" id="prenom">${esc(prenom)}</div>
     </div>
-    <div class="info">
-      ${['Code: ' + esc(code), (points!=='' ? 'Points: ' + esc(points) : null), (reduction!=='' ? 'Réduction: ' + esc(reduction) : null)].filter(Boolean).join(' • ')}
+
+    <div class="footer">
+      ${esc(code)} • Points: ${esc(points || "0")} • Réduction: ${esc(reduction || "0,00 €")}
     </div>
   </div>
 
-  <script>
-  (function(){
-    // Largeur disponible fiable (desktop/mobile) même en position:absolute
-    function availWidth(el){
-      var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-      if (w && w > 2) return w;
-      var cs = getComputedStyle(el);
-      var left  = parseFloat(cs.left)  || 0;
-      var right = parseFloat(cs.right) || 0;
-      var parent = el.offsetParent || el.parentElement || document.querySelector('.carte');
-      if (parent){
-        var pw = parent.getBoundingClientRect().width || 0;
-        var cand = pw - left - right;
-        if (cand > 2) return cand;
-      }
-      return 0;
+<script>
+// Ajuste la taille de police pour que le texte tienne sur une seule ligne
+(function(){
+  function fitLine(el, opts){
+    if (!el) return;
+    const minPx = (opts && opts.minPx) || 10;  // taille mini autorisée
+    const step  = (opts && opts.step)  || 0.5; // décrément en px
+    const maxLoops = 100;
+
+    // réinitialise d'abord (important si resize/orientation change)
+    el.style.transform = "none";
+    let fs = parseFloat(getComputedStyle(el).fontSize) || 16;
+
+    // largeur dispo = boîte parent (left/right déjà gérés par CSS)
+    const parent = el.parentElement || el;
+    let loops = 0;
+    while (el.scrollWidth > parent.clientWidth && fs > minPx && loops < maxLoops) {
+      fs -= step;
+      el.style.fontSize = fs + "px";
+      loops++;
     }
+  }
 
-    function fitToWidth(el, opts){
-      opts = opts || {};
-      var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
-      var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
-      var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
+  function run(){
+    fitLine(document.getElementById('nom'),    { minPx: 10, step: .5 });
+    fitLine(document.getElementById('prenom'), { minPx: 10, step: .5 });
+  }
 
-      el.style.fontSize = '';
-      el.style.letterSpacing = '';
-
-      var cs   = getComputedStyle(el);
-      var base = parseFloat(cs.fontSize);
-      var w    = availWidth(el);
-      if (!w || !base) return;
-
-      // Pré-réduction selon longueur pondérée (espaces = 0.5)
-      var txt    = (el.textContent || '').trim();
-      var spaces = (txt.match(/\\s/g) || []).length;
-      var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5);
-      var pre    = 1;
-      if (wlen > charTh) pre = charTh / wlen;
-      pre = Math.max(pre, minScale);
-
-      // Bisection
-      var lo = base * minScale, hi = base * pre, best = lo;
-      el.style.fontSize = hi + 'px';
-      if (el.scrollWidth <= w) {
-        best = hi;
-      } else {
-        for (var i=0; i<26 && (hi - lo) > precision; i++) {
-          var mid = (hi + lo) / 2;
-          el.style.fontSize = mid + 'px';
-          if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
-        }
-      }
-      el.style.fontSize = best + 'px';
-
-      // Ajustements fins si nécessaire
-      if (el.scrollWidth > w) {
-        var ls = 0, step = 0;
-        while (el.scrollWidth > w && step < 6) {
-          ls -= 0.2; step++;
-          el.style.letterSpacing = ls + 'px';
-        }
-        var guard = 0;
-        while (el.scrollWidth > w && guard < 6) {
-          var f = parseFloat(el.style.fontSize) * 0.97;
-          el.style.fontSize = f + 'px';
-          guard++;
-        }
-      }
-    }
-
-    function fitAll(scope){
-      scope = scope || document;
-      var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
-      nodes.forEach(function(el){
-        var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
-        var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
-        fitToWidth(el, {minScale: ms, charThreshold: ct});
-      });
-    }
-
-    function runFit(){
-      var carte = document.querySelector('.carte');
-      var nomEl = document.querySelector('.line.nom');
-
-      function tooCloseRight(el, padPx){
-        if (!el) return false;
-        var w = availWidth(el);
-        if (!w) return false;
-        return el.scrollWidth >= Math.max(0, w - padPx);
-      }
-
-      if (carte) carte.classList.remove('tight-nom','tighter-nom');
-
-      // Laisser le layout se stabiliser (important sur desktop)
-      requestAnimationFrame(function(){
-        fitAll();
-
-        if (carte && nomEl) {
-          var pad = 16; // marge de sécurité pour l'arrondi
-          if (tooCloseRight(nomEl, pad)) {
-            carte.classList.add('tight-nom');
-            fitAll();
-            if (tooCloseRight(nomEl, pad)) {
-              carte.classList.add('tighter-nom');
-              fitAll();
-            }
-          }
-        }
-
-        document.body.classList.add('fitted');
-      });
-    }
-
-    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
-    window.addEventListener('load', runFit);
-    window.addEventListener('resize', runFit);
-    window.addEventListener('orientationchange', runFit);
-    window.fitNow = runFit;
-  })();
-  </script>
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(run); }
+  window.addEventListener("load", run);
+  window.addEventListener("resize", run);
+  window.addEventListener("orientationchange", run);
+  window.fitNow = run; // pour tester à la main en console
+})();
+</script>
 </body>
 </html>`);
+});
+
+// ======== Affichage carte — ANCIEN LIEN (mémoire → redirection) ========
+app.get("/card/:id", (req, res) => {
+  const carte = cartes[req.params.id];
+  if (!carte) return res.status(404).send("<h1>Carte introuvable ❌</h1>");
+  const token = jwt.sign(carte, SECRET, { expiresIn: "365d" });
+  res.redirect(302, `/card/t/${encodeURIComponent(token)}`);
+});
+
+// ======== Pages simples de test ========
+app.get("/new", (_req, res) => {
+  res.send(`<html><head><title>Test Carte MDL</title><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  <body style="text-align:center;font-family:Arial;margin:24px">
+    <h2>Carte de fidélité test MDL</h2>
+    <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.15)">
+  </body></html>`);
+});
+
+app.get("/", (_req, res) => {
+  res.send(`<html><head><title>Serveur Carte Fidélité MDL</title><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  <body style="font-family:Arial;text-align:center;padding:40px">
+    <h2>✅ Serveur MDL en ligne</h2>
+    <ul style="list-style:none; padding:0; line-height:1.8">
+      <li>/api/create-card — API pour Excel (retourne url signé)</li>
+      <li>/card/t/:token — Afficher une carte (stateless) — options ?bg=mail et ?debug=1</li>
+      <li>/card/:id — Ancien lien basé mémoire (redirige vers lien signé)</li>
+      <li>/barcode/:code — Générer un code‑barres (?text=1 pour afficher le texte)</li>
+    </ul>
+  </body></html>`);
+});
+
+// ======== Lancement ========
+app.listen(PORT, () => {
+  const host = process.env.RENDER_EXTERNAL_HOSTNAME || `localhost:${PORT}`;
+  const protocol = host.includes("localhost") ? "http" : "https";
+  console.log(`🚀 Serveur démarré sur ${protocol}://${host}`);
+  if (!process.env.SECRET) {
+    console.warn("⚠️  SECRET non défini — utilisez une variable d'environnement en production.");
+  }
 });
