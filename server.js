@@ -87,7 +87,7 @@ app.get("/card/t/:token", (req, res) => {
   const nom = (carte.nom || "").trim();
   const code = (carte.code || "").trim();
 
-  // HTML/Styles: code-barres en zone ex-« nom », et nom/prénom dans leurs zones respectives
+  // HTML/Styles avec ajustement auto de la police (fit-to-width)
   res.send(`<!doctype html>
 <html lang="fr">
 <head>
@@ -121,10 +121,17 @@ body{
   aspect-ratio: 5 / 3; /* ajuste si nécessaire */
 }
 .overlay{ position:absolute; inset:0; }
+
+/* LIGNES DE TEXTE (ajout fit-to-width: nowrap/overflow/ellipsis) */
 .line{
   position:absolute; left:8%; right:8%;
   letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis;
 }
+
+/* Tailles “normales” (le JS ne fera que réduire si nécessaire) */
 .prenom{
   top: var(--y-prenom);
   font-weight:700;
@@ -135,10 +142,11 @@ body{
   font-weight:800;
   font-size: clamp(18px, 5vw, 34px);
 }
-  /* Ne bouger que Prénom et Nom */
+
+/* Largeur spécifique aux zones Prénom/Nom (garde tes valeurs) */
 .line.prenom,
 .line.nom{
-  left:23%;   /* diminue (6% → 5.5% → 5%) pour aller plus à gauche */
+  left:23%;
   right:50%;
 }
 
@@ -163,12 +171,69 @@ body{
         <div class="line barcode">
           <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
-        <div class="line prenom">${prenom}</div>
-        <div class="line nom">${nom.toUpperCase()}</div>
+        <!-- data-min-scale pour ajuster le “plancher” de réduction -->
+        <div class="line prenom" data-min-scale="0.70">${prenom}</div>
+        <div class="line nom"    data-min-scale="0.65">${nom.toUpperCase()}</div>
       </div>
     </div>
     <div class="info">Présentez cette carte à la MDL. Code: ${code}</div>
   </div>
+
+  <!-- Script fit-to-width : coller juste avant </body> -->
+  <script>
+    (function(){
+      function fitToWidth(el, opts){
+        opts = opts || {};
+        var minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.6;
+        var precision = typeof opts.precision === 'number' ? opts.precision : 0.2;
+
+        // repartir de la taille CSS (clamp)
+        el.style.fontSize = '';
+        el.style.letterSpacing = '';
+        var base = parseFloat(getComputedStyle(el).fontSize);
+        var clientWidth = el.clientWidth || el.getBoundingClientRect().width || 0;
+        if (!clientWidth || !base) return;
+
+        // si ça tient, ne rien changer
+        if (el.scrollWidth <= clientWidth) { el.style.fontSize = base + 'px'; return; }
+
+        // recherche binaire entre base*minScale et base
+        var lo = base * minScale, hi = base, best = lo;
+        while ((hi - lo) > precision) {
+          var mid = (hi + lo) / 2;
+          el.style.fontSize = mid + 'px';
+          if (el.scrollWidth <= clientWidth) { best = mid; hi = mid; }
+          else { lo = mid; }
+        }
+        el.style.fontSize = best + 'px';
+
+        // filet de sécurité si ça frotte encore
+        if (el.scrollWidth > clientWidth) {
+          var ls = parseFloat(getComputedStyle(el).letterSpacing || 0);
+          el.style.letterSpacing = (ls - 0.2) + 'px';
+        }
+      }
+
+      function fitAllNames(scope){
+        scope = scope || document;
+        var nodes = scope.querySelectorAll('.line.prenom, .line.nom');
+        nodes.forEach(function(el){
+          var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.6;
+          fitToWidth(el, {minScale: ms});
+        });
+      }
+
+      function runFit(){ fitAllNames(); }
+
+      window.addEventListener('load', runFit);
+      window.addEventListener('resize', runFit);
+      window.addEventListener('orientationchange', runFit);
+      if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
+
+      // Si tu modifies le texte côté client, appelle window.fitNamesNow()
+      window.fitNamesNow = runFit;
+    })();
+  </script>
 </body>
 </html>`);
 });
