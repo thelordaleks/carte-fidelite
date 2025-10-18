@@ -131,7 +131,7 @@ app.get("/card/t/:token", (req, res) => {
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Carte de fidélité MDL</title>
 <style>
 :root{
@@ -147,7 +147,7 @@ app.get("/card/t/:token", (req, res) => {
   /* X/largeurs calés (en %) */
   --x-nom:     24%;
   --x-prenom:  24%;
-  /* Un peu plus d'espace à droite pour éviter les coupures */
+  /* un peu plus d'espace à droite (éviter tronquage) */
   --r-nom:     31%;   /* ancien 35% */
   --r-prenom:  31%;
 
@@ -173,27 +173,26 @@ body{
 .carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
 .overlay{ position:absolute; inset:0; }
 
-/* Zones texte (conteneurs) */
+/* Zones texte */
 .line{
   position:absolute;
-  ${debug ? "" : "opacity:0;"} /* on montre après le fit */
+  ${debug ? "" : "opacity:0;"} /* révélé après fit */
   overflow:hidden; white-space:nowrap; text-overflow:clip;
   letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
   transition:opacity .12s ease;
 }
-
-/* L’élément texte interne que l’on ajuste */
 .line .txt{
   display:inline-block;
   white-space:nowrap;
   transform-origin:left center;
+  line-height:1;     /* évite de manger la zone au-dessus/dessous */
 }
 
 /* Code-barres */
 .barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
 .barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
 
-/* Nom/Prénom (tailles de base sobres — le JS ajuste) */
+/* Nom/Prénom (base sobres, JS ajuste) */
 .line.nom{
   left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
   transform: translateY(var(--ty-nom, -50%));
@@ -209,7 +208,7 @@ body{
   font-size:clamp(18px, 4.2vw, 36px);
 }
 
-/* Petites pilules du bas */
+/* Pilules bas */
 .line.points{
   top:var(--y-points); left:var(--x-points); width:var(--w-points);
   font-weight:700; font-size:clamp(14px,2.6vw,24px);
@@ -219,9 +218,15 @@ body{
   font-weight:700; font-size:clamp(14px,2.6vw,24px);
 }
 
-/* Info sous la carte */
-.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
+/* Petit ajustement mobile: recule un peu Nom/Prénom pour éviter de toucher le code-barres */
+@media (max-width: 480px){
+  :root{
+    --y-nom:    67%;
+    --y-prenom: 77%;
+  }
+}
 
+.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
 .fitted .line{ opacity:1; }
 
 /* Debug */
@@ -236,7 +241,7 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
           <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
 
-        <!-- Nom/Prénom (avec span .txt pour le fit) -->
+        <!-- Nom/Prénom -->
         <div class="line nom"><span class="txt">${nom.toUpperCase()}</span></div>
         <div class="line prenom"><span class="txt">${prenom}</span></div>
 
@@ -250,10 +255,9 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
     </div>
   </div>
 
-  <!-- ===== Fit: largeur conteneur + plafond + squeeze léger ===== -->
+  <!-- ===== Fit dynamique: plafond lié à la largeur de la carte ===== -->
   <script>
   (function(){
-    // Ajustement avec plafond (maxPx) + option de compression horizontale (squeeze)
     function fitOneLineCap(container, opts){
       if(!container) return;
       const el = container.querySelector('.txt') || container;
@@ -265,19 +269,15 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
       const maxPx    = typeof opts.maxPx    === 'number' ? opts.maxPx    : Infinity;
       const squeeze  = opts.squeeze || null; // { min:0.92, step:0.01 }
 
-      // largeur dispo = largeur du conteneur (pas du texte)
       const w = Math.max(0, (container.getBoundingClientRect().width || 0) - padPx);
       if (w <= 0) return;
 
-      // base = taille actuelle du texte
       const base = parseFloat(getComputedStyle(el).fontSize) || 16;
 
-      // bornes
       let lo = Math.max(1, base * minScale);
       let hi = Math.min(maxPx, base * Math.max(1, grow));
       let best = lo;
 
-      // recherche dichotomique de la plus grande taille qui rentre
       for (let i=0; i<30; i++){
         const mid = (lo + hi) / 2;
         el.style.fontSize = mid + 'px';
@@ -286,11 +286,10 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
       }
       el.style.fontSize = Math.min(best, maxPx) + 'px';
 
-      // reset transform puis, si ça dépasse encore → compression horizontale discrète
       el.style.transform = 'none';
       if (squeeze && el.scrollWidth > w){
         let sx = 1.0;
-        const minS = squeeze.min ?? 0.92;   // jusqu’à -8%
+        const minS = squeeze.min ?? 0.92;
         const step = squeeze.step ?? 0.01;
         while (el.scrollWidth > w && sx > minS){
           sx = +(sx - step).toFixed(3);
@@ -300,20 +299,28 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
     }
 
     function run(){
-      // NOM : cap pour éviter les noms courts trop gros + squeeze pour les très longs
+      const card = document.querySelector('.carte');
+      const cw = (card && card.getBoundingClientRect().width) || 1024;
+
+      // Plafonds proportionnels à la largeur carte (≈ 4.5% et 3.9%)
+      const capNom = Math.round(Math.max(16, cw * 0.045));    // 46px à 1024px, ~16px à 360px
+      const capPre = Math.round(Math.max(15, cw * 0.039));    // 40px à 1024px, ~14px à 360px
+
+      // Sur mobile, on “gonfle” moins les noms courts
+      const isNarrow = cw < 520;
+
       fitOneLineCap(document.querySelector('.line.nom'), {
-        minScale: 0.34,   // autorise une vraie réduction (cas très long)
-        grow:     1.55,   // évite de “gonfler” trop les noms courts (ex. DUHAMEL)
-        maxPx:    46,     // plafond dur ≈ 46 px
+        minScale: 0.34,
+        grow:     isNarrow ? 1.25 : 1.55,
+        maxPx:    capNom,
         padPx:    10,
-        squeeze:  { min: 0.92, step: 0.01 } // secours discret
+        squeeze:  { min: 0.92, step: 0.01 }
       });
 
-      // PRÉNOM : plage un peu plus basse
       fitOneLineCap(document.querySelector('.line.prenom'), {
         minScale: 0.45,
-        grow:     1.45,
-        maxPx:    40,
+        grow:     isNarrow ? 1.25 : 1.45,
+        maxPx:    capPre,
         padPx:    10,
         squeeze:  { min: 0.95, step: 0.01 }
       });
@@ -321,15 +328,15 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
       document.body.classList.add('fitted');
     }
 
-    // Attendre les polices et images, puis écouter les redimensionnements
-    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve())
-      .then(() => {
-        if (document.readyState === 'complete') run();
-        else window.addEventListener('load', run);
-      });
+    // Debounce léger pour les rotations/zoom
+    let raf = null;
+    function schedule(){ if(raf) cancelAnimationFrame(raf); raf = requestAnimationFrame(run); }
 
-    window.addEventListener('resize', run);
-    window.addEventListener('orientationchange', run);
+    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve())
+      .then(() => { if (document.readyState === 'complete') run(); else window.addEventListener('load', run); });
+
+    window.addEventListener('resize', schedule);
+    window.addEventListener('orientationchange', schedule);
 
     // helper manuel
     window.fitNames = run;
