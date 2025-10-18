@@ -46,7 +46,8 @@ app.post("/api/create-card", (req, res) => {
     raw["Cumul points"] ??
     raw["Points cumulés"] ??
     raw["Points"] ??
-    raw["G"] ?? raw["g"];
+    raw["G"] ??
+    raw["g"];
 
   const reductionRaw =
     raw.reduction ??
@@ -57,7 +58,8 @@ app.post("/api/create-card", (req, res) => {
     raw["Réduction fidelité"] ??
     raw["Réduction"] ??
     raw["Réduc"] ??
-    raw["H"] ?? raw["h"];
+    raw["H"] ??
+    raw["h"];
 
   const points = (pointsRaw ?? "").toString().trim();
   const reduction = (reductionRaw ?? "").toString().trim();
@@ -70,7 +72,8 @@ app.post("/api/create-card", (req, res) => {
   // Jeton signé (expire 365 jours)
   const token = jwt.sign(data, SECRET, { expiresIn: "365d" });
 
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
+  const host =
+    process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
   const protocol = host.includes("localhost") ? "http" : "https";
   const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
   const urlLegacy = `${protocol}://${host}/card/${id}`;
@@ -78,7 +81,7 @@ app.post("/api/create-card", (req, res) => {
   console.log("✅ Carte générée:", prenom, nom, "→", urlSigned);
   console.log("ℹ️ G/H reçus:", { points, reduction, keys: Object.keys(raw) });
 
-  res.json({ url: urlSigned, legacy: urlLegacy });
+  return res.json({ url: urlSigned, legacy: urlLegacy });
 });
 
 // ======== Code-barres ========
@@ -120,7 +123,8 @@ app.get("/card/t/:token", (req, res) => {
   const points = (carte.points ?? "").toString().trim();
   const reduction = (carte.reduction ?? "").toString().trim();
 
-  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const bg =
+    (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
   const debug = req.query.debug === "1"; // ?debug=1 pour afficher les cadres
 
   res.send(`<!doctype html>
@@ -144,8 +148,8 @@ app.get("/card/t/:token", (req, res) => {
   /* X/largeurs calés (en %) */
   --x-nom:     25.5%;
   --x-prenom:  25.5%;
-  --r-nom:     11%;    /* marge droite (right) */
-  --r-prenom:  11%;
+  --r-nom:     7%;    /* marge droite réduite pour plus de largeur */
+  --r-prenom:  9%;
 
   --x-points:  26%;
   --w-points:  17%;
@@ -180,12 +184,30 @@ body{
 .barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
 
 /* Nom/Prénom: pile sur les grandes pilules */
-.line.nom{    left:var(--x-nom);   right:var(--r-nom);   top:var(--y-nom);    font-weight:800; font-size:clamp(16px,4.2vw,36px); }
-.line.prenom{ left:var(--x-prenom);right:var(--r-prenom);top:var(--y-prenom); font-weight:700; font-size:clamp(16px,4.0vw,34px); }
+.line.nom{
+  left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
+  font-weight:800;
+  font-size:clamp(18px, 4.8vw, 46px);  /* base/max plus grands */
+  letter-spacing:-0.015em;             /* légère compaction utiles en MAJ */
+  text-transform:uppercase;
+  white-space:nowrap;                   /* 1 seule ligne */
+  overflow:hidden; text-overflow:clip;
+}
+.line.prenom{
+  left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
+  font-weight:700;
+  font-size:clamp(16px, 4.2vw, 34px);
+}
 
-/* Petites pilules de bas */
-.points{    top:var(--y-points); left:var(--x-points); width:var(--w-points); font-weight:700; font-size:clamp(14px,2.6vw,24px); }
-.reduction{ top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc); font-weight:700; font-size:clamp(14px,2.6vw,24px); }
+/* Petites pilules du bas */
+.points{
+  top:var(--y-points); left:var(--x-points); width:var(--w-points);
+  font-weight:700; font-size:clamp(14px,2.6vw,24px);
+}
+.reduction{
+  top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
+  font-weight:700; font-size:clamp(14px,2.6vw,24px);
+}
 
 /* Info sous la carte */
 .info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
@@ -204,8 +226,8 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
           <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
 
-        <!-- minScale abaissé pour éviter tout tronquage sur PC -->
-        <div class="line nom"    data-min-scale="0.42">${nom.toUpperCase()}</div>
+        <!-- 1 ligne obligatoire + réduction automatique si trop de caractères -->
+        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${nom.toUpperCase()}</div>
         <div class="line prenom" data-min-scale="0.46">${prenom}</div>
 
         <!-- Affiche TOUJOURS les deux champs (vides si Excel n’envoie rien) -->
@@ -219,31 +241,59 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
   </div>
 
   <script>
-    // Fit-to-width fiable
+    // Fit‑to‑width + préscalage par longueur de texte (1 ligne)
     (function(){
       function fitToWidth(el, opts){
         opts = opts || {};
-        var minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
+        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
         var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
+        var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
 
+        // reset
         el.style.fontSize = '';
         el.style.letterSpacing = '';
-        var base = parseFloat(getComputedStyle(el).fontSize);
-        var w = el.clientWidth || el.getBoundingClientRect().width || 0;
+
+        var cs   = getComputedStyle(el);
+        var base = parseFloat(cs.fontSize);
+        var w    = el.clientWidth || el.getBoundingClientRect().width || 0;
         if (!w || !base) return;
 
-        if (el.scrollWidth <= w) { el.style.fontSize = base + 'px'; return; }
+        // 1) Pré‑réduction si trop de caractères (espaces pondérés 0.5)
+        var txt    = (el.textContent || '').trim();
+        var spaces = (txt.match(/\\s/g) || []).length;
+        var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5); // longueur "pondérée"
+        var pre    = 1;
+        if (wlen > charTh) pre = charTh / wlen; // ex: 30 car. → 22/30 = 0.733
+        pre = Math.max(pre, minScale);
 
-        var lo = base * minScale, hi = base, best = lo;
-        for (var i=0; i<26 && (hi - lo) > precision; i++) {
-          var mid = (hi + lo) / 2;
-          el.style.fontSize = mid + 'px';
-          if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
+        // 2) Bisection entre base*minScale et base*pre
+        var lo = base * minScale, hi = base * pre, best = lo;
+
+        el.style.fontSize = hi + 'px';
+        if (el.scrollWidth <= w) {
+          best = hi;
+        } else {
+          for (var i=0; i<26 && (hi - lo) > precision; i++) {
+            var mid = (hi + lo) / 2;
+            el.style.fontSize = mid + 'px';
+            if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
+          }
         }
         el.style.fontSize = best + 'px';
+
+        // 3) Si ça déborde encore, resserrer l'interlettrage puis affiner la taille
         if (el.scrollWidth > w) {
-          var ls = parseFloat(getComputedStyle(el).letterSpacing || 0);
-          el.style.letterSpacing = (ls - 0.2) + 'px';
+          var ls = 0, step = 0;
+          while (el.scrollWidth > w && step < 6) { // jusqu’à ~ -1.2px
+            ls -= 0.2; step++;
+            el.style.letterSpacing = ls + 'px';
+          }
+          var guard = 0;
+          while (el.scrollWidth > w && guard < 6) {
+            var f = parseFloat(el.style.fontSize) * 0.97;
+            el.style.fontSize = f + 'px';
+            guard++;
+          }
         }
       }
 
@@ -252,7 +302,8 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
         var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
         nodes.forEach(function(el){
           var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
-          fitToWidth(el, {minScale: ms});
+          var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
+          fitToWidth(el, {minScale: ms, charThreshold: ct});
         });
       }
 
