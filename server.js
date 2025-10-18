@@ -11,294 +11,360 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET = process.env.SECRET || "dev-secret-change-me";
 
-// JSON
+// ✅ JSON
 app.use(express.json());
 
-// Fichiers statiques
+// Static
 app.use("/static", express.static(path.join(__dirname, "static")));
+
+// Vérif fichiers statiques utiles
 ["logo-mdl.png", "carte-mdl.png", "carte-mdl-mail.png"].forEach((f) => {
   const p = path.join(__dirname, "static", f);
   console.log(fs.existsSync(p) ? "✅ Fichier présent:" : "⚠️  Fichier manquant:", f);
 });
 
-// Mémoire (pour /card/:id legacy)
+// Mémoire (compat ancien /card/:id)
 const cartes = {};
-const esc = (s) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ======== API appelée depuis Excel ========
 app.post("/api/create-card", (req, res) => {
+  if (!req.body) return res.status(400).json({ error: "Requête vide" });
+
   const raw = req.body || {};
   const { nom, prenom, email, code } = raw;
+
   if (!nom || !prenom || !code) {
     return res.status(400).json({ error: "Champs manquants (nom, prenom, code)" });
   }
 
-  // Mapping tolérant colonnes G/H
+  // Mapping ULTRA tolérant pour colonnes G/H venant d’Excel/PowerAutomate
   const pointsRaw =
-    raw.points ?? raw.cumul ?? raw.cumul_points ?? raw["Cumul de points"] ?? raw["Cumul points"] ??
-    raw["Points cumulés"] ?? raw["Points"] ?? raw["G"] ?? raw["g"];
+    raw.points ??
+    raw.cumul ??
+    raw.cumul_points ??
+    raw["Cumul de points"] ??
+    raw["Cumul points"] ??
+    raw["Points cumulés"] ??
+    raw["Points"] ??
+    raw["G"] ??
+    raw["g"];
 
   const reductionRaw =
-    raw.reduction ?? raw.reduction_fidelite ?? raw.reduc ?? raw["Réduction Fidélité"] ?? raw["Reduction Fidélité"] ??
-    raw["Réduction fidelité"] ?? raw["Réduction"] ?? raw["Réduc"] ?? raw["H"] ?? raw["h"];
+    raw.reduction ??
+    raw.reduction_fidelite ??
+    raw.reduc ??
+    raw["Réduction Fidélité"] ??
+    raw["Reduction Fidélité"] ??
+    raw["Réduction fidelité"] ??
+    raw["Réduction"] ??
+    raw["Réduc"] ??
+    raw["H"] ??
+    raw["h"];
 
   const points = (pointsRaw ?? "").toString().trim();
   const reduction = (reductionRaw ?? "").toString().trim();
 
+  // Ancien comportement (mémoire) pour /card/:id
   const id = uuidv4();
   const data = { nom, prenom, email: email || null, code, points, reduction };
   cartes[id] = data;
 
+  // Jeton signé (expire 365 jours)
   const token = jwt.sign(data, SECRET, { expiresIn: "365d" });
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
+
+  const host =
+    process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
   const protocol = host.includes("localhost") ? "http" : "https";
   const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
   const urlLegacy = `${protocol}://${host}/card/${id}`;
 
   console.log("✅ Carte générée:", prenom, nom, "→", urlSigned);
-  console.log("ℹ️ Points/Reduc reçus:", { points, reduction });
+  console.log("ℹ️ G/H reçus:", { points, reduction, keys: Object.keys(raw) });
 
-  res.json({ url: urlSigned, legacy: urlLegacy });
+  return res.json({ url: urlSigned, legacy: urlLegacy });
 });
 
-// ======== Code‑barres ========
+// ======== Code-barres ========
 app.get("/barcode/:code", (req, res) => {
-  const includeText = req.query.text === "1";
-  bwipjs.toBuffer(
-    {
-      bcid: "code128",
-      text: req.params.code,
-      scale: 3,
-      height: 12,           // un peu plus haut que 10 pour un meilleur rendu
-      includetext: includeText,
-      textxalign: "center",
-      backgroundcolor: "FFFFFF",
-    },
-    (err, png) => {
-      if (err) return res.status(500).send("Erreur génération code‑barres");
-      res.type("image/png").send(png);
-    }
-  );
+  try {
+    const includeText = req.query.text === "1";
+    bwipjs.toBuffer(
+      {
+        bcid: "code128",
+        text: req.params.code,
+        scale: 3,
+        height: 10,
+        includetext: includeText,
+        textxalign: "center",
+        backgroundcolor: "FFFFFF",
+      },
+      (err, png) => {
+        if (err) return res.status(500).send("Erreur génération code-barres");
+        res.type("image/png").send(png);
+      }
+    );
+  } catch (e) {
+    res.status(500).send("Erreur serveur");
+  }
 });
 
-// ======== Affichage carte — lien signé ========
+// ======== Affichage carte — LIEN SIGNÉ (recommandé) ========
 app.get("/card/t/:token", (req, res) => {
-  let data;
+  let carte;
   try {
-    data = jwt.verify(req.params.token, SECRET);
+    carte = jwt.verify(req.params.token, SECRET);
   } catch {
     return res.status(404).send("<h1>Carte introuvable ❌</h1>");
   }
 
-  const prenom = (data.prenom || "").trim();
-  const nom = (data.nom || "").trim();
-  const code = (data.code || "").trim();
-  const points = (data.points ?? "").toString().trim();
-  const reduction = (data.reduction ?? "").toString().trim();
+  const prenom = (carte.prenom || "").trim();
+  const nom = (carte.nom || "").trim();
+  const code = (carte.code || "").trim();
+  const points = (carte.points ?? "").toString().trim();
+  const reduction = (carte.reduction ?? "").toString().trim();
 
-  // Image de fond
-  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
-  const debug = req.query.debug === "1";
-
-  // Calages (en % de la hauteur de la carte) — ajustables via query
-  const yBarcode   = parseFloat(req.query.y_barcode)   || 38; // position du haut du code‑barres
-  const hBarcode   = parseFloat(req.query.h_barcode)   || 22; // hauteur du code‑barres
-  const yRowsStart = parseFloat(req.query.y_rows)      || 64; // ligne “Nom/Prénom”
-  const rowGap     = parseFloat(req.query.row_gap)     || 7;  // écart entre les deux lignes
-  const yMetrics   = parseFloat(req.query.y_metrics)   || 79; // ligne points/réduc
-  const padPct     = parseFloat(req.query.pad)         || 6;  // padding gauche/droite %
+  const bg =
+    (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const debug = req.query.debug === "1"; // ?debug=1 pour afficher les cadres
 
   res.send(`<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <title>Carte fidélité</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{
-      --card-ratio: 1.586;             /* 85.6 x 53.98 */
-      --w: 360px;                       /* largeur max carte */
-      --fg: #111;
-      --muted: #3a3a3a;
-      --pill-bg: #f5c978;               /* jaune pâle (à rapprocher de ton fond aquarelle) */
-      --badge-bg: #f5c978;
-      --radius: 14px;
-      --pad-pct: ${padPct}%;
-      --y-barcode: ${yBarcode}%;
-      --h-barcode: ${hBarcode}%;
-      --y-rows: ${yRowsStart}%;
-      --row-gap: ${rowGap}%;
-      --y-metrics: ${yMetrics}%;
-    }
-    *{ box-sizing:border-box; }
-    html,body{ margin:0; padding:0; background:#f5f6f8; color:var(--fg); font-family: Arial, Helvetica, sans-serif; }
-    .wrap{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:16px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte de fidélité MDL</title>
+<style>
+:root{
+  /* gabarit 1024x585 => ratio ≈ 1.75 */
+  --maxw: 980px;
 
-    .carte{
-      position:relative;
-      width:min(92vw, var(--w));
-      aspect-ratio: var(--card-ratio);
-      border-radius: var(--radius);
-      background:#eee url("/static/${bg}") center/cover no-repeat;
-      box-shadow: 0 10px 28px rgba(0,0,0,.12);
-      overflow:hidden;
-    }
-    .layer{ position:absolute; inset:0; }
-    .zone{
-      position:absolute;
-      left: var(--pad-pct);
-      right: var(--pad-pct);
-      z-index:2; /* texte au-dessus du code‑barres */
-    }
+  /* Y calés (en %) sur tes pilules */
+  --y-bar:    36%;
+  --y-nom:    66%;  /* 62% → 60.8% : remonte un peu */
+  --y-prenom: 76%;  /* 72% → 70.8% : remonte un peu */
+  --y-points: 83%;
+  --y-reduc:  83%;
 
-    /* Code‑barres */
-    .barcode{ top: var(--y-barcode); height: var(--h-barcode); z-index:1; left: var(--pad-pct); right: var(--pad-pct); display:flex; align-items:center; }
-    .barcode img{ width:100%; height:100%; object-fit:contain; background:#fff; border-radius:8px; }
+  /* X/largeurs calés (en %) */
+  --x-nom:     24%;
+  --x-prenom:  24%;
+  --r-nom:     35%;    /* marge droite par défaut (élargit la zone du Nom) */
+  --r-prenom:  35%;
 
-    /* Lignes Nom / Prénom comme sur ta 1re image */
-    .rows{ top: var(--y-rows); }
-    .row{ display:flex; align-items:center; gap:10px; margin-bottom: calc(var(--row-gap)); }
-    .label{
-      flex:0 0 auto;
-      min-width: 64px;
-      color:#2b2b2b;
-      font-size: clamp(12px, 3.6vw, 16px);
-      font-style: italic;
-      opacity:.92;
-      text-shadow: 0 0 1px rgba(255,255,255,.55);
-    }
-    .pill{
-      position:relative;
-      flex:1 1 auto;
-      background: var(--pill-bg);
-      border-radius: 999px;
-      padding: 6px 12px;
-      min-height: 28px;
-      display:flex; align-items:center;
-      overflow:hidden;
-      white-space: nowrap; /* Sur PC on veut 1 ligne propre */
-    }
-    .pill .fit{
-      display:inline-block;
-      line-height:1.15;
-      font-weight: 800;
-      letter-spacing:.2px;
-      transform-origin:left center;
-      will-change: font-size;
-    }
+  --x-points:  26%;
+  --w-points:  17%;
+  --x-reduc:   45%;
+  --w-reduc:   17%;
 
-    .pill.nom .fit{ text-transform: uppercase; }
-    .pill.prenom .fit{ font-weight: 700; text-transform: none; }
+  --bar-l:      8%;
+  --bar-r:      8%;
 
-    /* Points / Réduc en petites pastilles comme sur l’exemple */
-    .metrics{ top: var(--y-metrics); display:flex; gap:14px; align-items:center; }
-    .badge{
-      background: var(--badge-bg);
-      border-radius: 12px;
-      padding: 6px 10px;
-      font-weight: 800;
-      display:inline-flex; align-items:center; gap:8px;
-      white-space: nowrap;
-      max-width: 45%;
-      overflow:hidden;
-    }
-    .badge .fit{ display:inline-block; line-height:1.1; transform-origin:left center; }
+  /* offsets de centrage vertical (MAJ = un chouïa plus haut visuellement) */
+  --ty-nom:    -51%;
+  --ty-prenom: -50%;
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:#f2f2f2;
+  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
+  min-height:100svh; display:flex; align-items:center; justify-content:center; padding:16px;
+  color:#1c2434;
+}
+.wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
+.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('/static/${bg}') center/cover no-repeat; }
+.overlay{ position:absolute; inset:0; }
 
-    /* Debug */
-    ${debug ? `
-      .barcode{ outline: 1px dashed rgba(0,128,255,.6); }
-      .rows, .metrics{ outline: 1px dashed rgba(255,0,0,.6); }
-      .pill, .badge{ outline: 1px dashed rgba(0,0,0,.35); }
-    ` : ""}
+/* Zones texte */
+.line{
+  position:absolute;
+  opacity:0; /* on montre après le fit */
+  white-space:nowrap; overflow:hidden; text-overflow:clip;
+  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
+  transition:opacity .12s ease;
+}
 
-    /* Apparition après fit */
-    body:not(.fitted) .carte .fit{ opacity:0; }
-    body.fitted .carte .fit{ opacity:1; transition:opacity .18s ease; }
-  </style>
+/* Code-barres */
+.barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
+.barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
+
+/* Nom/Prénom: pile sur les grandes pilules */
+.line.nom{
+  left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
+  transform: translateY(var(--ty-nom, -50%));
+  font-weight:800;
+  font-size:clamp(18px, 4.8vw, 46px);
+  letter-spacing:-0.015em;             /* légère compaction utile en MAJ */
+  text-transform:uppercase;
+}
+.line.prenom{
+  left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
+  transform: translateY(var(--ty-prenom, -50%));
+  font-weight:700;
+  font-size:clamp(16px, 4.2vw, 34px);
+}
+
+/* Petites pilules du bas */
+.points{
+  top:var(--y-points); left:var(--x-points); width:var(--w-points);
+  font-weight:700; font-size:clamp(14px,2.6vw,24px);
+}
+.reduction{
+  top:var(--y-reduc);  left:var(--x-reduc);  width:var(--w-reduc);
+  font-weight:700; font-size:clamp(14px,2.6vw,24px);
+}
+
+/* Info sous la carte */
+.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
+
+.fitted .line{ opacity:1; }
+
+/* Mode “bord droit serré” pour la pilule du Nom (noms très larges) */
+.carte.tight-nom   { --r-nom: 10.5%; }   /* avant 10% */
+.carte.tighter-nom { --r-nom: 12%;   }   /* avant 11.5% */
+
+/* Debug: cadres visibles */
+${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
+</style>
 </head>
 <body>
   <div class="wrap">
-    <div class="carte">
-      <div class="layer barcode">
-        <img alt="code-barres" src="/barcode/${encodeURIComponent(code)}" />
-      </div>
-
-      <div class="layer rows zone">
-        <div class="row">
-          <span class="label">Nom :</span>
-          <span class="pill nom"><span class="fit nom" data-min="0.36" data-max="26">${esc(nom).toUpperCase()}</span></span>
+    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
+      <div class="overlay">
+        <div class="line barcode">
+          <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${code}" decoding="async" />
         </div>
-        <div class="row">
-          <span class="label">Prénom :</span>
-          <span class="pill prenom"><span class="fit prenom" data-min="0.42" data-max="22">${esc(prenom)}</span></span>
-        </div>
-      </div>
 
-      <div class="layer metrics zone">
-        <span class="badge"><span class="fit points" data-min="0.6" data-max="18">Points: ${esc(points || "0")}</span></span>
-        <span class="badge"><span class="fit reduction" data-min="0.6" data-max="18">Réduction: ${esc(reduction || "0,00 €")}</span></span>
+        <!-- 1 ligne obligatoire + réduction automatique si trop de caractères -->
+        <div class="line nom"    data-min-scale="0.50" data-char-threshold="22">${nom.toUpperCase()}</div>
+        <div class="line prenom" data-min-scale="0.46">${prenom}</div>
+
+        <!-- Affiche TOUJOURS les deux champs (vides si Excel n’envoie rien) -->
+        <div class="line points"    data-min-scale="0.50">${points}</div>
+        <div class="line reduction" data-min-scale="0.50">${reduction}</div>
       </div>
     </div>
-
-    <div style="font-size:14px;color:#333;opacity:.9;text-align:center">
-      Code: <b>${esc(code)}</b> • Points: ${esc(points || "0")} • Réduction: ${esc(reduction || "0,00 €")}
+    <div class="info">
+      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
   <script>
-    // Ajuste UNIQUEMENT la taille de police pour faire tenir sur 1 ligne à l'intérieur des pastilles
+    // Fit‑to‑width + préscalage par longueur de texte (1 ligne)
     (function(){
-      function fit(el){
-        if(!el) return;
-        // Taille maximale depuis data-max (px) ou font-size courante
-        const maxPx = parseFloat(el.getAttribute('data-max')) || parseFloat(getComputedStyle(el).fontSize) || 24;
-        const minScale = parseFloat(el.getAttribute('data-min')) || 0.36; // proportion minimale vs maxPx
-        const parent = el.parentElement;
-        if(!parent) return;
+      function fitToWidth(el, opts){
+        opts = opts || {};
+        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
+        var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
+        var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
 
-        // On part du max puis on diminue
-        let lo = maxPx * minScale;
-        let hi = maxPx;
-        let best = lo;
+        // reset
+        el.style.fontSize = '';
+        el.style.letterSpacing = '';
+
+        var cs   = getComputedStyle(el);
+        var base = parseFloat(cs.fontSize);
+        var w    = el.clientWidth || el.getBoundingClientRect().width || 0;
+        if (!w || !base) return;
+
+        // 1) Pré‑réduction si trop de caractères (espaces pondérés 0.5)
+        var txt    = (el.textContent || '').trim();
+        var spaces = (txt.match(/\\s/g) || []).length;
+        var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5); // longueur "pondérée"
+        var pre    = 1;
+        if (wlen > charTh) pre = charTh / wlen; // ex: 30 car. → 22/30 = 0.733
+        pre = Math.max(pre, minScale);
+
+        // 2) Bisection entre base*minScale et base*pre
+        var lo = base * minScale, hi = base * pre, best = lo;
 
         el.style.fontSize = hi + 'px';
-        const boxW = parent.clientWidth;
-        if(!boxW) return;
-
-        // Si ça rentre déjà au max → fini
-        if (el.scrollWidth <= boxW) {
+        if (el.scrollWidth <= w) {
           best = hi;
         } else {
-          // Dichotomie
-          let guard = 0;
-          while(guard++ < 30 && (hi - lo) > 0.2){
-            const mid = (hi + lo) / 2;
+          for (var i=0; i<26 && (hi - lo) > precision; i++) {
+            var mid = (hi + lo) / 2;
             el.style.fontSize = mid + 'px';
-            if (el.scrollWidth <= boxW) { best = mid; hi = mid; }
-            else { lo = mid; }
+            if (el.scrollWidth <= w) { best = mid; hi = mid; } else { lo = mid; }
           }
         }
         el.style.fontSize = best + 'px';
+
+        // 3) Si ça déborde encore, resserrer l'interlettrage puis affiner la taille
+        if (el.scrollWidth > w) {
+          var ls = 0, step = 0;
+          while (el.scrollWidth > w && step < 6) { // jusqu’à ~ -1.2px
+            ls -= 0.2; step++;
+            el.style.letterSpacing = ls + 'px';
+          }
+          var guard = 0;
+          while (el.scrollWidth > w && guard < 6) {
+            var f = parseFloat(el.style.fontSize) * 0.97;
+            el.style.fontSize = f + 'px';
+            guard++;
+          }
+        }
       }
 
-      function fitAll(){
-        document.querySelectorAll('.pill .fit, .badge .fit').forEach(fit);
+      function fitAll(scope){
+        scope = scope || document;
+        var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
+        nodes.forEach(function(el){
+          var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
+          var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
+          fitToWidth(el, {minScale: ms, charThreshold: ct});
+        });
       }
 
-      if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fitAll); }
-      window.addEventListener('load', fitAll);
-      window.addEventListener('resize', fitAll);
-      window.addEventListener('orientationchange', fitAll);
-      window.fitNow = fitAll; // debug
-      document.body.classList.add('fitted');
+    function runFit(){
+  var carte = document.querySelector('.carte');
+  var nomEl = document.querySelector('.line.nom');
+
+  // Fonction: est‑ce que le texte est trop proche du bord droit ?
+  // On garde un "coussin" (pad) pour ne pas mordre l’arrondi visuel de la pilule
+  function tooCloseRight(el, padPx){
+    if (!el) return false;
+    var w = el.clientWidth || el.getBoundingClientRect().width || 0;
+    // après un fit, scrollWidth ≈ largeur du texte
+    return el.scrollWidth >= Math.max(0, w - padPx);
+  }
+
+  // 1) État neutre, fit initial
+  if (carte) carte.classList.remove('tight-nom','tighter-nom');
+  fitAll();
+
+  // 2) Si le nom touche trop le bord droit → resserrer et re‑fit
+  if (carte && nomEl) {
+    var pad = 16; // coussin visuel (px) pour l’arrondi de la pilule
+    if (tooCloseRight(nomEl, pad)) {
+      carte.classList.add('tight-nom');
+      fitAll();
+
+      // 3) Encore trop proche ? on resserre davantage
+      if (tooCloseRight(nomEl, pad)) {
+        carte.classList.add('tighter-nom');
+        fitAll();
+      }
+    }
+  }
+
+        // 2) Fit après avoir posé la classe (largeur correcte)
+        fitAll();
+        document.body.classList.add('fitted');
+      }
+
+      if (document.fonts && document.fonts.ready) { document.fonts.ready.then(runFit); }
+      window.addEventListener('load', runFit);
+      window.addEventListener('resize', runFit);
+      window.addEventListener('orientationchange', runFit);
+
+      window.fitNow = runFit;
     })();
   </script>
 </body>
 </html>`);
 });
 
-// ======== Affichage carte — ancien lien mémoire ========
+// ======== Affichage carte — ANCIEN LIEN (dépend de la mémoire) ========
 app.get("/card/:id", (req, res) => {
   const carte = cartes[req.params.id];
   if (!carte) return res.status(404).send("<h1>Carte introuvable ❌</h1>");
@@ -306,16 +372,24 @@ app.get("/card/:id", (req, res) => {
   res.redirect(302, `/card/t/${encodeURIComponent(token)}`);
 });
 
-// ======== Page d’accueil ========
+// ======== Page d’accueil et test ========
+app.get("/new", (_req, res) => {
+  res.send(`<html><head><title>Test Carte MDL</title></head>
+  <body style="text-align:center;font-family:Arial;">
+    <h2>Carte de fidélité test MDL</h2>
+    <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;">
+  </body></html>`);
+});
+
 app.get("/", (_req, res) => {
   res.send(`<html><head><title>Serveur Carte Fidélité MDL</title></head>
-  <body style="font-family:Arial,Helvetica,sans-serif;text-align:center;padding:36px">
+  <body style="font-family:Arial;text-align:center;padding:40px">
     <h2>✅ Serveur MDL en ligne</h2>
-    <ul style="list-style:none;padding:0;line-height:1.8">
-      <li>/api/create-card — API pour Excel (retourne une URL signée)</li>
-      <li>/card/t/:token — Afficher la carte (options: ?bg=mail&debug=1&y_barcode=38&h_barcode=22&y_rows=64&row_gap=7&y_metrics=79&pad=6)</li>
-      <li>/card/:id — Ancien lien (redirige vers le lien signé)</li>
-      <li>/barcode/:code — Générer un code‑barres</li>
+    <ul style="list-style:none">
+      <li>/api/create-card — API pour Excel (retourne url signé)</li>
+      <li>/card/t/:token — Afficher une carte (stateless) — option ?bg=mail et ?debug=1</li>
+      <li>/card/:id — Ancien lien basé mémoire (redirige vers lien signé)</li>
+      <li>/barcode/:code — Générer un code-barres (?text=1 pour afficher le texte)</li>
     </ul>
   </body></html>`);
 });
