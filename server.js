@@ -37,7 +37,7 @@ app.post("/api/create-card", (req, res) => {
     return res.status(400).json({ error: "Champs manquants (nom, prenom, code)" });
   }
 
-  // Mapping ULTRA tolérant pour colonnes G/H venant d’Excel/PowerAutomate
+  // Mapping tolérant pour colonnes G/H
   const pointsRaw =
     raw.points ??
     raw.cumul ??
@@ -72,8 +72,7 @@ app.post("/api/create-card", (req, res) => {
   // Jeton signé (expire 365 jours)
   const token = jwt.sign(data, SECRET, { expiresIn: "365d" });
 
-  const host =
-    process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
+  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
   const protocol = host.includes("localhost") ? "http" : "https";
   const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
   const urlLegacy = `${protocol}://${host}/card/${id}`;
@@ -126,8 +125,7 @@ app.get("/card/t/:token", (req, res) => {
   const points = (carte.points ?? "").toString().trim();
   const reduction = (carte.reduction ?? "").toString().trim();
 
-  const bg =
-    (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
+  const bg = (req.query.bg || "").toLowerCase() === "mail" ? "carte-mdl-mail.png" : "carte-mdl.png";
   const debug = req.query.debug === "1"; // ?debug=1 pour afficher les cadres
 
   res.send(`<!doctype html>
@@ -141,14 +139,14 @@ app.get("/card/t/:token", (req, res) => {
   /* gabarit 1024x585 => ratio ≈ 1.75 */
   --maxw: 980px;
 
-  /* Y calés (en %) sur ton visuel */
+  /* Y calés (en %) */
   --y-bar:    36%;
   --y-nom:    66%;
   --y-prenom: 76%;
   --y-points: 83%;
   --y-reduc:  83%;
 
-  /* X/largeurs (en %) */
+  /* X/largeurs (en %) — FIXES: on ne décale PAS, on ne change PAS sur PC */
   --x-nom:     24%;
   --x-prenom:  24%;
   --r-nom:     35%;
@@ -167,14 +165,6 @@ app.get("/card/t/:token", (req, res) => {
   --ty-prenom: -50%;
 }
 
-/* Desktop: on élargit la zone du NOM pour éviter la sortie de pilule sur PC */
-@media (min-width: 900px){
-  :root{
-    --x-nom: 22%;
-    --r-nom: 18%; /* zone plus large que sur mobile */
-  }
-}
-
 *{box-sizing:border-box}
 body{
   margin:0; background:#f2f2f2;
@@ -189,23 +179,21 @@ body{
 /* Zones texte */
 .line{
   position:absolute;
-  opacity:0; /* on montre après le fit */
   white-space:nowrap; overflow:hidden; text-overflow:clip;
-  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
-  transition:opacity .12s ease;
+  letter-spacing:0; /* pas de compaction, on ajuste UNIQUEMENT la taille de police */
+  opacity:0; transition:opacity .12s ease;
 }
 
 /* Code-barres */
 .barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
-.barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
+.barcode img{ width:86%; max-width:760px; height:auto; }
 
-/* Nom/Prénom: pas de bulles */
+/* Nom/Prénom: texte simple, pas de bulles, zones FIXES */
 .line.nom{
   left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
   transform: translateY(var(--ty-nom, -50%));
   font-weight:800;
   font-size:clamp(18px, 4.8vw, 46px);
-  letter-spacing:-0.015em;             /* légère compaction utile en MAJ */
   text-transform:uppercase;
 }
 .line.prenom{
@@ -215,7 +203,7 @@ body{
   font-size:clamp(16px, 4.2vw, 34px);
 }
 
-/* Petites pilules du bas */
+/* Petites zones chiffrées */
 .points{
   top:var(--y-points); left:var(--x-points); width:var(--w-points);
   font-weight:700; font-size:clamp(14px,2.6vw,24px);
@@ -225,14 +213,7 @@ body{
   font-weight:700; font-size:clamp(14px,2.6vw,24px);
 }
 
-/* Info sous la carte */
-.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
-
 .fitted .line{ opacity:1; }
-
-/* Ajustements auto si ça touche encore à droite (PC et noms très longs) */
-.carte.tight-nom   { --x-nom: 21%; --r-nom: 14%; }   /* élargit encore la zone */
-.carte.tighter-nom { --x-nom: 20%; --r-nom: 10%; }   /* élargit au max sans heurter le décor */
 
 /* Debug: cadres visibles */
 ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
@@ -246,53 +227,41 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
           <img src="/barcode/${encodeURIComponent(code)}?text=0" alt="Code-barres ${esc(code)}" decoding="async" />
         </div>
 
-        <!-- 1 ligne obligatoire + réduction automatique si trop de caractères -->
-        <div class="line nom"    id="nom"    data-min-scale="0.50" data-char-threshold="22">${esc(nom.toUpperCase())}</div>
-        <div class="line prenom" id="prenom" data-min-scale="0.46">${esc(prenom)}</div>
+        <!-- 1 ligne obligatoire + adaptation uniquement par taille de police -->
+        <div class="line nom"    id="nom"    data-min-scale="0.34">${esc(nom.toUpperCase())}</div>
+        <div class="line prenom" id="prenom" data-min-scale="0.40">${esc(prenom)}</div>
 
-        <!-- Affiche TOUJOURS les deux champs (vides si Excel n’envoie rien) -->
-        <div class="line points"    data-min-scale="0.50">${esc(points)}</div>
-        <div class="line reduction" data-min-scale="0.50">${esc(reduction)}</div>
+        <div class="line points">${esc(points)}</div>
+        <div class="line reduction">${esc(reduction)}</div>
       </div>
-    </div>
-    <div class="info">
-      ${['Code: ' + esc(code), (points!=='' ? 'Points: ' + esc(points) : null), (reduction!=='' ? 'Réduction: ' + esc(reduction) : null)].filter(Boolean).join(' • ')}
     </div>
   </div>
 
   <script>
-    // Fit‑to‑width + préscalage par longueur de texte (1 ligne)
+    // Ajuste UNIQUEMENT la taille de police pour tenir sur une ligne, sans bouger les marges.
     (function(){
-      function fitToWidth(el, opts){
+      function fitOneLine(el, opts){
         opts = opts || {};
-        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.45;
+        var minScale  = typeof opts.minScale === 'number' ? opts.minScale : 0.34;
         var precision = typeof opts.precision === 'number' ? opts.precision : 0.12;
-        var charTh    = typeof opts.charThreshold === 'number' ? opts.charThreshold : 22;
 
         // reset
         el.style.fontSize = '';
-        el.style.letterSpacing = '';
 
         var cs   = getComputedStyle(el);
-        var base = parseFloat(cs.fontSize);
+        var base = parseFloat(cs.fontSize); // taille issue du clamp()
         var w    = el.clientWidth || el.getBoundingClientRect().width || 0;
         if (!w || !base) return;
 
-        // 1) Pré‑réduction si trop de caractères (espaces pondérés 0.5)
-        var txt    = (el.textContent || '').trim();
-        var spaces = (txt.match(/\\s/g) || []).length;
-        var wlen   = txt.length - spaces + Math.ceil(spaces * 0.5); // longueur "pondérée"
-        var pre    = 1;
-        if (wlen > charTh) pre = charTh / wlen; // ex: 30 car. → 22/30 = 0.733
-        pre = Math.max(pre, minScale);
+        // bornes
+        var lo = base * minScale, hi = base, best = lo;
 
-        // 2) Bisection entre base*minScale et base*pre
-        var lo = base * minScale, hi = base * pre, best = lo;
-
+        // essai en haut
         el.style.fontSize = hi + 'px';
         if (el.scrollWidth <= w) {
           best = hi;
         } else {
+          // dichotomie
           for (var i=0; i<26 && (hi - lo) > precision; i++) {
             var mid = (hi + lo) / 2;
             el.style.fontSize = mid + 'px';
@@ -300,71 +269,14 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
           }
         }
         el.style.fontSize = best + 'px';
-
-        // 3) Si ça déborde encore, resserrer l'interlettrage puis affiner la taille
-        if (el.scrollWidth > w) {
-          var ls = 0, step = 0;
-          while (el.scrollWidth > w && step < 6) { // jusqu’à ~ -1.2px
-            ls -= 0.2; step++;
-            el.style.letterSpacing = ls + 'px';
-          }
-          var guard = 0;
-          while (el.scrollWidth > w && guard < 6) {
-            var f = parseFloat(el.style.fontSize) * 0.97;
-            el.style.fontSize = f + 'px';
-            guard++;
-          }
-        }
-      }
-
-      function fitAll(scope){
-        scope = scope || document;
-        var nodes = scope.querySelectorAll('.line.nom, .line.prenom, .line.points, .line.reduction');
-        var desktop = window.matchMedia('(min-width: 900px)').matches;
-
-        nodes.forEach(function(el){
-          var ms = parseFloat(el.getAttribute('data-min-scale')) || 0.45;
-          var ct = parseFloat(el.getAttribute('data-char-threshold')) || 22;
-
-          // Sur PC, autorise un peu plus de réduction pour le NOM (cas "BONNIN ..." très long)
-          if (desktop && el.classList.contains('nom')) {
-            ms = Math.min(ms, 0.38); // autorise 38% du corps de base si nécessaire
-            ct = Math.max(20, ct);   // garde un pré‑scaling raisonnable
-          }
-          fitToWidth(el, {minScale: ms, charThreshold: ct});
-        });
       }
 
       function runFit(){
-        var carte = document.querySelector('.carte');
-        var nomEl = document.querySelector('.line.nom');
-
-        function tooCloseRight(el, padPx){
-          if (!el) return false;
-          var w = el.clientWidth || el.getBoundingClientRect().width || 0;
-          return el.scrollWidth >= Math.max(0, w - padPx);
-        }
-
-        // État neutre, fit initial
-        if (carte) carte.classList.remove('tight-nom','tighter-nom');
-        fitAll();
-
-        // Si le nom est encore trop proche du bord droit → élargir la zone et re‑fit
-        if (carte && nomEl) {
-          var desktop = window.matchMedia('(min-width: 900px)').matches;
-          var pad = desktop ? 24 : 16; // coussin plus large sur PC
-
-          if (tooCloseRight(nomEl, pad)) {
-            carte.classList.add('tight-nom');
-            fitAll();
-
-            if (tooCloseRight(nomEl, pad)) {
-              carte.classList.add('tighter-nom');
-              fitAll();
-            }
-          }
-        }
-
+        var nodes = document.querySelectorAll('.line.nom, .line.prenom');
+        nodes.forEach(function(el){
+          var ms = parseFloat(el.getAttribute('data-min-scale')) || (el.classList.contains('nom') ? 0.34 : 0.40);
+          fitOneLine(el, {minScale: ms});
+        });
         document.body.classList.add('fitted');
       }
 
@@ -413,7 +325,7 @@ app.get("/", (_req, res) => {
 app.listen(PORT, () => {
   const host = process.env.RENDER_EXTERNAL_HOSTNAME || `localhost:${PORT}`;
   const protocol = host.includes("localhost") ? "http" : "https";
-  console.log(`🚀 Serveur démarré sur ${protocol}://${host}`);
+  console.log(\`🚀 Serveur démarré sur \${protocol}://\${host}\`);
   if (!process.env.SECRET) {
     console.warn("⚠️  SECRET non défini — utilisez une variable d'environnement en production.");
   }
