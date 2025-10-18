@@ -147,8 +147,9 @@ app.get("/card/t/:token", (req, res) => {
   /* X/largeurs calés (en %) */
   --x-nom:     24%;
   --x-prenom:  24%;
-  --r-nom:     35%;
-  --r-prenom:  35%;
+  /* Un peu plus d'espace à droite pour éviter les coupures */
+  --r-nom:     31%;   /* ancien 35% */
+  --r-prenom:  31%;
 
   --x-points:  26%;
   --w-points:  17%;
@@ -192,21 +193,20 @@ body{
 .barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
 .barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
 
-/* Nom/Prénom */
+/* Nom/Prénom (tailles de base sobres — le JS ajuste) */
 .line.nom{
   left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
   transform: translateY(var(--ty-nom, -50%));
   font-weight:800;
-  /* taille de base, le JS peut dépasser sans limite "max" */
-  font-size:clamp(22px, 5.0vw, 48px);
-  letter-spacing:-0.015em;
+  font-size:clamp(22px, 4.8vw, 42px);
+  letter-spacing:-0.02em;
   text-transform:uppercase;
 }
 .line.prenom{
   left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
   transform: translateY(var(--ty-prenom, -50%));
   font-weight:700;
-  font-size:clamp(18px, 4.4vw, 36px);
+  font-size:clamp(18px, 4.2vw, 36px);
 }
 
 /* Petites pilules du bas */
@@ -250,17 +250,20 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
     </div>
   </div>
 
-  <!-- ===== Fit: mesure la largeur du conteneur et ajuste le span .txt ===== -->
+  <!-- ===== Fit: largeur conteneur + plafond + squeeze léger ===== -->
   <script>
   (function(){
-    function fitOneLine(container, opts){
+    // Ajustement avec plafond (maxPx) + option de compression horizontale (squeeze)
+    function fitOneLineCap(container, opts){
       if(!container) return;
       const el = container.querySelector('.txt') || container;
 
       opts = opts || {};
       const minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.5;
-      const grow     = typeof opts.grow     === 'number' ? opts.grow     : 1.0; // >1 = autorise à grandir
+      const grow     = typeof opts.grow     === 'number' ? opts.grow     : 1.0;
       const padPx    = typeof opts.padPx    === 'number' ? opts.padPx    : 0;
+      const maxPx    = typeof opts.maxPx    === 'number' ? opts.maxPx    : Infinity;
+      const squeeze  = opts.squeeze || null; // { min:0.92, step:0.01 }
 
       // largeur dispo = largeur du conteneur (pas du texte)
       const w = Math.max(0, (container.getBoundingClientRect().width || 0) - padPx);
@@ -268,43 +271,62 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
 
       // base = taille actuelle du texte
       const base = parseFloat(getComputedStyle(el).fontSize) || 16;
-      let lo = base * minScale;
-      let hi = base;
 
-      el.style.fontSize = hi + 'px';
+      // bornes
+      let lo = Math.max(1, base * minScale);
+      let hi = Math.min(maxPx, base * Math.max(1, grow));
+      let best = lo;
 
-      // Si ça tient et qu'on peut grandir → augmente jusqu'à la limite
-      if (grow > 1 && el.scrollWidth < w) {
-        const cap = base * grow;
-        while (el.scrollWidth < w && hi < cap) {
-          lo = hi;
-          hi = Math.min(cap, hi * 1.18); // pas d'environ 18%
-          el.style.fontSize = hi + 'px';
+      // recherche dichotomique de la plus grande taille qui rentre
+      for (let i=0; i<30; i++){
+        const mid = (lo + hi) / 2;
+        el.style.fontSize = mid + 'px';
+        if (el.scrollWidth <= w){ best = mid; lo = mid; } else { hi = mid; }
+        if (hi - lo < 0.2) break;
+      }
+      el.style.fontSize = Math.min(best, maxPx) + 'px';
+
+      // reset transform puis, si ça dépasse encore → compression horizontale discrète
+      el.style.transform = 'none';
+      if (squeeze && el.scrollWidth > w){
+        let sx = 1.0;
+        const minS = squeeze.min ?? 0.92;   // jusqu’à -8%
+        const step = squeeze.step ?? 0.01;
+        while (el.scrollWidth > w && sx > minS){
+          sx = +(sx - step).toFixed(3);
+          el.style.transform = \`scaleX(\${sx})\`;
         }
       }
-
-      // Recherche dichotomique pour coller au bord sans déborder
-      for (let i = 0; i < 28; i++){
-        const mid = (hi + lo) / 2;
-        el.style.fontSize = mid + 'px';
-        if (el.scrollWidth <= w) { lo = mid; } else { hi = mid; }
-        if (Math.abs(hi - lo) < 0.2) break;
-      }
-      el.style.fontSize = Math.max(lo, base*minScale) + 'px';
     }
 
     function run(){
-      // NOM : peut grandir jusqu'à x3 (≈ +200%), marge 8 px
-      fitOneLine(document.querySelector('.line.nom'),    { minScale:0.50, grow:1.70, padPx:8 });
-      // PRÉNOM : peut grandir jusqu'à x2.2
-      fitOneLine(document.querySelector('.line.prenom'), { minScale:0.55, grow:0.90, padPx:8 });
+      // NOM : cap pour éviter les noms courts trop gros + squeeze pour les très longs
+      fitOneLineCap(document.querySelector('.line.nom'), {
+        minScale: 0.34,   // autorise une vraie réduction (cas très long)
+        grow:     1.55,   // évite de “gonfler” trop les noms courts (ex. DUHAMEL)
+        maxPx:    46,     // plafond dur ≈ 46 px
+        padPx:    10,
+        squeeze:  { min: 0.92, step: 0.01 } // secours discret
+      });
+
+      // PRÉNOM : plage un peu plus basse
+      fitOneLineCap(document.querySelector('.line.prenom'), {
+        minScale: 0.45,
+        grow:     1.45,
+        maxPx:    40,
+        padPx:    10,
+        squeeze:  { min: 0.95, step: 0.01 }
+      });
 
       document.body.classList.add('fitted');
     }
 
-    // Attendre les polices et les images, et réagir aux redimensionnements
+    // Attendre les polices et images, puis écouter les redimensionnements
     (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve())
-      .then(() => { if (document.readyState === 'complete') run(); else window.addEventListener('load', run); });
+      .then(() => {
+        if (document.readyState === 'complete') run();
+        else window.addEventListener('load', run);
+      });
 
     window.addEventListener('resize', run);
     window.addEventListener('orientationchange', run);
@@ -316,7 +338,6 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
 </body>
 </html>`);
 });
-
 
 // ======== Affichage carte — ANCIEN LIEN (dépend de la mémoire) ========
 app.get("/card/:id", (req, res) => {
