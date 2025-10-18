@@ -348,10 +348,6 @@ ${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,
     }
   }
 
-  document.body.classList.add('fitted');
-}
-
-
         // 2) Fit après avoir posé la classe (largeur correcte)
         fitAll();
         document.body.classList.add('fitted');
