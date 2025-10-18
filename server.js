@@ -219,7 +219,7 @@ body{
 .fitted .line{ opacity:1; }
 
 /* Mode “bord droit serré” pour la pilule du Nom (noms très longs) */
-.carte.tight-nom   { --r-nom: 10%; }     /* réduit un peu la largeur utile → fit diminue la taille */
+.carte.tight-nom   { --r-nom: 12%; }     /* réduit un peu la largeur utile → fit diminue la taille */
 .carte.tighter-nom { --r-nom: 11.5%; }   /* cas extrême */
 
 /* Debug: cadres visibles */
