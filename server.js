@@ -138,7 +138,7 @@ body{
   /* Ne bouger que Prénom et Nom */
 .line.prenom,
 .line.nom{
-  left:8%;   /* diminue (6% → 5.5% → 5%) pour aller plus à gauche */
+  left:15%;   /* diminue (6% → 5.5% → 5%) pour aller plus à gauche */
   right:5%;
 }
 
