@@ -16,7 +16,7 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use('/static', express.static(path.join(__dirname, 'static')));
 app.use('/app', express.static(path.join(__dirname, 'public/app')));
-
+app.use(express.static(path.join(__dirname, 'public')));
 // === ENV ===
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.SECRET || '';
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(__dirname, 'template.html');
