@@ -241,7 +241,7 @@ app.get('/wallet/:code', async (req, res) => {
     if (!r.rows.length) return res.status(404).send('Carte inconnue');
     const card = r.rows[0];
 
-    const modelPath = path.join(process.cwd(), "wallet-model");
+    const modelPath = path.join(process.cwd(), "wallet-model.pass");
     console.log("== Wallet model contents ==");
     console.log(fs.readdirSync(modelPath));
 
