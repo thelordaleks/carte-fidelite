@@ -244,9 +244,30 @@ app.get('/wallet/:code', async (req, res) => {
     console.log("== Wallet model contents ==");
     console.log(fs.readdirSync(modelPath));
 
-    // ⚙️ Génère un pass NON SIGNÉ (aucun certificat requis)
+  // === Carte Wallet .pkpass non signée (gratuite, Android-compatible) ===
+const { PKPass } = require("passkit-generator");
+
+app.get('/wallet/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const dbc = await getDb();
+    const r = await dbc.execute({
+      sql: 'SELECT * FROM cards WHERE code=?',
+      args: [code]
+    });
+    if (!r.rows.length) return res.status(404).send('Carte inconnue');
+    const card = r.rows[0];
+
+    const modelPath = path.join(process.cwd(), "wallet-model.pass");
+    console.log("== Wallet model contents ==");
+    console.log(fs.readdirSync(modelPath));
+
+    // ✅ Bonne syntaxe : le dossier est dans "model"
     const pass = await PKPass.from(
-      modelPath,
+      {
+        model: modelPath,
+        disableSigning: true // <-- option gratuite (aucun certificat requis)
+      },
       {
         serialNumber: card.code,
         description: "Carte fidélité MDL",
@@ -265,9 +286,6 @@ app.get('/wallet/:code', async (req, res) => {
             { key: "reduction", label: "Réduction", value: card.reduction || "—" }
           ]
         }
-      },
-      {
-        disableSigning: true // ✅ option globale correcte
       }
     );
 
@@ -279,6 +297,7 @@ app.get('/wallet/:code', async (req, res) => {
     res.status(500).send("Erreur génération .pkpass");
   }
 });
+
 
 
 
