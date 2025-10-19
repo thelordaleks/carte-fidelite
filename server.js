@@ -20,27 +20,21 @@ const app = express();
 // ---------- Config ----------
 const PORT = process.env.PORT || 3000;
 const SECRET = process.env.SECRET || ''; // DOIT être défini en prod
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+
+const fs = require('fs');
+const path = require('path');
+
+// IMPORTANT: dossier writable sur Render (gratuit)
+const DATA_DIR = process.env.DATA_DIR || '/tmp/carte-fidelite';
+fs.mkdirSync(DATA_DIR, { recursive: true });
+console.log('DATA_DIR:', DATA_DIR);
+
+// fichiers dépendants de DATA_DIR
+const DB_PATH = path.join(DATA_DIR, 'db.sqlite3');
+
 const DEFAULT_TEMPLATE_FILE = path.join(__dirname, 'static', 'template.html');
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || DEFAULT_TEMPLATE_FILE;
 
-// Crée DATA_DIR si besoin
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// DB pour les liens courts (persistance nécessaire pour que les e-mails restent valides)
-const DB_FILE = path.join(DATA_DIR, 'db.sqlite3');
-const db = new Database(DB_FILE);
-db.pragma('journal_mode = WAL');
-db.exec(`
-  CREATE TABLE IF NOT EXISTS short_links (
-    id TEXT PRIMARY KEY,
-    token TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-  );
-  CREATE INDEX IF NOT EXISTS idx_short_links_created_at ON short_links(created_at);
-`);
 
 // ---------- Middlewares ----------
 app.use(cors());
