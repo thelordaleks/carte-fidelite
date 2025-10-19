@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carte fidélité MDL</title>
 
-  <!-- Icône + manifest PWA -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="/static/logo-mdl.png">
   <meta name="theme-color" content="#0078D7">
@@ -27,9 +26,7 @@
       font-weight: bold;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
-    main {
-      padding: 20px;
-    }
+    main { padding: 20px; }
     iframe {
       width: 100%;
       max-width: 450px;
@@ -51,12 +48,8 @@
       box-shadow: 0 3px 8px rgba(0,0,0,0.2);
       transition: transform 0.2s ease;
     }
-    .btn:hover {
-      transform: scale(1.05);
-    }
-    .wallet-btn {
-      background: #0078D7;
-    }
+    .btn:hover { transform: scale(1.05); }
+    .wallet-btn { background: #0078D7; }
     footer {
       margin-top: 30px;
       font-size: 13px;
@@ -77,84 +70,82 @@
       <a id="wallet" class="btn wallet-btn" target="_blank">💳 Ajouter au Wallet</a>
     </div>
     <div>
-      <a href="https://www.instagram.com/mdl.edouardvaillant" class="btn" target="_blank">
-        📸 Voir l’Instagram de la MDL
-      </a>
+      <a href="https://www.instagram.com/mdl.edouardvaillant"
+         class="btn" target="_blank">📸 Voir l’Instagram de la MDL</a>
     </div>
     <div class="status" id="status"></div>
   </main>
   <footer>© MDL Édouard Vaillant</footer>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    let code = params.get('code');
-    const statusEl = document.getElementById('status');
+    document.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      let code = params.get("code");
+      const statusEl = document.getElementById("status");
 
-    // ✅ Sauvegarde / récupération du dernier code
-    if (code) {
-      localStorage.setItem('mdl_last_code', code);
-    } else {
-      const lastCode = localStorage.getItem('mdl_last_code');
-      if (lastCode) {
-        code = lastCode;
-        // Met à jour l’URL sans recharger la page
-        window.history.replaceState({}, '', `/app?code=${lastCode}`);
-      }
-    }
-
-    if (code) {
-      const iframe = document.getElementById('carte');
-      const wallet = document.getElementById('wallet');
-      iframe.src = `/c/${encodeURIComponent(code)}`;
-      wallet.href = `/wallet/${encodeURIComponent(code)}`;
-
-      // ✅ Vérifie les infos toutes les 60 secondes
-      async function refreshCard() {
-        try {
-          const res = await fetch(`/api/get-card/${encodeURIComponent(code)}`);
-          const data = await res.json();
-          if (data && data.ok) {
-            statusEl.textContent = `✅ Dernière mise à jour : ${new Date().toLocaleTimeString()}`;
-            iframe.src = `/c/${encodeURIComponent(code)}?t=${Date.now()}`;
-          } else {
-            statusEl.textContent = "⚠️ Carte introuvable";
-          }
-        } catch (e) {
-          statusEl.textContent = "⚠️ Impossible de mettre à jour (hors ligne ?)";
+      // ✅ Sauvegarde / récupération du dernier code
+      if (code) {
+        localStorage.setItem("mdl_last_code", code);
+      } else {
+        const lastCode = localStorage.getItem("mdl_last_code");
+        if (lastCode) {
+          code = lastCode;
+          // Met à jour l’URL sans recharger la page
+          window.history.replaceState({}, "", `/app?code=${lastCode}`);
         }
       }
 
-      refreshCard();
-      setInterval(refreshCard, 60000);
+      if (code) {
+        const iframe = document.getElementById("carte");
+        const wallet = document.getElementById("wallet");
+        iframe.src = `/c/${encodeURIComponent(code)}`;
+        wallet.href = `/wallet/${encodeURIComponent(code)}`;
 
-      // ✅ Enregistre le Service Worker (PWA installable)
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-          .then(() => console.log("Service Worker enregistré ✅"))
-          .catch(err => console.error("Erreur SW ❌", err));
+        // 🔁 Mise à jour automatique
+        async function refreshCard() {
+          try {
+            const res = await fetch(`/api/get-card/${encodeURIComponent(code)}`);
+            const data = await res.json();
+            if (data && data.ok) {
+              statusEl.textContent = `✅ Dernière mise à jour : ${new Date().toLocaleTimeString()}`;
+              iframe.src = `/c/${encodeURIComponent(code)}?t=${Date.now()}`;
+            } else {
+              statusEl.textContent = "⚠️ Carte introuvable";
+            }
+          } catch {
+            statusEl.textContent = "⚠️ Impossible de mettre à jour (hors ligne ?)";
+          }
+        }
+        refreshCard();
+        setInterval(refreshCard, 60000);
+
+        // ✅ Enregistre le Service Worker
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("/sw.js")
+            .then(() => console.log("Service Worker OK"))
+            .catch(err => console.error("Erreur SW", err));
+        }
+
+        // 📱 Bouton d’installation PWA
+        window.addEventListener("beforeinstallprompt", (event) => {
+          event.preventDefault();
+          window.deferredPrompt = event;
+          const btn = document.createElement("button");
+          btn.textContent = "📱 Installer l’application";
+          btn.className = "btn wallet-btn";
+          btn.style.display = "block";
+          btn.style.margin = "25px auto";
+          btn.onclick = () => {
+            window.deferredPrompt.prompt();
+            window.deferredPrompt.userChoice.then(() => window.deferredPrompt = null);
+          };
+          document.querySelector("main").appendChild(btn);
+        });
+      } else {
+        document.querySelector("main").innerHTML =
+          "<p>⚠️ Code de carte manquant.<br>Essayez d’ouvrir depuis votre lien e-mail une première fois.</p>";
       }
-
-      // 👉 Affiche le bouton d'installation PWA
-      window.addEventListener('beforeinstallprompt', (event) => {
-        event.preventDefault();
-        window.deferredPrompt = event;
-        const btn = document.createElement('button');
-        btn.textContent = '📱 Installer l’application';
-        btn.className = 'btn wallet-btn';
-        btn.style.display = 'block';
-        btn.style.margin = '25px auto';
-        btn.onclick = () => {
-          window.deferredPrompt.prompt();
-          window.deferredPrompt.userChoice.then(() => {
-            window.deferredPrompt = null;
-          });
-        };
-        document.querySelector('main').appendChild(btn);
-      });
-
-    } else {
-      document.querySelector('main').innerHTML = "<p>⚠️ Code de carte manquant.</p>";
-    }
+    });
   </script>
 </body>
 </html>
