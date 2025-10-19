@@ -2,32 +2,76 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ma carte fidélité - MDL Édouard Vaillant</title>
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carte fidélité MDL</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f2f4f8;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+    }
+    header {
+      background: #0078D7;
+      color: white;
+      padding: 15px 10px;
+      font-size: 20px;
+      font-weight: bold;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    main {
+      padding: 20px;
+    }
+    iframe {
+      width: 100%;
+      max-width: 450px;
+      height: 280px;
+      border: none;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 25px;
+      background: #e4405f;
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+      padding: 12px 22px;
+      border-radius: 8px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+      transition: transform 0.2s ease;
+    }
+    .btn:hover {
+      transform: scale(1.05);
+    }
+    footer {
+      margin-top: 30px;
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>Carte fidélité MDL</h1>
-  </header>
-
+  <header>Carte fidélité MDL</header>
   <main>
-    <iframe id="carte" src="" frameborder="0"></iframe>
-
-    <a class="btn" href="https://www.instagram.com/mdlvaillant" target="_blank">
-      📸 Voir l’Instagram de la MDL
-    </a>
+    <iframe id="carte" src=""></iframe>
+    <div>
+      <a href="https://www.instagram.com/mdl.edouardvaillant" class="btn" target="_blank">📸 Voir l’Instagram de la MDL</a>
+    </div>
   </main>
+  <footer>© MDL Édouard Vaillant</footer>
 
   <script>
-    // Récupère le code dans l’URL ?code=XXXX
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     if (code) {
       document.getElementById('carte').src = `/c/${encodeURIComponent(code)}`;
     } else {
-      document.body.innerHTML = '<p>Code de carte manquant</p>';
+      document.querySelector('main').innerHTML = "<p>⚠️ Code de carte manquant.</p>";
     }
   </script>
 </body>
