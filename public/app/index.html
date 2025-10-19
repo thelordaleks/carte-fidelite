@@ -62,6 +62,11 @@
       font-size: 13px;
       color: #666;
     }
+    .status {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #0078D7;
+    }
   </style>
 </head>
 <body>
@@ -74,26 +79,50 @@
     <div>
       <a href="https://www.instagram.com/mdl.edouardvaillant" class="btn" target="_blank">📸 Voir l’Instagram de la MDL</a>
     </div>
+    <div class="status" id="status"></div>
   </main>
   <footer>© MDL Édouard Vaillant</footer>
 
   <script>
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
+    const statusEl = document.getElementById('status');
+
     if (code) {
-      // Carte intégrée
-      document.getElementById('carte').src = `/c/${encodeURIComponent(code)}`;
-      // Bouton Wallet
-      document.getElementById('wallet').href = `/wallet/${encodeURIComponent(code)}`;
+      const iframe = document.getElementById('carte');
+      const wallet = document.getElementById('wallet');
+      iframe.src = `/c/${encodeURIComponent(code)}`;
+      wallet.href = `/wallet/${encodeURIComponent(code)}`;
+
+      // ✅ Vérifie les infos toutes les 60 secondes
+      async function refreshCard() {
+        try {
+          const res = await fetch(`/api/get-card/${encodeURIComponent(code)}`);
+          const data = await res.json();
+          if (data && data.ok) {
+            statusEl.textContent = `✅ Dernière mise à jour : ${new Date().toLocaleTimeString()}`;
+            // on recharge la carte visible dans l’iframe
+            iframe.src = `/c/${encodeURIComponent(code)}?t=${Date.now()}`;
+          } else {
+            statusEl.textContent = "⚠️ Carte introuvable";
+          }
+        } catch (e) {
+          statusEl.textContent = "⚠️ Impossible de mettre à jour (hors ligne ?)";
+        }
+      }
+
+      refreshCard();
+      setInterval(refreshCard, 60000); // toutes les 60 secondes
+
+      // ✅ Enregistre le Service Worker (PWA installable)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/app/sw.js')
+          .then(() => console.log("Service Worker enregistré !"))
+          .catch(err => console.error("SW error", err));
+      }
+
     } else {
       document.querySelector('main').innerHTML = "<p>⚠️ Code de carte manquant.</p>";
-    }
-
-    // ✅ Enregistre le Service Worker (PWA installable)
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/app/sw.js').then(() => {
-        console.log("Service Worker enregistré !");
-      });
     }
   </script>
 </body>

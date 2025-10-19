@@ -198,6 +198,27 @@ app.get('/barcode/:txt', async (req, res) => {
     res.status(400).send('bad-barcode');
   }
 });
+// === API pour récupérer une carte ===
+app.get('/api/get-card/:code', async (req, res) => {
+  try {
+    const dbc = await getDb();
+    const r = await dbc.execute({
+      sql: 'SELECT * FROM cards WHERE code=?',
+      args: [req.params.code]
+    });
+    if (!r.rows.length) return res.json({ ok: false });
+    const c = r.rows[0];
+    res.json({
+      ok: true,
+      fullname: `${c.prenom} ${c.nom}`.trim(),
+      points: c.points || 0,
+      reduction: c.reduction || "—"
+    });
+  } catch (e) {
+    console.error("Erreur get-card:", e);
+    res.status(500).json({ ok: false });
+  }
+});
 
 // === Carte Wallet .pkpass (non signée, gratuite) ===
 app.get('/wallet/:code', async (req, res) => {
