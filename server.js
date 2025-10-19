@@ -1,16 +1,21 @@
-// server.js — Version rollback (zéro changement visuel)
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const cors = require('cors');
-const morgan = require('morgan');
-const dotenv = require('dotenv');
-const bwipjs = require('bwip-js');
-const nodemailer = require('nodemailer');
+// server.js — Cartes persistantes hors-ligne (SW + Manifest + API JSON)
+import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import cors from 'cors';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
+import bwipjs from 'bwip-js';
+import nodemailer from 'nodemailer';
+import { fileURLToPath } from 'url';
+
 dotenv.config();
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cors());
 app.use(morgan('dev'));
 app.use('/static', express.static(path.join(__dirname, 'static')));
@@ -19,9 +24,9 @@ app.use('/static', express.static(path.join(__dirname, 'static')));
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.SECRET || '';
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(__dirname, 'template.html');
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ? process.env.PUBLIC_BASE_URL.replace(/\/+$/,'') : '';
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT || 3000);
 
-// SMTP (inchangé, classique)
+// SMTP
 const SMTP = {
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || 587),
@@ -41,6 +46,7 @@ async function getDb() {
   });
   return db;
 }
+
 async function initDb() {
   const dbc = await getDb();
   await dbc.execute(`
@@ -49,193 +55,168 @@ async function initDb() {
       nom TEXT,
       prenom TEXT,
       email TEXT,
-      reduction TEXT,
+      telephone TEXT,
       points INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now'))
-    )
+      reduction INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT
+    );
   `);
 }
 
 // === Helpers ===
 function absoluteBaseUrl(req) {
   if (PUBLIC_BASE_URL) return PUBLIC_BASE_URL;
-  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https');
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http');
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   return `${proto}://${host}`;
 }
+
 function readFileOrFallback(file, fallback='') {
   try { return fs.readFileSync(file, 'utf8'); } catch { return fallback; }
 }
-function replaceTokens(html, data, baseUrl) {
-  // On ne touche PAS au style/HTML du template.
-  const fullName = [data.prenom, data.nom].filter(Boolean).join(' ').trim();
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function replaceTokens(tpl, card, base) {
+  // Remplacements simples (adapter au besoin selon ton template)
   const map = {
-    NOM: data.nom || '',
-    PRENOM: data.prenom || '',
-    FULLNAME: fullName,
-    EMAIL: data.email || '',
-    POINTS: String(data.points ?? 0),
-    CODE: data.code || '',
-    REDUCTION: data.reduction || '',
-    BARCODE_URL: `${baseUrl}/barcode/${encodeURIComponent(data.code || '')}`,
-    CARD_URL: `${baseUrl}/c/${encodeURIComponent(data.code || '')}`,
+    '{{CODE}}': card.code || '',
+    '{{NOM}}': card.nom || '',
+    '{{PRENOM}}': card.prenom || '',
+    '{{EMAIL}}': card.email || '',
+    '{{TELEPHONE}}': card.telephone || '',
+    '{{POINTS}}': String(card.points ?? ''),
+    '{{REDUCTION}}': String(card.reduction ?? ''),
+    '{{BARCODE_URL}}': `${base}/barcode/${encodeURIComponent(card.code)}`,
+    '{{BASE_URL}}': base
   };
-  let out = String(html || '');
+  let out = String(tpl);
   for (const [k, v] of Object.entries(map)) {
-    // Jetons stricts uniquement → pas d’écrasement sauvage.
-    const patterns = [
-      new RegExp(`{{\\s*${k}\\s*}}`, 'g'),
-      new RegExp(`%%${k}%%`, 'g'),
-      new RegExp(`\\[\\[\\s*${k}\\s*\\]\\]`, 'g'),
-      new RegExp(`__${k}__`, 'g'),
-      new RegExp(`\\$\\{\\s*${k}\\s*\\}`, 'g')
-    ];
-    for (const p of patterns) out = out.replace(p, v);
+    out = out.replace(new RegExp(escapeRegExp(k), 'g'), v);
   }
   return out;
 }
-function requireAdmin(req, res, next) {
-  const h = req.headers.authorization || '';
-  const token = h.startsWith('Bearer ') ? h.slice(7) : '';
-  if (!ADMIN_TOKEN) return res.status(500).json({ error: 'ADMIN_TOKEN manquant' });
-  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'unauthorized' });
-  next();
+
+function toIntOrUndef(x) {
+  if (x === null || x === undefined || x === '') return undefined;
+  const n = Number(String(x).replace(',', '.'));
+  return Number.isFinite(n) ? Math.trunc(n) : undefined;
 }
+
 function createTransporter() {
-  if (!SMTP.host || !SMTP.port || !SMTP.user || !SMTP.pass || !SMTP.from) {
-    throw new Error('Config SMTP incomplète (SMTP_HOST/PORT/USER/PASS/FROM)');
+  if (!SMTP.host || !SMTP.user || !SMTP.pass || !SMTP.from) {
+    // Mode "no-op" si SMTP non configuré. Utile en dev.
+    return {
+      async sendMail() { return { messageId: 'dev-noop' }; }
+    };
   }
   return nodemailer.createTransport({
-    host: SMTP.host, port: SMTP.port, secure: SMTP.port === 465,
+    host: SMTP.host,
+    port: SMTP.port,
+    secure: SMTP.port === 465,
     auth: { user: SMTP.user, pass: SMTP.pass }
   });
 }
 
-// === Utils ===
-function genCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-  let out = 'ADH';
-  for (let i=0;i<8;i++) out += alphabet[Math.floor(Math.random()*alphabet.length)];
-  return out;
-}
-function toIntOrUndef(v) {
-  if (v === undefined || v === null || v === '') return undefined;
-  const n = Number(String(v).replace(',', '.'));
-  if (!Number.isFinite(n)) return undefined;
-  return Math.max(0, Math.round(n));
-}
+// === OFFLINE: snippet injecté dans la page carte ===
+const OFFLINE_SNIPPET = `
+<link rel="manifest" href="/manifest.webmanifest">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(()=>{});
+    });
+  }
+</script>
+`;
 
-// === Routes API ===
+// === API: création/maj d’une carte ===
 app.post('/api/create-card', async (req, res) => {
   try {
-    let { code, nom='', prenom='', email, mail, reduction='', points } = req.body || {};
-    email = (email || mail || '').trim();
-    code = String(code || genCode()).trim().toUpperCase();
+    const auth = (req.headers.authorization || '').replace(/^Bearer\s+/i,'').trim();
+    if (ADMIN_TOKEN && auth !== ADMIN_TOKEN) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
 
-    const pts = toIntOrUndef(points);
-    const insertPts = pts === undefined ? 0 : pts;   // 0 par défaut à la création
-    const updatePts = pts === undefined ? null : pts; // n’écrase pas si Excel n’envoie pas
+    const body = req.body || {};
+    const card = {
+      code: String(body.code || '').trim(),
+      nom: body.nom ? String(body.nom).trim() : null,
+      prenom: body.prenom ? String(body.prenom).trim() : null,
+      email: body.email ? String(body.email).trim() : null,
+      telephone: body.telephone ? String(body.telephone).trim() : null,
+      points: toIntOrUndef(body.points) ?? 0,
+      reduction: toIntOrUndef(body.reduction) ?? 0,
+    };
+    if (!card.code) return res.status(400).json({ error: 'missing-code' });
 
     const dbc = await getDb();
     await dbc.execute({
       sql: `
-        INSERT INTO cards(code,nom,prenom,email,reduction,points)
-        VALUES(?,?,?,?,?,?)
+        INSERT INTO cards(code, nom, prenom, email, telephone, points, reduction, created_at, updated_at)
+        VALUES(?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         ON CONFLICT(code) DO UPDATE SET
           nom=excluded.nom,
           prenom=excluded.prenom,
           email=excluded.email,
+          telephone=excluded.telephone,
+          points=excluded.points,
           reduction=excluded.reduction,
-          points = COALESCE(?, cards.points)
+          updated_at=datetime('now')
       `,
-      args: [code, nom, prenom, email, reduction, insertPts, updatePts]
+      args: [card.code, card.nom, card.prenom, card.email, card.telephone, card.points, card.reduction]
     });
 
-    const base = absoluteBaseUrl(req);
-    res.json({ ok:true, code, url: `${base}/c/${encodeURIComponent(code)}`, points: pts ?? insertPts });
+    res.json({ ok: true, code: card.code });
   } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'create-failed' });
+    console.error('create-card failed:', e);
+    res.status(500).json({ error: 'create-failed', detail: String(e.message || e) });
   }
 });
 
-app.get('/api/card/:code', requireAdmin, async (req, res) => {
+// === API: lire une carte (JSON) — pour rafraîchissements dynamiques ===
+app.get('/api/card/:code', async (req, res) => {
   try {
     const dbc = await getDb();
     const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
-    res.json(r.rows[0] || {});
+    if (!r.rows.length) return res.status(404).json({ error: 'not-found' });
+    res.json(r.rows[0]);
   } catch (e) {
-    console.error(e);
+    console.error('read card failed:', e);
     res.status(500).json({ error: 'read-failed' });
   }
 });
 
-app.post('/api/card/:code/points', requireAdmin, async (req, res) => {
-  try {
-    const delta = Number(req.body?.delta || 0);
-    const dbc = await getDb();
-    const r = await dbc.execute({ sql: 'SELECT points FROM cards WHERE code=?', args: [req.params.code] });
-    if (!r.rows.length) return res.status(404).json({ error: 'Carte inconnue' });
-    const next = Math.max(0, Number(r.rows[0].points || 0) + delta);
-    await dbc.execute({ sql: 'UPDATE cards SET points=? WHERE code=?', args: [next, req.params.code] });
-    res.json({ ok:true, points: next });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'update-failed' });
-  }
-});
-
-// Envoi d’e‑mail (HTML simple + lien de la carte). Ne modifie pas ton template carte.
-app.post('/api/card/:code/send', requireAdmin, async (req, res) => {
-  try {
-    const dbc = await getDb();
-    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
-    if (!r.rows.length) return res.status(404).json({ error: 'Carte inconnue' });
-    const card = r.rows[0];
-    const to = (req.body && req.body.to) || card.email;
-    if (!to) return res.status(400).json({ error: 'email manquant' });
-
-    const base = absoluteBaseUrl(req);
-    const html = `
-      <div style="font-family:system-ui,Arial,sans-serif">
-        <p>Bonjour ${[card.prenom, card.nom].filter(Boolean).join(' ') || ''},</p>
-        <p>Voici votre carte fidélité.</p>
-        <p><a href="${base}/c/${encodeURIComponent(card.code)}">Ouvrir la carte</a></p>
-        <p style="margin-top:12px">Code: <strong>${card.code}</strong> — Points: <strong>${card.points||0}</strong></p>
-        <img src="${base}/barcode/${encodeURIComponent(card.code)}" alt="Code-barres" style="max-width:280px">
-      </div>`;
-
-    const transporter = createTransporter();
-    const info = await transporter.sendMail({
-      from: SMTP.from, to,
-      subject: `Votre carte fidélité (${card.code})`,
-      html
-    });
-    res.json({ ok:true, messageId: info.messageId });
-  } catch (e) {
-    console.error('send mail failed:', e);
-    res.status(500).json({ error: 'send-failed', detail: String(e.message || e) });
-  }
-});
-
-// === Rendu de la carte: TON template inchangé ===
+// === Rendu HTML de la carte ===
 app.get('/c/:code', async (req, res) => {
   try {
     const dbc = await getDb();
     const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
     if (!r.rows.length) return res.status(404).send('Carte inconnue');
     const card = r.rows[0];
-    const tpl = readFileOrFallback(TEMPLATE_FILE, '<p>Template introuvable</p>');
-    const html = replaceTokens(tpl, card, absoluteBaseUrl(req));
+    const base = absoluteBaseUrl(req);
+    const tpl = readFileOrFallback(TEMPLATE_FILE, `
+      <!doctype html><meta charset="utf-8">
+      <title>Carte fidélité</title>
+      <h1>Carte {{CODE}}</h1>
+      <p>{{PRENOM}} {{NOM}}</p>
+      <p>Points: <strong id="points">{{POINTS}}</strong></p>
+      <p>Réduction: <strong id="reduction">{{REDUCTION}}</strong></p>
+      <img alt="code-barres" src="{{BARCODE_URL}}" />
+    `);
+    const html = replaceTokens(tpl, card, base);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(html);
+    res.send(html + OFFLINE_SNIPPET);
   } catch (e) {
     console.error(e);
     res.status(500).send('render-failed');
   }
 });
 
-// Code‑barres (visuel strict, pas de texte ajouté)
+// === Code‑barres: PNG Code128, sans texte ===
 app.get('/barcode/:txt', async (req, res) => {
   try {
     const png = await bwipjs.toBuffer({
@@ -253,8 +234,105 @@ app.get('/barcode/:txt', async (req, res) => {
   }
 });
 
+// === Service Worker (hors-ligne) ===
+const SW_SOURCE = `
+const CACHE = 'card-cache-v1';
+const toPrecache = ['/manifest.webmanifest'];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then(c => c.addAll(toPrecache)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+  );
+  self.clients.claim();
+});
+
+function shouldCache(req) {
+  const u = new URL(req.url);
+  if (req.method !== 'GET') return false;
+  return u.pathname.startsWith('/c/')
+      || u.pathname.startsWith('/barcode/')
+      || u.pathname.startsWith('/static/')
+      || u.pathname === '/manifest.webmanifest';
+}
+
+// Stratégie: Stale-While-Revalidate
+self.addEventListener('fetch', (event) => {
+  if (!shouldCache(event.request)) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(event.request);
+    const networkFetch = fetch(event.request).then(resp => {
+      if (resp && resp.status === 200) cache.put(event.request, resp.clone());
+      return resp;
+    }).catch(() => cached || new Response('Hors ligne', { status: 503, headers:{'Content-Type':'text/plain; charset=utf-8'} }));
+    return cached || networkFetch;
+  })());
+});
+`;
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.send(SW_SOURCE);
+});
+
+// === Manifest Web App ===
+app.get('/manifest.webmanifest', (req, res) => {
+  const base = absoluteBaseUrl(req);
+  res.json({
+    name: 'Carte fidélité',
+    short_name: 'Carte',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    background_color: '#ffffff',
+    theme_color: '#111111',
+    icons: [
+      { src: base + '/static/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: base + '/static/icon-512.png', sizes: '512x512', type: 'image/png' }
+    ]
+  });
+});
+
+// === Email (facultatif: envoi de carte) ===
+app.post('/api/send-card', async (req, res) => {
+  try {
+    const { to, code } = req.body || {};
+    if (!to || !code) return res.status(400).json({ error: 'missing-to-or-code' });
+
+    const dbc = await getDb();
+    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
+    if (!r.rows.length) return res.status(404).json({ error: 'card-not-found' });
+    const card = r.rows[0];
+
+    const base = PUBLIC_BASE_URL || '';
+    const link = base ? `${base}/c/${encodeURIComponent(code)}` : `/c/${encodeURIComponent(code)}`;
+
+    const html = `
+      <p>Bonjour ${card.prenom || ''} ${card.nom || ''},</p>
+      <p>Voici votre carte fidélité: <a href="${link}">${link}</a></p>
+      <p>Points: <strong>${card.points ?? 0}</strong> — Réduction: <strong>${card.reduction ?? 0}</strong></p>
+    `;
+
+    const transporter = createTransporter();
+    const info = await transporter.sendMail({
+      from: SMTP.from, to,
+      subject: `Votre carte fidélité (${card.code})`,
+      html
+    });
+    res.json({ ok: true, messageId: info.messageId });
+  } catch (e) {
+    console.error('send mail failed:', e);
+    res.status(500).json({ error: 'send-failed', detail: String(e.message || e) });
+  }
+});
+
+// === Boot ===
 initDb().then(() => {
   app.listen(PORT, () => console.log('Listening on', PORT));
 }).catch((e) => {
-  console.error('DB init failed:', e); process.exit(1);
+  console.error('DB init failed:', e);
+  process.exit(1);
 });
