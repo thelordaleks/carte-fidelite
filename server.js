@@ -111,19 +111,48 @@ function createTransporter() {
   });
 }
 
+// === Utils ===
+function genCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+  let out = 'ADH';
+  for (let i=0;i<8;i++) out += alphabet[Math.floor(Math.random()*alphabet.length)];
+  return out;
+}
+function toIntOrUndef(v) {
+  if (v === undefined || v === null || v === '') return undefined;
+  const n = Number(String(v).replace(',', '.'));
+  if (!Number.isFinite(n)) return undefined;
+  return Math.max(0, Math.round(n));
+}
+
 // === Routes API ===
 app.post('/api/create-card', async (req, res) => {
   try {
-    const { nom='', prenom='', email='', reduction='' } = req.body || {};
-    if (!nom && !prenom) return res.status(400).json({ error: 'nom/prenom requis' });
-    const code = genCode();
+    let { code, nom='', prenom='', email, mail, reduction='', points } = req.body || {};
+    email = (email || mail || '').trim();
+    code = String(code || genCode()).trim().toUpperCase();
+
+    const pts = toIntOrUndef(points);
+    const insertPts = pts === undefined ? 0 : pts;   // 0 par défaut à la création
+    const updatePts = pts === undefined ? null : pts; // n’écrase pas si Excel n’envoie pas
+
     const dbc = await getDb();
     await dbc.execute({
-      sql: 'INSERT INTO cards(code,nom,prenom,email,reduction,points) VALUES(?,?,?,?,?,0)',
-      args: [code, nom, prenom, email, reduction]
+      sql: `
+        INSERT INTO cards(code,nom,prenom,email,reduction,points)
+        VALUES(?,?,?,?,?,?)
+        ON CONFLICT(code) DO UPDATE SET
+          nom=excluded.nom,
+          prenom=excluded.prenom,
+          email=excluded.email,
+          reduction=excluded.reduction,
+          points = COALESCE(?, cards.points)
+      `,
+      args: [code, nom, prenom, email, reduction, insertPts, updatePts]
     });
+
     const base = absoluteBaseUrl(req);
-    res.json({ ok:true, code, url: `${base}/c/${encodeURIComponent(code)}` });
+    res.json({ ok:true, code, url: `${base}/c/${encodeURIComponent(code)}`, points: pts ?? insertPts });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'create-failed' });
@@ -223,14 +252,6 @@ app.get('/barcode/:txt', async (req, res) => {
     res.status(400).send('bad-barcode');
   }
 });
-
-// === Utils ===
-function genCode() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-  let out = 'ADH';
-  for (let i=0;i<8;i++) out += alphabet[Math.floor(Math.random()*alphabet.length)];
-  return out;
-}
 
 initDb().then(() => {
   app.listen(PORT, () => console.log('Listening on', PORT));
