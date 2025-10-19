@@ -229,8 +229,8 @@ app.get('/barcode/:txt', async (req, res) => {
   }
 });
 
-// === Carte Wallet (.pkpass) simple ===
-const { PKPass } = require("passkit-generator");
+// === Carte Wallet .pkpass non signée (mode test) ===
+import { PKPass } from "passkit-generator";
 
 app.get('/wallet/:code', async (req, res) => {
   try {
@@ -238,24 +238,37 @@ app.get('/wallet/:code', async (req, res) => {
     const dbc = await getDb();
     const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
     if (!r.rows.length) return res.status(404).send('Carte inconnue');
-
     const card = r.rows[0];
-    const modelPath = path.join(process.cwd(), "wallet-model");
 
+    const modelPath = path.join(process.cwd(), "wallet-model");
     console.log("== Wallet model contents ==");
     console.log(fs.readdirSync(modelPath));
 
-    // 🟢 Nouvelle syntaxe correcte :
     const pass = await PKPass.from(
-      { model: modelPath },  // <== c’est ici la différence
+      {
+        model: modelPath,
+        // 👇 ajout du mode non signé :
+        certificates: {
+          disableSigning: true
+        }
+      },
       {
         serialNumber: card.code,
-        points: String(card.points || 0),
-        adh: `${card.prenom} ${card.nom}`,
-        barcode: {
-          format: "PKBarcodeFormatCode128",
-          message: card.code,
-          messageEncoding: "utf-8"
+        description: "Carte fidélité MDL",
+        organizationName: "MDL Édouard Vaillant",
+        logoText: `${card.prenom} ${card.nom}`,
+        foregroundColor: "rgb(255,255,255)",
+        backgroundColor: "rgb(0,120,215)",
+        storeCard: {
+          primaryFields: [
+            { key: "points", label: "Points", value: String(card.points || 0) }
+          ],
+          secondaryFields: [
+            { key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }
+          ],
+          auxiliaryFields: [
+            { key: "reduction", label: "Réduction", value: card.reduction || "—" }
+          ]
         }
       }
     );
