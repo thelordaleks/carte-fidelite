@@ -285,8 +285,7 @@ app.get('/barcode/:txt', async (req, res) => {
   }
 });
 // === Génération de carte Wallet (.pkpass) ===
-import fs from "fs";
-import path from "path";
+
 import { PKPass } from "passkit-generator";
 
 app.get('/wallet/:code', async (req, res) => {
