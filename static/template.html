@@ -5,41 +5,103 @@
   <title>Carte de fidélité</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    :root { --brand:#0d6efd; --bg:#f5f7fb; --card:#ffffff; --text:#1a1f2c; }
-    body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text)}
-    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-    .card{width:380px;max-width:100%;background:var(--card);border-radius:16px;border:1px solid #e5e7eb;box-shadow:0 8px 30px rgba(0,0,0,.06);padding:20px}
-    .top{display:flex;gap:12px;align-items:center;margin-bottom:12px}
-    .logo{width:44px;height:44px;border-radius:8px;background:var(--brand);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
-    h1{font-size:18px;margin:0}
-    .meta{font-size:12px;color:#6b7280}
-    .row{margin:8px 0}
-    .label{font-size:12px;color:#6b7280}
-    .value{font-weight:600}
-    .barcode{text-align:center;margin-top:14px}
+    :root{
+      /* ratio de TON visuel: 1024×585 (≈ 16:9). Si tu changes l'image, ajuste ici */
+      --w:1024; --h:585;
+      /* Positions (en %) des zones texte. Ajustables si besoin. */
+      --nom-left: 24%;
+      --nom-top: 62%;
+      --nom-width: 64%;
+      --nom-height: 9%;
+
+      --prenom-left: 24%;
+      --prenom-top: 73.5%;
+      --prenom-width: 64%;
+      --prenom-height: 9%;
+
+      --points-left: 24%;
+      --points-top: 86.2%;
+      --points-width: 22%;
+      --points-height: 10%;
+
+      --reduc-left: 41.8%;
+      --reduc-top: 86.2%;
+      --reduc-width: 22%;
+      --reduc-height: 10%;
+    }
+    html,body{margin:0;height:100%}
+    body{background:#f5f7fb;display:grid;place-items:center;padding:16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1a1f2c}
+    .card{
+      position:relative;
+      aspect-ratio: var(--w) / var(--h);
+      width: min(92vw, 860px);   /* grand sur PC, s’adapte sur mobile */
+      max-height: 92vh;
+      background: #fff url('/static/carte-mdl.png') center/cover no-repeat;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,.10);
+      overflow:hidden;
+    }
+    .field{
+      position:absolute;
+      display:flex; align-items:center;
+      padding: 0 1.2%;
+      color:#1c2434;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      /* s’adapte: ↓ rétrécit sur mobile, grandit sur PC, évite le “Nom tronqué” */
+      font-size: clamp(14px, 2.2vw, 24px);
+      letter-spacing: .2px;
+    }
+    .nom{
+      left: var(--nom-left); top: var(--nom-top);
+      width: var(--nom-width); height: var(--nom-height);
+      transform: translateY(-50%);
+    }
+    .prenom{
+      left: var(--prenom-left); top: var(--prenom-top);
+      width: var(--prenom-width); height: var(--prenom-height);
+      transform: translateY(-50%);
+    }
+    .points{
+      left: var(--points-left); top: var(--points-top);
+      width: var(--points-width); height: var(--points-height);
+      transform: translateY(-50%);
+      justify-content:center;    /* zone plus courte -> centrage visuel */
+      font-weight: 800;
+    }
+    .reduc{
+      left: var(--reduc-left); top: var(--reduc-top);
+      width: var(--reduc-width); height: var(--reduc-height);
+      transform: translateY(-50%);
+      justify-content:center;
+      font-weight: 800;
+    }
+
+    /* Optionnel: si un texte est vraiment très long, on réduit un peu plus */
+    @container style(--w: 1024){
+      .field{ font-size: clamp(13px, 2vw, 22px); }
+    }
+
+    /* Petit watermark discrète si tu veux afficher un code-barres (désactivé par défaut)
+    .barcode{
+      position:absolute; right:2.8%; bottom:4%;
+      width:min(36%, 320px);
+      background:#fff8; padding:6px 8px; border-radius:10px;
+    } */
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="top">
-        <div class="logo">MDL</div>
-        <div>
-          <h1>Carte de fidélité</h1>
-          <div class="meta">Présentez ce code en caisse</div>
-        </div>
-      </div>
+  <div class="card">
+    <div class="field nom">{{NOM}}</div>
+    <div class="field prenom">{{PRENOM}}</div>
+    <div class="field points">{{POINTS}}</div>
+    <div class="field reduc">{{REDUCTION}}</div>
 
-      <div class="row"><span class="label">Nom:</span> <span class="value">{{PRENOM}} {{NOM}}</span></div>
-      <div class="row"><span class="label">Email:</span> <span class="value">{{EMAIL}}</span></div>
-      <div class="row"><span class="label">ID/Code:</span> <span class="value">{{CODE}}</span></div>
-      <div class="row"><span class="label">Points:</span> <span class="value">{{POINTS}}</span></div>
-      <div class="row"><span class="label">Réduction:</span> <span class="value">{{REDUCTION}}</span></div>
-
-      <div class="barcode">
-        <img src="{{BARCODE_URL}}" alt="Code-barres" style="width:100%;max-width:320px;height:auto">
-      </div>
-    </div>
+    <!-- Si tu veux ré‑afficher un code‑barres: décommente ci‑dessous
+    <img class="barcode" src="{{BARCODE_URL}}" alt="Code-barres">
+    -->
   </div>
 </body>
 </html>
