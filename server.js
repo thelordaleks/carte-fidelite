@@ -1,32 +1,89 @@
-// ======== Dépendances ========
-const express = require("express");
-const { v4: uuidv4 } = require("uuid");
+// server.js
+"use strict";
+
+/* =======================
+   Base SQLite (better-sqlite3)
+   ======================= */
+const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
+
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, "data.sqlite");
+const db = new Database(DB_FILE);
+db.pragma("journal_mode = WAL");
+db.exec(`
+CREATE TABLE IF NOT EXISTS membres (
+  id TEXT PRIMARY KEY,
+  prenom TEXT NOT NULL,
+  nom TEXT NOT NULL,
+  email TEXT,
+  code TEXT NOT NULL,
+  points TEXT,
+  reduction TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_membres_code ON membres(code);
+`);
+const upsert = db.prepare(`
+INSERT INTO membres (id, prenom, nom, email, code, points, reduction)
+VALUES (@id, @prenom, @nom, @email, @code, @points, @reduction)
+ON CONFLICT(code) DO UPDATE SET
+  prenom=excluded.prenom,
+  nom=excluded.nom,
+  email=excluded.email,
+  points=excluded.points,
+  reduction=excluded.reduction,
+  updated_at=datetime('now')
+`);
+const getById   = db.prepare("SELECT * FROM membres WHERE id = ?");
+const getByCode = db.prepare("SELECT * FROM membres WHERE code = ?");
+
+/* =======================
+   Dépendances serveur
+   ======================= */
+const express = require("express");
+const { v4: uuidv4 } = require("uuid");
 const bwipjs = require("bwip-js");
 const jwt = require("jsonwebtoken");
 
-// ======== Configuration ========
+/* =======================
+   Configuration Express
+   ======================= */
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET = process.env.SECRET || "dev-secret-change-me";
 
-// ✅ JSON
+app.set("trust proxy", 1);
 app.use(express.json());
 
-// ======== Fichiers statiques ========
+/* =======================
+   Fichiers statiques
+   ======================= */
 app.use("/static", express.static(path.join(__dirname, "static")));
-
-// Vérif fichiers statiques utiles
 ["logo-mdl.png", "carte-mdl.png", "carte-mdl-mail.png"].forEach((f) => {
   const p = path.join(__dirname, "static", f);
   console.log(fs.existsSync(p) ? "✅ Fichier présent:" : "⚠️  Fichier manquant:", f);
 });
 
-// Mémoire (compat ancien /card/:id)
+/* =======================
+   Mémoire (compat ancien /card/:id)
+   ======================= */
 const cartes = {};
 
-// ======== API appelée depuis Excel/PowerAutomate ========
+/* =======================
+   Helpers
+   ======================= */
+function makeBaseUrl(req) {
+  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
+  const xfProto = (req.headers["x-forwarded-proto"] || "").toString().split(",")[0].trim();
+  const protocol = xfProto || (host.includes("localhost") ? "http" : "https");
+  return `${protocol}://${host}`;
+}
+
+/* =======================
+   API: création de carte (Excel/PowerAutomate) — PERSISTANTE
+   ======================= */
 app.post("/api/create-card", (req, res) => {
   if (!req.body) return res.status(400).json({ error: "Requête vide" });
 
@@ -37,317 +94,248 @@ app.post("/api/create-card", (req, res) => {
     return res.status(400).json({ error: "Champs manquants (nom, prenom, code)" });
   }
 
-  // Mapping tolérant des colonnes G/H
+  // Mapping souple colonnes points / réduction (Excel peut changer d'en-têtes)
   const pointsRaw =
-    raw.points ??
-    raw.cumul ??
-    raw.cumul_points ??
-    raw["Cumul de points"] ??
-    raw["Cumul points"] ??
-    raw["Points cumulés"] ??
-    raw["Points"] ??
-    raw["G"] ??
-    raw["g"];
+    raw.points ?? raw.cumul ?? raw.cumul_points ??
+    raw["Cumul de points"] ?? raw["Cumul points"] ??
+    raw["Points cumulés"] ?? raw["Points"] ?? raw["G"] ?? raw["g"];
 
   const reductionRaw =
-    raw.reduction ??
-    raw.reduction_fidelite ??
-    raw.reduc ??
-    raw["Réduction Fidélité"] ??
-    raw["Reduction Fidélité"] ??
-    raw["Réduction fidelité"] ??
-    raw["Réduction"] ??
-    raw["Réduc"] ??
-    raw["H"] ??
-    raw["h"];
+    raw.reduction ?? raw.reduction_fidelite ?? raw.reduc ??
+    raw["Réduction Fidélité"] ?? raw["Reduction Fidélité"] ??
+    raw["Réduction fidelité"] ?? raw["Réduction"] ?? raw["Réduc"] ??
+    raw["H"] ?? raw["h"];
 
   const points = (pointsRaw ?? "").toString().trim();
   const reduction = (reductionRaw ?? "").toString().trim();
 
-  // Ancien comportement (mémoire) pour /card/:id
+  // Propose un nouvel id; si le code existe, l'UPSERT met à jour la fiche existante
   const id = uuidv4();
-  const data = { nom, prenom, email: email || null, code, points, reduction };
-  cartes[id] = data;
+  const data = { id, nom, prenom, email: email || null, code, points, reduction };
 
-  // Jeton signé (expire 365 jours)
-  const token = jwt.sign(data, SECRET, { expiresIn: "365d" });
-
-  // URLs absolues
-  const host =
-    process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const urlSigned = `${protocol}://${host}/card/t/${encodeURIComponent(token)}`;
-  const urlLegacy = `${protocol}://${host}/card/${id}`;
-
-  console.log("✅ Carte générée:", prenom, nom, "→", urlSigned);
-  console.log("ℹ️ G/H reçus:", { points, reduction, keys: Object.keys(raw) });
-
-  return res.json({ url: urlSigned, legacy: urlLegacy });
-});
-
-// ======== Code-barres ========
-app.get("/barcode/:code", (req, res) => {
   try {
-    const includeText = req.query.text === "1";
-    bwipjs.toBuffer(
-      {
-        bcid: "code128",
-        text: req.params.code,
-        scale: 3,
-        height: 10,
-        includetext: includeText,
-        textxalign: "center",
-        backgroundcolor: "FFFFFF",
-      },
-      (err, png) => {
-        if (err) return res.status(500).send("Erreur génération code-barres");
-        res.type("image/png").send(png);
-      }
-    );
+    upsert.run(data);
+    const row = getByCode.get(code);
+    if (!row) return res.status(500).json({ error: "Persisté mais introuvable (DB)" });
+
+    // Compat mémoire
+    cartes[row.id] = row;
+
+    // Lien signé (stateless)
+    const token = jwt.sign(row, SECRET, { expiresIn: "365d" });
+    const base = makeBaseUrl(req);
+    const urlSigned = `${base}/card/t/${encodeURIComponent(token)}`;
+    const urlLegacy = `${base}/card/${row.id}`;
+
+    console.log("✅ Carte persistée:", row.prenom, row.nom, "→", urlSigned);
+    console.log("ℹ️ G/H reçus:", { points, reduction, keys: Object.keys(raw) });
+
+    return res.json({ ok: true, id: row.id, url: urlSigned, legacy: urlLegacy });
   } catch (e) {
-    res.status(500).send("Erreur serveur");
+    console.error("❌ Erreur persist /api/create-card:", e);
+    return res.status(500).json({ error: "Erreur serveur lors de la création" });
   }
 });
 
-// ======== Affichage carte — LIEN SIGNÉ (recommandé) ========
-app.get("/card/t/:token", (req, res) => {
-  let carte;
+/* =======================
+   API: lookup par code
+   ======================= */
+app.get("/api/find-by-code/:code", (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code) return res.status(400).json({ error: "code requis" });
+
+  const row = getByCode.get(code);
+  if (!row) return res.status(404).json({ error: "not found" });
+
+  const token = jwt.sign(row, SECRET, { expiresIn: "365d" });
+  const base = makeBaseUrl(req);
+  const url = `${base}/card/t/${encodeURIComponent(token)}`;
+  res.json({ ...row, token, url });
+});
+
+/* =======================
+   Code-barres (PNG)
+   ======================= */
+app.get("/barcode/:code", async (req, res) => {
   try {
-    carte = jwt.verify(req.params.token, SECRET);
-  } catch {
-    return res.status(404).send("<h1>Carte introuvable ❌</h1>");
+    const includeText = req.query.text === "1" || req.query.text === "true";
+    const buf = await bwipjs.toBuffer({
+      bcid: "code128",
+      text: String(req.params.code || ""),
+      scale: 3,
+      height: 10,       // mm approx (bwip-js units)
+      includetext: includeText,
+      textxalign: "center",
+      textsize: 12,
+      backgroundcolor: "FFFFFF"
+    });
+    res.setHeader("Content-Type", "image/png");
+    res.send(buf);
+  } catch (e) {
+    res.status(400).send("Invalid barcode");
   }
+});
 
-  const prenom = (carte.prenom || "").trim();
-  const nom = (carte.nom || "").trim();
-  const code = (carte.code || "").trim();
-  const points = (carte.points ?? "").toString().trim();
-  const reduction = (carte.reduction ?? "").toString().trim();
+/* =======================
+   Affichage carte — LIEN SIGNE (token)
+   Options: ?bg=mail | print | default, ?debug=1
+   ======================= */
+app.get("/card/t/:token", (req, res) => {
+  try {
+    const data = jwt.verify(req.params.token, SECRET);
+    const bg = (req.query.bg || "").toString();
+    const debug = req.query.debug === "1";
 
-  // URLs absolues (obligatoire pour aperçus d’e‑mail)
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const abs = (p) => `${protocol}://${host}${p}`;
+    const bgFile =
+      bg === "mail" ? "carte-mdl-mail.png"
+    : bg === "print" ? "carte-mdl.png"
+    : "carte-mdl.png";
 
-  // Fond de page: selon ?bg=mail (utile pour tester visuellement)
-const isMail = String(req.query.bg || "").toLowerCase() === "mail";
-const bgFile = isMail ? "carte-mdl-mail.png" : "carte-mdl.png";
+    // Sanitize affichage
+    const safe = {
+      prenom: (data.prenom || "").toString(),
+      nom: (data.nom || "").toString(),
+      email: (data.email || "").toString(),
+      code: (data.code || "").toString(),
+      points: (data.points || "").toString(),
+      reduction: (data.reduction || "").toString(),
+    };
 
-// APERÇU DU LIEN: TOUJOURS l'image spéciale e‑mail (indépendant de ?bg)
-const ogImage = abs(`/static/carte-mdl-mail.png?v=2025-10-18-2`); // change le v pour forcer le cache
+    const base = makeBaseUrl(req);
+    const barcodeUrl = `${base}/barcode/${encodeURIComponent(safe.code)}?text=1`;
 
-  const debug = req.query.debug === "1";
-
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-
-  res.send(`<!doctype html>
+    res.send(`<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Carte de fidélité MDL</title>
-
-<!-- Aperçus (email / messagerie) -->
-<meta property="og:type" content="website">
-<meta property="og:title" content="Carte de fidélité MDL">
-<meta property="og:description" content="${(prenom + ' ' + nom).trim()}">
-<meta property="og:image" content="${ogImage}">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="675">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="${ogImage}">
-<link rel="image_src" href="${ogImage}">
-
-<style>
-:root{
-  --maxw: 980px;
-  --y-bar:    36%;
-  --y-nom:    65.5%;
-  --y-prenom: 76%;
-  --y-points: 83%;
-  --y-reduc:  83%;
-  --x-nom:     24%;
-  --x-prenom:  24%;
-  --r-nom:     31%;
-  --r-prenom:  31%;
-  --x-points:  26%;
-  --w-points:  10%;
-  --x-reduc:   45%;
-  --w-reduc:   17%;
-  --bar-l:      8%;
-  --bar-r:      8%;
-  --ty-nom:    -51%;
-  --ty-prenom: -50%;
-}
-*{box-sizing:border-box}
-body{
-  margin:0; background:#f2f2f2;
-  font-family: system-ui, -apple-system, Segoe UI, Arial, sans-serif;
-  min-height:100svh; display:flex; align-items:center; justify-content:center; padding:16px;
-  color:#1c2434;
-}
-.wrap{ width:min(96vw, var(--maxw)); background:#fff; border-radius:20px; padding:16px; box-shadow:0 6px 24px rgba(0,0,0,.10); }
-.carte{ position:relative; width:100%; border-radius:16px; overflow:hidden; aspect-ratio: 1024 / 585; background:#fff url('${abs('/static/' + bgFile)}') center/cover no-repeat; }
-.overlay{ position:absolute; inset:0; }
-
-.line{
-  position:absolute;
-  ${debug ? "" : "opacity:0;"}
-  overflow:hidden; white-space:nowrap; text-overflow:clip;
-  letter-spacing:.2px; text-shadow:0 1px 0 rgba(255,255,255,.6);
-  transition:opacity .12s ease;
-}
-.line .txt{ display:inline-block; white-space:nowrap; transform-origin:left center; line-height:1; }
-
-.barcode{ left:var(--bar-l); right:var(--bar-r); top:var(--y-bar); display:flex; align-items:center; justify-content:center; }
-.barcode img{ width:86%; max-width:760px; height:auto; filter:drop-shadow(0 1px 0 rgba(255,255,255,.5)); }
-
-.line.nom{
-  left:var(--x-nom); right:var(--r-nom); top:var(--y-nom);
-  transform: translateY(var(--ty-nom, -50%));
-  font-weight:800; font-size:clamp(22px, 4.8vw, 42px); letter-spacing:-0.02em; text-transform:uppercase;
-}
-.line.prenom{
-  left:var(--x-prenom); right:var(--r-prenom); top:var(--y-prenom);
-  transform: translateY(var(--ty-prenom, -50%));
-  font-weight:700; font-size:clamp(18px, 4.2vw, 36px);
-}
-.line.points{ top:var(--y-points); left:var(--x-points); width:var(--w-points); font-weight:700; font-size:clamp(14px,2.6vw,24px); }
-.line.reduction{ top:var(--y-reduc); left:var(--x-reduc); width:var(--w-reduc); font-weight:700; font-size:clamp(14px,2.6vw,24px); }
-
-@media (max-width: 480px){
-  :root{ --y-nom: 65.5%; --y-prenom: 76.5%; }
-}
-.info{ text-align:center; color:#444; font-size:14px; margin-top:12px; }
-.fitted .line{ opacity:1; }
-${debug ? `.line{ outline:1px dashed rgba(255,0,0,.65); background:rgba(255,0,0,.06); }` : ``}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Carte MDL</title>
+  <style>
+    :root{
+      --card-w: 420px;
+      --card-h: 260px;
+    }
+    *{ box-sizing: border-box; }
+    body{
+      margin:0; padding:16px; font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;
+      background:#f5f6f8; color:#222;
+    }
+    .wrap{ display:flex; justify-content:center; align-items:center; min-height:100vh; }
+    .carte{
+      position:relative; width: min(92vw, var(--card-w)); aspect-ratio: 420/260;
+      border-radius:16px; overflow:hidden; background:#fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      ${debug ? "outline:2px dashed #f80;" : ""}
+    }
+    .bg{
+      position:absolute; inset:0; background:#fff center/cover no-repeat url('/static/${bgFile}');
+      filter: ${bg === "mail" ? "saturate(1.05)" : "none"};
+    }
+    .content{
+      position:absolute; inset:0; padding:14px 16px; display:flex; flex-direction:column; justify-content:flex-end;
+    }
+    .row{ display:flex; gap:8px; align-items:center; }
+    .name{
+      position:absolute; left:16px; right:16px; top:18px; line-height:1.1;
+      ${debug ? "outline:1px dotted #07f;" : ""}
+    }
+    .name .prenom{ font-weight:700; font-size: clamp(18px, 6.2vw, 26px); }
+    .name .nom{ font-weight:800; font-size: clamp(20px, 6.8vw, 28px); letter-spacing:.4px; }
+    .code{
+      margin-top: auto; font-weight:700; font-size: clamp(14px, 4.6vw, 18px);
+      ${debug ? "outline:1px dotted #0a0;" : ""}
+    }
+    .stats{
+      display:flex; gap:16px; margin:6px 0 8px;
+      ${debug ? "outline:1px dotted #a0a;" : ""}
+    }
+    .stat{ background:rgba(255,255,255,.82); backdrop-filter: blur(2px);
+      padding:6px 10px; border-radius:8px; font-size: clamp(12px, 3.6vw, 14px); }
+    .barcode{ width: 64%; max-width: 300px; margin-top:6px; background:#fff; border-radius:6px; padding:6px; }
+    .footer{ position:absolute; right:12px; bottom:10px; font-size:12px; opacity:.7 }
+    @media (max-width:520px){
+      .barcode{ width:72%; }
+    }
+  </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="carte" role="img" aria-label="Carte de fidélité de ${prenom} ${nom}">
-      <div class="overlay">
-        <div class="line barcode">
-          <img src="${abs('/barcode/' + encodeURIComponent(code) + '?text=0')}" alt="Code-barres ${code}" decoding="async" />
+    <div class="carte">
+      <div class="bg" aria-hidden="true"></div>
+      <div class="name">
+        <div class="prenom">${escapeHtml(safe.prenom)}</div>
+        <div class="nom">${escapeHtml(safe.nom)}</div>
+      </div>
+      <div class="content">
+        <div class="stats">
+          <div class="stat">Points: <strong>${escapeHtml(safe.points || "-")}</strong></div>
+          <div class="stat">Réduction: <strong>${escapeHtml(safe.reduction || "-")}</strong></div>
         </div>
-        <div class="line nom"><span class="txt">${nom.toUpperCase()}</span></div>
-        <div class="line prenom"><span class="txt">${prenom}</span></div>
-        <div class="line points"><span class="txt">${points}</span></div>
-        <div class="line reduction"><span class="txt">${reduction}</span></div>
+        <div class="code">Code: <span>${escapeHtml(safe.code)}</span></div>
+        <img class="barcode" alt="code-barres" src="${barcodeUrl}">
+        <div class="footer">MDL</div>
       </div>
     </div>
-    <div class="info">
-      ${['Code: ' + code, (points!=='' ? 'Points: ' + points : null), (reduction!=='' ? 'Réduction: ' + reduction : null)].filter(Boolean).join(' • ')}
-    </div>
   </div>
-
-  <script>
-  (function(){
-    function fitOneLineCap(container, opts){
-      if(!container) return;
-      const el = container.querySelector('.txt') || container;
-      opts = opts || {};
-      const minScale = typeof opts.minScale === 'number' ? opts.minScale : 0.5;
-      const grow     = typeof opts.grow     === 'number' ? opts.grow     : 1.0;
-      const padPx    = typeof opts.padPx    === 'number' ? opts.padPx    : 0;
-      const maxPx    = typeof opts.maxPx    === 'number' ? opts.maxPx    : Infinity;
-      const squeeze  = opts.squeeze || null;
-
-      const w = Math.max(0, (container.getBoundingClientRect().width || 0) - padPx);
-      if (w <= 0) return;
-
-      const base = parseFloat(getComputedStyle(el).fontSize) || 16;
-
-      let lo = Math.max(1, base * minScale);
-      let hi = Math.min(maxPx, base * Math.max(1, grow));
-      let best = lo;
-
-      for (let i=0; i<30; i++){
-        const mid = (lo + hi) / 2;
-        el.style.fontSize = mid + 'px';
-        if (el.scrollWidth <= w){ best = mid; lo = mid; } else { hi = mid; }
-        if (hi - lo < 0.2) break;
-      }
-      el.style.fontSize = Math.min(best, maxPx) + 'px';
-
-      el.style.transform = 'none';
-      if (squeeze && el.scrollWidth > w){
-        let sx = 1.0;
-        const minS = squeeze.min ?? 0.92;
-        const step = squeeze.step ?? 0.01;
-        while (el.scrollWidth > w && sx > minS){
-          sx = +(sx - step).toFixed(3);
-          el.style.transform = \`scaleX(\${sx})\`;
-        }
-      }
-    }
-
-    function run(){
-      const card = document.querySelector('.carte');
-      const cw = (card && card.getBoundingClientRect().width) || 1024;
-      const capNom = Math.round(Math.max(16, cw * 0.045));
-      const capPre = Math.round(Math.max(15, cw * 0.039));
-      const isNarrow = cw < 520;
-
-      fitOneLineCap(document.querySelector('.line.nom'), {
-        minScale: 0.34, grow: isNarrow ? 1.25 : 1.55, maxPx: capNom, padPx: 10, squeeze: { min: 0.92, step: 0.01 }
-      });
-      fitOneLineCap(document.querySelector('.line.prenom'), {
-        minScale: 0.45, grow: isNarrow ? 1.25 : 1.45, maxPx: capPre, padPx: 10, squeeze: { min: 0.95, step: 0.01 }
-      });
-      document.body.classList.add('fitted');
-    }
-
-    let raf = null;
-    function schedule(){ if(raf) cancelAnimationFrame(raf); raf = requestAnimationFrame(run); }
-    (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve())
-      .then(() => { if (document.readyState === 'complete') run(); else window.addEventListener('load', run); });
-    window.addEventListener('resize', schedule);
-    window.addEventListener('orientationchange', schedule);
-    window.fitNames = run;
-  })();
-  </script>
 </body>
 </html>`);
+  } catch (_e) {
+    res.status(400).send("<h1>Token invalide ou expiré</h1>");
+  }
 });
 
-// ======== Affichage carte — ANCIEN LIEN (dépend de la mémoire) ========
+// Petite fonction pour échapper le HTML (XSS-safe pour les valeurs)
+function escapeHtml(s){
+  return String(s)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
+}
+
+/* =======================
+   Affichage carte — ANCIEN LIEN (fallback mémoire + DB)
+   ======================= */
 app.get("/card/:id", (req, res) => {
-  const carte = cartes[req.params.id];
+  const id = String(req.params.id || "").trim();
+  const carte = cartes[id] || getById.get(id);
   if (!carte) return res.status(404).send("<h1>Carte introuvable ❌</h1>");
   const token = jwt.sign(carte, SECRET, { expiresIn: "365d" });
   res.redirect(302, `/card/t/${encodeURIComponent(token)}`);
 });
 
-// ======== Page d’accueil et test ========
+/* =======================
+   Pages de test
+   ======================= */
 app.get("/new", (_req, res) => {
-  res.send(`<html><head><title>Test Carte MDL</title></head>
-  <body style="text-align:center;font-family:Arial;">
+  res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Test Carte MDL</title></head>
+  <body style="text-align:center;font-family:Arial;padding:40px;background:#f5f6f8">
     <h2>Carte de fidélité test MDL</h2>
-    <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;">
+    <img src="/static/carte-mdl.png" style="width:320px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.12)">
   </body></html>`);
 });
 
 app.get("/", (_req, res) => {
-  res.send(`<html><head><title>Serveur Carte Fidélité MDL</title></head>
-  <body style="font-family:Arial;text-align:center;padding:40px">
+  res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Serveur Carte Fidélité MDL</title></head>
+  <body style="font-family:Arial;text-align:center;padding:40px;background:#f5f6f8">
     <h2>✅ Serveur MDL en ligne</h2>
-    <ul style="list-style:none;padding:0">
-      <li>/api/create-card — API pour Excel (retourne url signé)</li>
-      <li>/card/t/:token — Afficher une carte (stateless) — options ?bg=mail et ?debug=1</li>
-      <li>/card/:id — Ancien lien basé mémoire (redirige vers lien signé)</li>
-      <li>/barcode/:code — Générer un code-barres (?text=1 pour afficher le texte)</li>
+    <ul style="list-style:none;padding:0;line-height:1.9">
+      <li><code>POST /api/create-card</code> — API pour Excel (retourne url signée)</li>
+      <li><code>GET /api/find-by-code/:code</code> — Récupérer une carte et une URL signée</li>
+      <li><code>/card/t/:token</code> — Afficher une carte (stateless) — options <code>?bg=mail</code> et <code>?debug=1</code></li>
+      <li><code>/card/:id</code> — Ancien lien (redirige vers lien signé, lit mémoire + DB)</li>
+      <li><code>/barcode/:code</code> — PNG de code-barres (<code>?text=1</code> pour afficher le texte)</li>
+      <li><code>/static</code> — Fichiers: carte-mdl.png, carte-mdl-mail.png, logo-mdl.png</li>
     </ul>
   </body></html>`);
 });
 
-// ======== Lancement ========
+/* =======================
+   Lancement
+   ======================= */
 app.listen(PORT, () => {
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME || `localhost:${PORT}`;
-  const protocol = host.includes("localhost") ? "http" : "https";
-  console.log(`🚀 Serveur démarré sur ${protocol}://${host}`);
+  const base = `http://localhost:${PORT}`;
+  console.log(`🚀 Serveur démarré sur ${base}`);
+  console.log(`→ Test rapide: ${base}/`);
   if (!process.env.SECRET) {
     console.warn("⚠️  SECRET non défini — utilisez une variable d'environnement en production.");
   }
