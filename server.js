@@ -247,6 +247,17 @@ app.get('/wallet/:code', async (req, res) => {
     passObj.description = passObj.description || "Carte fidélité MDL";
     passObj.logoText = `${card.prenom} ${card.nom}`;
 
+    // 🎨 Personnalisation visuelle (style carte beige/dorée)
+    passObj.foregroundColor = "rgb(0,0,0)"; // texte noir
+    passObj.backgroundColor = "rgb(255, 244, 230)"; // fond beige clair
+    passObj.labelColor = "rgb(120, 80, 30)"; // brun doré pour les labels
+
+    // ✅ Icônes et logos (doivent être dans wallet-model.pass)
+    passObj.icon = "icon.png";
+    passObj.icon2x = "icon@2x.png";
+    passObj.logo = "logo.png";
+    passObj.logo2x = "logo@2x.png";
+
     // ✅ Ajout du code-barres
     passObj.barcode = {
       format: "PKBarcodeFormatCode128",
