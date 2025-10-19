@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.mdl.vaillant",
+  "serialNumber": "123456",
+  "teamIdentifier": "XXXXXXXXXX",
+  "organizationName": "MDL Édouard Vaillant",
+  "description": "Carte fidélité MDL",
+  "foregroundColor": "rgb(255,255,255)",
+  "backgroundColor": "rgb(0,120,215)",
+  "labelColor": "rgb(255,255,255)",
+  "logoText": "MDL Vaillant",
+  "storeCard": {
+    "primaryFields": [
+      {
+        "key": "points",
+        "label": "Points",
+        "value": "0"
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "nom",
+        "label": "Adhérent",
+        "value": "Nom Prénom"
+      }
+    ],
+    "auxiliaryFields": [
+      {
+        "key": "reduction",
+        "label": "Réduction",
+        "value": "—"
+      }
+    ],
+    "backFields": [
+      {
+        "key": "info",
+        "label": "MDL Édouard Vaillant",
+        "value": "Carte de fidélité scolaire non monétaire."
+      }
+    ]
+  }
+}

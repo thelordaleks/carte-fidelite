@@ -284,6 +284,59 @@ app.get('/barcode/:txt', async (req, res) => {
     res.status(400).send('bad-barcode');
   }
 });
+// === Génération de carte Wallet (.pkpass) ===
+import fs from "fs";
+import path from "path";
+import { PKPass } from "passkit-generator";
+
+app.get('/wallet/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const dbc = await getDb();
+    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
+    if (!r.rows.length) return res.status(404).send('Carte inconnue');
+
+    const card = r.rows[0];
+
+    // Chemins des certificats
+    const certPath = path.join(process.cwd(), 'certs');
+    const wwdr = fs.readFileSync(path.join(certPath, 'WWDR.pem'));
+    const signerCert = fs.readFileSync(path.join(certPath, 'signerCert.pem'));
+    const signerKey = fs.readFileSync(path.join(certPath, 'signerKey.pem'));
+
+    // Génération du pass
+    const pass = new PKPass({
+      model: path.join(process.cwd(), 'wallet-model'),
+      certificates: {
+        wwdr,
+        signerCert,
+        signerKey,
+        signerKeyPassphrase: process.env.WALLET_KEY_PASS || ''
+      },
+      overrides: {
+        serialNumber: card.code,
+        description: "Carte fidélité MDL",
+        organizationName: "MDL Édouard Vaillant",
+        logoText: `${card.prenom} ${card.nom}`,
+        foregroundColor: "rgb(255,255,255)",
+        backgroundColor: "rgb(0,120,215)",
+        labelColor: "rgb(255,255,255)",
+        storeCard: {
+          primaryFields: [{ key: "points", label: "Points", value: String(card.points || 0) }],
+          secondaryFields: [{ key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }],
+          auxiliaryFields: [{ key: "reduction", label: "Réduction", value: card.reduction || "—" }]
+        }
+      }
+    });
+
+    const buffer = await pass.asBuffer();
+    res.type('application/vnd.apple.pkpass');
+    res.send(buffer);
+  } catch (err) {
+    console.error('Erreur Wallet:', err);
+    res.status(500).send('Erreur génération Wallet');
+  }
+});
 
 initDb().then(() => {
   app.listen(PORT, () => console.log('Listening on', PORT));
