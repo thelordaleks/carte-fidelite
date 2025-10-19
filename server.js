@@ -7,7 +7,7 @@ const morgan = require('morgan');
 const dotenv = require('dotenv');
 const bwipjs = require('bwip-js');
 const nodemailer = require('nodemailer');
-const archiver = require('archiver'); // <-- pour créer les fichiers .pkpass (zip)
+const archiver = require('archiver'); // pour créer les fichiers .pkpass (zip)
 dotenv.config();
 
 const app = express();
@@ -17,13 +17,14 @@ app.use(morgan('dev'));
 app.use('/static', express.static(path.join(__dirname, 'static')));
 app.use('/app', express.static(path.join(__dirname, 'public/app')));
 app.use(express.static(path.join(__dirname, 'public')));
+
 // === ENV ===
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.SECRET || '';
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(__dirname, 'template.html');
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ? process.env.PUBLIC_BASE_URL.replace(/\/+$/, '') : '';
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
-// SMTP config
+// === SMTP config ===
 const SMTP = {
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || 587),
@@ -131,13 +132,15 @@ function toIntOrUndef(v) {
   return Math.max(0, Math.round(n));
 }
 
-// === Routes ===
+// === ROUTES ===
 
-// Création carte
+// ✅ Création carte + sauvegarde locale du code
+const dataFile = path.join(__dirname, "data", "lastCodes.json");
+
 app.post('/api/create-card', async (req, res) => {
   try {
     let { code, nom = '', prenom = '', email, mail, reduction = '', points } = req.body || {};
-    email = (email || mail || '').trim();
+    email = (email || mail || '').trim().toLowerCase();
     code = String(code || genCode()).trim().toUpperCase();
     const pts = toIntOrUndef(points);
     const insertPts = pts === undefined ? 0 : pts;
@@ -156,11 +159,37 @@ app.post('/api/create-card', async (req, res) => {
       `,
       args: [code, nom, prenom, email, reduction, insertPts, updatePts]
     });
+
+    // ✅ Sauvegarde JSON locale (pour la PWA)
+    try {
+      fs.mkdirSync(path.join(__dirname, "data"), { recursive: true });
+      const dbFile = fs.existsSync(dataFile) ? JSON.parse(fs.readFileSync(dataFile)) : {};
+      dbFile[email] = code;
+      fs.writeFileSync(dataFile, JSON.stringify(dbFile, null, 2));
+    } catch (e) {
+      console.error("Erreur enregistrement code", e);
+    }
+
     const base = absoluteBaseUrl(req);
     res.json({ ok: true, code, url: `${base}/c/${encodeURIComponent(code)}`, points: pts ?? insertPts });
+
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'create-failed' });
+  }
+});
+
+// ✅ Route pour retrouver le dernier code connu
+app.get("/api/last/:email", (req, res) => {
+  try {
+    if (!fs.existsSync(dataFile)) return res.json({});
+    const dbFile = JSON.parse(fs.readFileSync(dataFile));
+    const email = req.params.email.toLowerCase();
+    if (dbFile[email]) return res.json({ code: dbFile[email] });
+    res.json({});
+  } catch (e) {
+    console.error("Erreur lecture lastCodes.json", e);
+    res.json({});
   }
 });
 
@@ -198,14 +227,12 @@ app.get('/barcode/:txt', async (req, res) => {
     res.status(400).send('bad-barcode');
   }
 });
-// === API pour récupérer une carte ===
+
+// API de récupération
 app.get('/api/get-card/:code', async (req, res) => {
   try {
     const dbc = await getDb();
-    const r = await dbc.execute({
-      sql: 'SELECT * FROM cards WHERE code=?',
-      args: [req.params.code]
-    });
+    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
     if (!r.rows.length) return res.json({ ok: false });
     const c = r.rows[0];
     res.json({
@@ -220,15 +247,12 @@ app.get('/api/get-card/:code', async (req, res) => {
   }
 });
 
-// === Carte Wallet .pkpass (non signée, gratuite) ===
+// Carte Wallet (ZIP .pkpass)
 app.get('/wallet/:code', async (req, res) => {
   try {
     const { code } = req.params;
     const dbc = await getDb();
-    const r = await dbc.execute({
-      sql: 'SELECT * FROM cards WHERE code=?',
-      args: [code]
-    });
+    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
     if (!r.rows.length) return res.status(404).send('Carte inconnue');
     const card = r.rows[0];
 
@@ -238,74 +262,52 @@ app.get('/wallet/:code', async (req, res) => {
       return res.status(500).send("Modèle wallet introuvable sur le serveur");
     }
 
-    // Création de l’archive ZIP .pkpass
     res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
     res.setHeader('Content-Disposition', `attachment; filename="MDL-${card.code}.pkpass"`);
+
     const archive = archiver('zip', { zlib: { level: 9 } });
     archive.pipe(res);
-
     const files = fs.readdirSync(modelPath).filter(f => f[0] !== '.');
 
     for (const f of files) {
       const full = path.join(modelPath, f);
       if (!fs.statSync(full).isFile()) continue;
-      if (f === 'pass.json') continue; // on le modifie plus bas
+      if (f === 'pass.json') continue;
       archive.file(full, { name: f });
     }
 
-    // Lecture et modification de pass.json
-    const passJsonPath = path.join(modelPath, 'pass.json');
     let passObj = {};
     try {
-      passObj = JSON.parse(fs.readFileSync(passJsonPath, 'utf8'));
-    } catch {
-      passObj = {};
-    }
+      passObj = JSON.parse(fs.readFileSync(path.join(modelPath, 'pass.json'), 'utf8'));
+    } catch { passObj = {}; }
 
-    // Injection des champs
-passObj.serialNumber = card.code;
-passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
-passObj.description = passObj.description || "Carte fidélité MDL";
-passObj.logoText = `${card.prenom} ${card.nom}`;
-
-// 🎨 Personnalisation visuelle (style carte beige/dorée)
-passObj.foregroundColor = "rgb(0,0,0)"; // texte noir
-passObj.backgroundColor = "rgb(255, 244, 230)"; // fond beige clair
-passObj.labelColor = "rgb(120, 80, 30)"; // brun doré pour les titres
-
-// ✅ Liens vers tes icônes et logos existants
-passObj.icon = "icon.png";
-passObj.icon2x = "icon@2x.png";
-passObj.logo = "logo.png";
-passObj.logo2x = "logo@2x.png";
-
-// ✅ Ajout du code-barres
-passObj.barcode = {
-  format: "PKBarcodeFormatCode128",
-  message: card.code,
-  messageEncoding: "iso-8859-1"
-};
-passObj.barcodes = [passObj.barcode];
-
-
-    // Champs affichés
+    passObj.serialNumber = card.code;
+    passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
+    passObj.description = passObj.description || "Carte fidélité MDL";
+    passObj.logoText = `${card.prenom} ${card.nom}`;
+    passObj.foregroundColor = "rgb(0,0,0)";
+    passObj.backgroundColor = "rgb(255, 244, 230)";
+    passObj.labelColor = "rgb(120, 80, 30)";
+    passObj.icon = "icon.png";
+    passObj.icon2x = "icon@2x.png";
+    passObj.logo = "logo.png";
+    passObj.logo2x = "logo@2x.png";
+    passObj.barcode = {
+      format: "PKBarcodeFormatCode128",
+      message: card.code,
+      messageEncoding: "iso-8859-1"
+    };
+    passObj.barcodes = [passObj.barcode];
     passObj.storeCard = passObj.storeCard || {};
-    passObj.storeCard.primaryFields = [
-      { key: "points", label: "Points", value: String(card.points || 0) }
-    ];
-    passObj.storeCard.secondaryFields = [
-      { key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }
-    ];
-    passObj.storeCard.auxiliaryFields = [
-      { key: "reduction", label: "Réduction", value: card.reduction || "—" }
-    ];
+    passObj.storeCard.primaryFields = [{ key: "points", label: "Points", value: String(card.points || 0) }];
+    passObj.storeCard.secondaryFields = [{ key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }];
+    passObj.storeCard.auxiliaryFields = [{ key: "reduction", label: "Réduction", value: card.reduction || "—" }];
 
-    // Ajoute le pass.json modifié
     archive.append(JSON.stringify(passObj, null, 2), { name: 'pass.json' });
-    archive.append('{}', { name: 'manifest.json' }); // vide
-    archive.append('', { name: 'signature' }); // vide
-
+    archive.append('{}', { name: 'manifest.json' });
+    archive.append('', { name: 'signature' });
     archive.finalize();
+
   } catch (e) {
     console.error("Erreur .pkpass:", e);
     res.status(500).send("Erreur génération .pkpass");
@@ -322,45 +324,6 @@ initDb()
     } catch (e) {
       console.warn("wallet-model.pass absent ou illisible:", e.message || e);
     }
-// ✅ API pour retrouver le dernier code adhérent
-const path = require("path");
-const fs = require("fs");
-
-const dataFile = path.join(__dirname, "data", "lastCodes.json");
-
-// Sauvegarde du code à chaque création
-app.post("/api/create-card", (req, res) => {
-  // ton code existant
-  const { nom, prenom, email, code } = req.body;
-
-  // sauvegarde dans ton fichier JSON
-  try {
-    const db = fs.existsSync(dataFile)
-      ? JSON.parse(fs.readFileSync(dataFile))
-      : {};
-    db[email] = code;
-    fs.writeFileSync(dataFile, JSON.stringify(db, null, 2));
-  } catch (e) {
-    console.error("Erreur enregistrement code", e);
-  }
-
-  res.json({ ok: true, url: `/c/${code}` });
-});
-
-// ✅ route pour récupérer le dernier code connu
-app.get("/api/last/:email", (req, res) => {
-  try {
-    if (!fs.existsSync(dataFile)) return res.json({});
-    const db = JSON.parse(fs.readFileSync(dataFile));
-    const email = req.params.email.toLowerCase();
-    if (db[email]) return res.json({ code: db[email] });
-    res.json({});
-  } catch (e) {
-    res.json({});
-  }
-});
-
-
     app.listen(PORT, () => console.log('Listening on', PORT));
   })
   .catch(e => {
