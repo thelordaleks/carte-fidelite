@@ -1,161 +1,280 @@
-"use strict";
+// server.js
+// Service carte fidélité avec lien court, rendu template 100% custom, et code-barres.
+// Déploiement: fonctionne tel quel sur Render. Tu n'as qu'à définir SECRET.
 
-const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const jwt = require("jsonwebtoken");
-const bwipjs = require("bwip-js");
+require('dotenv').config();
+
+const fs = require('fs');
+const fsp = require('fs/promises');
+const path = require('path');
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const cors = require('cors');
+const morgan = require('morgan');
+const bwipjs = require('bwip-js');
+const crypto = require('crypto');
+const Database = require('better-sqlite3');
 
 const app = express();
-app.set("trust proxy", true);
 
-// ===== Config
+// ---------- Config ----------
 const PORT = process.env.PORT || 3000;
-const SECRET = process.env.SECRET; // OBLIGATOIRE sur Render
-const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(__dirname, "static", "template.html");
+const SECRET = process.env.SECRET || ''; // DOIT être défini en prod
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const DEFAULT_TEMPLATE_FILE = path.join(__dirname, 'static', 'template.html');
+const TEMPLATE_FILE = process.env.TEMPLATE_FILE || DEFAULT_TEMPLATE_FILE;
 
-// ===== Middlewares
-app.use(express.json({ limit: "256kb" }));
-app.use("/static", express.static(path.join(__dirname, "static"), { maxAge: "1y", etag: true }));
+// Crée DATA_DIR si besoin
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 
-// ===== Helpers
-function fillTpl(tpl, map) {
-  let out = tpl;
-  for (const [k, v] of Object.entries(map)) out = out.split(`{{${k}}}`).join(String(v ?? ""));
-  return out;
-}
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
-}
-// URL utilisée DANS LES MAILS (Render uniquement)
-function baseUrlForEmails() {
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME; // fourni par Render
-  if (host) return `https://${host}`;
-  // fallback dev local seulement
-  return `http://localhost:${PORT}`;
-}
-// URL basée sur la requête courante (utile pour l’image code‑barres)
-function baseUrlFromRequest(req) {
-  const host = req.headers.host;
-  const proto = (req.headers["x-forwarded-proto"] || "").split(",")[0] || (host?.includes("localhost") ? "http" : "https");
+// DB pour les liens courts (persistance nécessaire pour que les e-mails restent valides)
+const DB_FILE = path.join(DATA_DIR, 'db.sqlite3');
+const db = new Database(DB_FILE);
+db.pragma('journal_mode = WAL');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS short_links (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_short_links_created_at ON short_links(created_at);
+`);
+
+// ---------- Middlewares ----------
+app.use(cors());
+app.use(express.json({ limit: '1mb' }));
+app.use(morgan('tiny'));
+app.use('/static', express.static(path.join(__dirname, 'static'), { fallthrough: true }));
+
+// ---------- Utils ----------
+function makeBaseUrl(req) {
+  // Sur Render: RENDER_EXTERNAL_HOSTNAME est défini.
+  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers['x-forwarded-host'] || req.headers.host;
+  const proto = (req.headers['x-forwarded-proto'] || '').includes('https') ? 'https' : 'https';
   return `${proto}://${host}`;
 }
-function euroCentsToString(cents) {
-  if (cents == null || cents === "") return "";
-  const n = Number(cents) / 100;
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
+
+function signCard(payload, days = 365) {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const exp = nowSec + days * 24 * 60 * 60;
+  const claims = {
+    sub: 'card',
+    iat: nowSec,
+    exp,
+    ...payload
+  };
+  return jwt.sign(claims, SECRET, { algorithm: 'HS256' });
 }
 
-// ===== Template (HTML/CSS prêt à l’emploi)
-let templateHtml = fs.readFileSync(TEMPLATE_FILE, "utf8");
+function verifyToken(token) {
+  return jwt.verify(token, SECRET, { algorithms: ['HS256'] });
+}
 
-// ===== API: création du lien signé (utilisé par Excel/Outlook)
-app.post("/api/create-card", (req, res) => {
+async function loadTemplate() {
   try {
-    if (!SECRET) {
-      return res.status(500).json({ error: "SECRET manquant (à définir dans Render > Environment)" });
-    }
-    const body = req.body || {};
-    // Normalisation champs
-    const payload = {
-      firstName: body.firstName ?? body.prenom ?? "",
-      lastName: body.lastName ?? body.nom ?? "",
-      email: body.email ?? "",
-      code: body.code ?? "",
-      points: body.points ?? "",
-      reduction: body.reduction ?? undefined,
-      reduction_cents: body.reduction_cents ?? undefined
-    };
-
-    // JWT SANS expiration pour éviter “expiré” dans les mails anciens
-    const token = jwt.sign(payload, SECRET);
-
-    // Lien 100% Render (jamais localhost)
-    const url = `${baseUrlForEmails()}/card/t/${token}`;
-
-    return res.json({ url, token });
-  } catch (err) {
-    console.error("[/api/create-card] error:", err);
-    res.status(500).json({ error: "Erreur interne" });
-  }
-});
-
-// ===== Page carte: affiche à partir du token
-app.get("/card/t/:token", (req, res) => {
-  if (!SECRET) {
-    return res.status(500).type("html").send("<h1>SECRET manquant sur le serveur</h1>");
-  }
-  try {
-    const data = jwt.verify(req.params.token, SECRET);
-
-    const base = baseUrlFromRequest(req);
-    const code = String(data.code || "");
-    const barcodeUrl = `${base}/barcode/${encodeURIComponent(code)}.png?width=640&height=150`;
-
-    const html = fillTpl(templateHtml, {
-      PRENOM: escapeHtml(data.firstName || ""),
-      NOM: escapeHtml(data.lastName || ""),
-      EMAIL: escapeHtml(data.email || ""),
-      CODE: escapeHtml(code),
-      POINTS: escapeHtml(data.points ?? ""),
-      REDUCTION: escapeHtml(
-        data.reduction != null ? String(data.reduction) : euroCentsToString(data.reduction_cents)
-      ),
-      BARCODE_URL: barcodeUrl
-    });
-
-    res.type("html").send(html);
+    return await fsp.readFile(TEMPLATE_FILE, 'utf8');
   } catch (e) {
-    console.error("[/card/t/:token] verify error:", e?.name, e?.message);
-    const msg =
-      e?.name === "TokenExpiredError" ? "Token expiré" :
-      e?.name === "JsonWebTokenError" ? "Token invalide" :
-      "Token invalide ou expiré";
-    res.status(400).type("html").send(`<h1>${msg}</h1>`);
+    return '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Template manquant</title><h1>Template introuvable</h1><p>Place ton HTML dans static/template.html ou indique TEMPLATE_FILE.</p>';
   }
-});
+}
 
-// ===== Image code‑barres
-app.get("/barcode/:code.png", async (req, res) => {
-  try {
-    const code = String(req.params.code || "");
-    const width = Math.max(200, Math.min(2000, parseInt(req.query.width || "640", 10)));
-    const height = Math.max(50, Math.min(600, parseInt(req.query.height || "150", 10)));
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
-    const png = await bwipjs.toBuffer({
-      bcid: "code128",
-      text: code,
-      width,
-      height,
-      includetext: false,
-      textxalign: "center"
-    });
+function formatEuroCents(cents) {
+  const n = Number.isFinite(+cents) ? +cents : 0;
+  const euros = n / 100;
+  return euros.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
+}
 
-    res.type("png").send(png);
-  } catch (err) {
-    console.error("[/barcode] error:", err);
-    res.status(400).type("text/plain").send("Erreur génération code‑barres");
+function buildTemplateData(claims, req) {
+  const base = makeBaseUrl(req);
+  const code = claims.code || '';
+  const reduction_cents = Number.isFinite(+claims.reduction_cents) ? +claims.reduction_cents : 0;
+  const points = claims.points ?? '';
+
+  const data = {
+    prenom: claims.prenom ?? '',
+    nom: claims.nom ?? '',
+    email: claims.email ?? '',
+    code,
+    points: String(points),
+    reduction_cents: String(reduction_cents),
+    reduction_euros: formatEuroCents(reduction_cents),
+    fullname: `${(claims.prenom || '').trim()} ${(claims.nom || '').trim()}`.trim(),
+    // URL vers PNG code128 généré côté serveur
+    barcode_url: `${base}/barcode?text=${encodeURIComponent(code)}&scale=3&height=60&margin=0`,
+    // Quelques infos utiles
+    service_base_url: base,
+    now_iso: new Date().toISOString()
+  };
+
+  // Ajoute tous les autres champs libres que tu pourrais envoyer (ex: magasin, tier, etc.)
+  for (const [k, v] of Object.entries(claims)) {
+    if (data[k] === undefined) data[k] = String(v);
   }
-});
 
-// ===== Diagnostics simples
-app.get("/_diag", (req, res) => {
+  return data;
+}
+
+function renderWithPlaceholders(template, data) {
+  // Remplacement insensible à la casse sur {{cle}}
+  let out = template;
+  for (const [key, val] of Object.entries(data)) {
+    const re = new RegExp(`{{\\s*${escapeRegex(key)}\\s*}}`, 'gi');
+    out = out.replace(re, String(val ?? ''));
+  }
+  // Placeholders non renseignés -> vides
+  out = out.replace(/{{\s*[a-z0-9_.-]+\s*}}/gi, '');
+  return out;
+}
+
+function createShortLink(token) {
+  const id = crypto.randomBytes(5).toString('hex'); // 10 hexa
+  db.prepare('INSERT INTO short_links (id, token, created_at) VALUES (?, ?, ?)').run(id, token, Date.now());
+  return id;
+}
+
+// ---------- Routes ----------
+
+// Santé/diagnostic
+app.get('/_diag', async (req, res) => {
+  let templateExists = false;
+  try { await fsp.access(TEMPLATE_FILE); templateExists = true; } catch {}
+  const row = db.prepare('SELECT COUNT(*) as c FROM short_links').get();
   res.json({
     ok: true,
+    now: new Date().toISOString(),
+    has_secret: Boolean(SECRET && SECRET.length >= 16),
     render_host: process.env.RENDER_EXTERNAL_HOSTNAME || null,
-    has_secret: !!SECRET,
-    template_file: TEMPLATE_FILE
+    template_file: TEMPLATE_FILE,
+    template_exists: templateExists,
+    data_dir: DATA_DIR,
+    short_links_count: row.c
   });
 });
 
-app.get("/", (req, res) => {
-  res.type("text/plain").send("OK - utilisez POST /api/create-card pour obtenir l’URL de la carte.");
+// Génération code-barres PNG (Code 128)
+app.get('/barcode', async (req, res) => {
+  try {
+    const text = String(req.query.text || '');
+    const scale = Math.max(1, Math.min(8, parseInt(req.query.scale || '3', 10)));
+    const height = Math.max(20, Math.min(100, parseInt(req.query.height || '60', 10)));
+    const margin = Math.max(0, Math.min(20, parseInt(req.query.margin || '0', 10)));
+    const includetext = String(req.query.includetext || 'false') === 'true';
+
+    if (!text) {
+      return res.status(400).send('Paramètre "text" requis.');
+    }
+
+    const png = await bwipjs.toBuffer({
+      bcid: 'code128',
+      text,
+      scale,
+      height,
+      includetext,
+      textxalign: 'center',
+      paddingwidth: margin,
+      paddingheight: margin
+    });
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(png);
+  } catch (err) {
+    res.status(500).send('Erreur génération code-barres');
+  }
 });
 
+// Fabrique un JWT + lien court
+function makeLinks(req, payload) {
+  const base = makeBaseUrl(req);
+  const token = signCard(payload, 365);
+  const longUrl = `${base}/card/t/${encodeURIComponent(token)}`;
+  const shortId = createShortLink(token);
+  const shortUrl = `${base}/u/${shortId}`;
+  return { token, url: longUrl, short_url: shortUrl };
+}
+
+// API: création de carte (utilise le body tel quel)
+app.post('/api/create-card', (req, res) => {
+  if (!SECRET) {
+    return res.status(500).json({ ok: false, error: 'SECRET manquant côté serveur.' });
+  }
+  const {
+    prenom = '',
+    nom = '',
+    email = '',
+    code = '',
+    points = '',
+    reduction_cents = 0,
+    // champs libres additionnels acceptés...
+    ...rest
+  } = req.body || {};
+
+  if (!code) {
+    return res.status(400).json({ ok: false, error: 'Le champ "code" est requis.' });
+  }
+
+  const payload = { prenom, nom, email, code, points, reduction_cents, ...rest };
+  const links = makeLinks(req, payload);
+  return res.json({ ok: true, ...links });
+});
+
+// API: retrouver par code (compatible avec tes usages existants)
+// Si tu n'as pas de base "cartes", on régénère juste un token à partir du code et champs fournis.
+app.post('/api/find-by-code', (req, res) => {
+  if (!SECRET) {
+    return res.status(500).json({ ok: false, error: 'SECRET manquant côté serveur.' });
+  }
+  const { code = '', ...rest } = req.body || {};
+  if (!code) {
+    return res.status(400).json({ ok: false, error: 'Le champ "code" est requis.' });
+  }
+  const payload = { code, ...rest };
+  const links = makeLinks(req, payload);
+  return res.json({ ok: true, ...links });
+});
+
+// Lien court -> redirection 302 vers /card/t/<JWT>
+app.get('/u/:id', (req, res) => {
+  const row = db.prepare('SELECT token FROM short_links WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).send('Lien inconnu.');
+  const base = makeBaseUrl(req);
+  const dest = `${base}/card/t/${encodeURIComponent(row.token)}`;
+  res.redirect(302, dest);
+});
+
+// Affichage carte par TOKEN (nouveau)
+app.get('/card/t/:token', async (req, res) => {
+  try {
+    const token = req.params.token;
+    const claims = verifyToken(token);
+    const template = await loadTemplate();
+    const data = buildTemplateData(claims, req);
+    const html = renderWithPlaceholders(template, data);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (err) {
+    res.status(400).send('<!doctype html><meta charset="utf-8"><title>Token invalide</title><h1>Token invalide ou expiré</h1>');
+  }
+});
+
+// Compat: /card/:id -> traite id comme un token (ancien lien)
+app.get('/card/:id', async (req, res) => {
+  req.params.token = req.params.id;
+  return app._router.handle({ ...req, url: `/card/t/${encodeURIComponent(req.params.id)}`, method: 'GET' }, res, () => {});
+});
+
+// Home (optionnel)
+app.get('/', (req, res) => {
+  res.type('text').send('OK - Service carte. Voir /_diag');
+});
+
+// Démarrage
 app.listen(PORT, () => {
-  console.log(`✅ Serveur démarré sur port ${PORT}`);
-  if (!SECRET) console.warn("⚠️ SECRET non défini — ajoutez-le sur Render (Environment).");
-  if (!process.env.RENDER_EXTERNAL_HOSTNAME) console.warn("ℹ️ RENDER_EXTERNAL_HOSTNAME non détecté (OK en local).");
+  console.log(`Server listening on :${PORT}`);
 });
