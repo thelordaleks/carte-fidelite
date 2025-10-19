@@ -396,8 +396,3 @@ initDb().then(() => {
   console.error('DB init failed:', e); process.exit(1);
 });
 
-initDb().then(() => {
-  app.listen(PORT, () => console.log('Listening on', PORT));
-}).catch((e) => {
-  console.error('DB init failed:', e); process.exit(1);
-});
