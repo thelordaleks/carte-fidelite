@@ -322,6 +322,25 @@ app.get('/wallet/:code', async (req, res) => {
     try { res.status(500).send("Erreur génération .pkpass"); } catch {}
   }
 });
+// Injecte les champs dynamiques
+passObj.serialNumber = card.code;
+passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
+passObj.description = passObj.description || "Carte fidélité MDL";
+passObj.logoText = `${card.prenom} ${card.nom}`;
+
+// ✅ Ajout du code-barres
+passObj.barcode = {
+  format: "PKBarcodeFormatCode128",
+  message: card.code,
+  messageEncoding: "iso-8859-1"
+};
+passObj.barcodes = [passObj.barcode];
+
+// S'assurer de la structure storeCard
+passObj.storeCard = passObj.storeCard || {};
+passObj.storeCard.primaryFields = [{ key: "points", label: "Points", value: String(card.points || 0) }];
+passObj.storeCard.secondaryFields = [{ key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }];
+passObj.storeCard.auxiliaryFields = [{ key: "reduction", label: "Réduction", value: card.reduction || "—" }];
 
 // === Lancement du serveur ===
 initDb()
