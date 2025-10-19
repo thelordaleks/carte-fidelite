@@ -298,16 +298,14 @@ app.get('/wallet/:code', async (req, res) => {
   }
 });
 
-
-
-
 // Lancement du serveur
 initDb().then(() => {
   console.log("== Wallet model contents ==");
-console.log(fs.readdirSync(path.join(process.cwd(), "wallet-model.pass")));
-console.log("pass.json exists:", fs.existsSync(path.join(process.cwd(), "wallet-model.pass", "pass.json")));
+  console.log(fs.readdirSync(path.join(process.cwd(), "wallet-model.pass")));
+  console.log("pass.json exists:", fs.existsSync(path.join(process.cwd(), "wallet-model.pass", "pass.json")));
 
   app.listen(PORT, () => console.log('Listening on', PORT));
 }).catch(e => {
-  console.error('DB init failed:', e); process.exit(1);
+  console.error('DB init failed:', e);
+  process.exit(1);
 });
