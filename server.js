@@ -19,7 +19,7 @@ app.use('/app', express.static(path.join(__dirname, 'public/app')));
 // === ENV ===
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.SECRET || '';
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(__dirname, 'template.html');
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ? process.env.PUBLIC_BASE_URL.replace(/\/+$/,'') : '';
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ? process.env.PUBLIC_BASE_URL.replace(/\/+$/, '') : '';
 const PORT = process.env.PORT || 3000;
 
 // SMTP config
@@ -64,8 +64,12 @@ function absoluteBaseUrl(req) {
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   return `${proto}://${host}`;
 }
-function readFileOrFallback(file, fallback='') {
-  try { return fs.readFileSync(file, 'utf8'); } catch { return fallback; }
+function readFileOrFallback(file, fallback = '') {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return fallback;
+  }
 }
 function replaceTokens(html, data, baseUrl) {
   const fullName = [data.prenom, data.nom].filter(Boolean).join(' ').trim();
@@ -105,7 +109,9 @@ function createTransporter() {
     throw new Error('Config SMTP incomplète (SMTP_HOST/PORT/USER/PASS/FROM)');
   }
   return nodemailer.createTransport({
-    host: SMTP.host, port: SMTP.port, secure: SMTP.port === 465,
+    host: SMTP.host,
+    port: SMTP.port,
+    secure: SMTP.port === 465,
     auth: { user: SMTP.user, pass: SMTP.pass }
   });
 }
@@ -114,7 +120,7 @@ function createTransporter() {
 function genCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
   let out = 'ADH';
-  for (let i=0;i<8;i++) out += alphabet[Math.floor(Math.random()*alphabet.length)];
+  for (let i = 0; i < 8; i++) out += alphabet[Math.floor(Math.random() * alphabet.length)];
   return out;
 }
 function toIntOrUndef(v) {
@@ -129,7 +135,7 @@ function toIntOrUndef(v) {
 // Création carte
 app.post('/api/create-card', async (req, res) => {
   try {
-    let { code, nom='', prenom='', email, mail, reduction='', points } = req.body || {};
+    let { code, nom = '', prenom = '', email, mail, reduction = '', points } = req.body || {};
     email = (email || mail || '').trim();
     code = String(code || genCode()).trim().toUpperCase();
     const pts = toIntOrUndef(points);
@@ -150,7 +156,7 @@ app.post('/api/create-card', async (req, res) => {
       args: [code, nom, prenom, email, reduction, insertPts, updatePts]
     });
     const base = absoluteBaseUrl(req);
-    res.json({ ok:true, code, url: `${base}/c/${encodeURIComponent(code)}`, points: pts ?? insertPts });
+    res.json({ ok: true, code, url: `${base}/c/${encodeURIComponent(code)}`, points: pts ?? insertPts });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'create-failed' });
@@ -187,7 +193,7 @@ app.post('/api/card/:code/send', requireAdmin, async (req, res) => {
       subject: `Votre carte fidélité (${card.code})`,
       html
     });
-    res.json({ ok:true, messageId: info.messageId });
+    res.json({ ok: true, messageId: info.messageId });
   } catch (e) {
     console.error('send mail failed:', e);
     res.status(500).json({ error: 'send-failed', detail: String(e.message || e) });
@@ -229,22 +235,7 @@ app.get('/barcode/:txt', async (req, res) => {
   }
 });
 
-// === Carte Wallet .pkpass non signée (mode test, gratuite) ===
-const { PKPass } = require("passkit-generator");
-
-app.get('/wallet/:code', async (req, res) => {
-  try {
-    const { code } = req.params;
-    const dbc = await getDb();
-    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
-    if (!r.rows.length) return res.status(404).send('Carte inconnue');
-    const card = r.rows[0];
-
-    const modelPath = path.join(process.cwd(), "wallet-model.pass");
-    console.log("== Wallet model contents ==");
-    console.log(fs.readdirSync(modelPath));
-
-  // === Carte Wallet .pkpass non signée (gratuite, Android-compatible) ===
+// === Carte Wallet .pkpass non signée (gratuite, Android-compatible) ===
 const { PKPass } = require("passkit-generator");
 
 app.get('/wallet/:code', async (req, res) => {
@@ -262,11 +253,10 @@ app.get('/wallet/:code', async (req, res) => {
     console.log("== Wallet model contents ==");
     console.log(fs.readdirSync(modelPath));
 
-    // ✅ Bonne syntaxe : le dossier est dans "model"
     const pass = await PKPass.from(
       {
         model: modelPath,
-        disableSigning: true // <-- option gratuite (aucun certificat requis)
+        disableSigning: true // pas de certificat requis
       },
       {
         serialNumber: card.code,
@@ -298,14 +288,16 @@ app.get('/wallet/:code', async (req, res) => {
   }
 });
 
-// Lancement du serveur
-initDb().then(() => {
-  console.log("== Wallet model contents ==");
-  console.log(fs.readdirSync(path.join(process.cwd(), "wallet-model.pass")));
-  console.log("pass.json exists:", fs.existsSync(path.join(process.cwd(), "wallet-model.pass", "pass.json")));
+// === Lancement du serveur ===
+initDb()
+  .then(() => {
+    console.log("== Wallet model contents ==");
+    console.log(fs.readdirSync(path.join(process.cwd(), "wallet-model.pass")));
+    console.log("pass.json exists:", fs.existsSync(path.join(process.cwd(), "wallet-model.pass", "pass.json")));
 
-  app.listen(PORT, () => console.log('Listening on', PORT));
-}).catch(e => {
-  console.error('DB init failed:', e);
-  process.exit(1);
-});
+    app.listen(PORT, () => console.log('Listening on', PORT));
+  })
+  .catch(e => {
+    console.error('DB init failed:', e);
+    process.exit(1);
+  });
