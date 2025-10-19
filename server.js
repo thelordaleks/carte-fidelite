@@ -1,4 +1,4 @@
-// server.js — version stable avec .pkpass non signé
+// server.js — version stable avec .pkpass non signé (archive ZIP manuelle)
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const dotenv = require('dotenv');
 const bwipjs = require('bwip-js');
 const nodemailer = require('nodemailer');
+const archiver = require('archiver'); // <-- nouveau
 dotenv.config();
 
 const app = express();
@@ -235,9 +236,7 @@ app.get('/barcode/:txt', async (req, res) => {
   }
 });
 
-// === Carte Wallet .pkpass non signée (gratuite, Android-compatible) ===
-const { PKPass } = require("passkit-generator");
-
+// === Carte Wallet .pkpass générée manuellement (gratuite) ===
 app.get('/wallet/:code', async (req, res) => {
   try {
     const { code } = req.params;
@@ -250,48 +249,77 @@ app.get('/wallet/:code', async (req, res) => {
     const card = r.rows[0];
 
     const modelPath = path.join(process.cwd(), "wallet-model.pass");
-    console.log("== Wallet model contents ==");
-    console.log(fs.readdirSync(modelPath));
-
-    const pass = await PKPass.from(
-  {
-    model: modelPath,
-    certificates: {
-      wwdr: Buffer.alloc(0),
-      signerCert: Buffer.alloc(0),
-      signerKey: Buffer.alloc(0),
-      disableSigning: true
+    if (!fs.existsSync(modelPath)) {
+      console.error("wallet-model.pass missing:", modelPath);
+      return res.status(500).send("Modèle wallet introuvable sur le serveur");
     }
-  },
-  {
-    serialNumber: card.code,
-    description: "Carte fidélité MDL",
-    organizationName: "MDL Édouard Vaillant",
-    logoText: `${card.prenom} ${card.nom}`,
-    foregroundColor: "rgb(255,255,255)",
-    backgroundColor: "rgb(0,120,215)",
-    storeCard: {
-      primaryFields: [
-        { key: "points", label: "Points", value: String(card.points || 0) }
-      ],
-      secondaryFields: [
-        { key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }
-      ],
-      auxiliaryFields: [
-        { key: "reduction", label: "Réduction", value: card.reduction || "—" }
-      ]
-    }
-  }
-);
 
+    // Lecture des fichiers du modèle (pass.json + images)
+    const files = fs.readdirSync(modelPath).filter(f => f[0] !== '.');
 
-
+    // Préparer les en-têtes pour renvoyer un .pkpass
     res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
     res.setHeader('Content-Disposition', `attachment; filename="MDL-${card.code}.pkpass"`);
-    res.send(await pass.asBuffer());
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.on('warning', err => {
+      if (err.code === 'ENOENT') console.warn('archiver warning', err);
+      else console.error('archiver warning', err);
+    });
+    archive.on('error', err => {
+      console.error('archiver error', err);
+      try { res.status(500).end(); } catch {}
+    });
+
+    // Pipe l'archive directement dans la réponse HTTP
+    archive.pipe(res);
+
+    // Ajoute tous les fichiers du dossier modèle sauf pass.json (on l'ajoute modifié plus bas)
+    for (const f of files) {
+      const full = path.join(modelPath, f);
+      if (!fs.statSync(full).isFile()) continue;
+      if (f === 'pass.json') continue; // skip original, on injecte la version modifiée
+      archive.file(full, { name: f });
+    }
+
+    // Lecture et modification de pass.json
+    const passJsonPath = path.join(modelPath, 'pass.json');
+    let passObj = {};
+    try {
+      passObj = JSON.parse(fs.readFileSync(passJsonPath, 'utf8'));
+    } catch (err) {
+      console.warn('Impossible de lire/parse pass.json, on part d\'un objet vide', err);
+      passObj = {};
+    }
+
+    // Injecte les champs dynamiques
+    passObj.serialNumber = card.code;
+    passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
+    passObj.description = passObj.description || "Carte fidélité MDL";
+    passObj.logoText = `${card.prenom} ${card.nom}`;
+
+    // S'assurer de la structure storeCard (ajuste en fonction de ton pass.json)
+    passObj.storeCard = passObj.storeCard || {};
+    passObj.storeCard.primaryFields = [{ key: "points", label: "Points", value: String(card.points || 0) }];
+    passObj.storeCard.secondaryFields = [{ key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }];
+    passObj.storeCard.auxiliaryFields = [{ key: "reduction", label: "Réduction", value: card.reduction || "—" }];
+
+    // Ajoute le pass.json modifié dans l'archive
+    archive.append(JSON.stringify(passObj, null, 2), { name: 'pass.json' });
+
+    // Manifest minimal (vide) — Apple s'attend à trouver un manifest, on met {}.
+    archive.append('{}', { name: 'manifest.json' });
+
+    // Signature vide (nécessaire pour structure PKPass) — fichier vide
+    archive.append('', { name: 'signature' });
+
+    // Fin de l'archive — le stream est envoyé au client
+    archive.finalize();
+
+    // NOTE: on ne fait pas de res.send() après finalize; la réponse sera envoyée par le stream
   } catch (e) {
-    console.error("Erreur .pkpass:", e);
-    res.status(500).send("Erreur génération .pkpass");
+    console.error("Erreur .pkpass (zip):", e);
+    try { res.status(500).send("Erreur génération .pkpass"); } catch {}
   }
 });
 
@@ -299,8 +327,12 @@ app.get('/wallet/:code', async (req, res) => {
 initDb()
   .then(() => {
     console.log("== Wallet model contents ==");
-    console.log(fs.readdirSync(path.join(process.cwd(), "wallet-model.pass")));
-    console.log("pass.json exists:", fs.existsSync(path.join(process.cwd(), "wallet-model.pass", "pass.json")));
+    try {
+      console.log(fs.readdirSync(path.join(process.cwd(), "wallet-model.pass")));
+      console.log("pass.json exists:", fs.existsSync(path.join(process.cwd(), "wallet-model.pass", "pass.json")));
+    } catch (e) {
+      console.warn("wallet-model.pass absent ou illisible:", e.message || e);
+    }
 
     app.listen(PORT, () => console.log('Listening on', PORT));
   })
