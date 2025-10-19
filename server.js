@@ -1,7 +1,4 @@
 // server.js
-// Service carte fidélité avec lien court, rendu template 100% custom, et code-barres.
-// Déploiement: fonctionne tel quel sur Render. Tu n'as qu'à définir SECRET.
-
 require('dotenv').config();
 
 const fs = require('fs');
@@ -21,9 +18,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SECRET = process.env.SECRET || ''; // DOIT être défini en prod
 
-const fs = require('fs');
-const path = require('path');
-
 // IMPORTANT: dossier writable sur Render (gratuit)
 const DATA_DIR = process.env.DATA_DIR || '/tmp/carte-fidelite';
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -34,7 +28,6 @@ const DB_PATH = path.join(DATA_DIR, 'db.sqlite3');
 
 const DEFAULT_TEMPLATE_FILE = path.join(__dirname, 'static', 'template.html');
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || DEFAULT_TEMPLATE_FILE;
-
 
 // ---------- Middlewares ----------
 app.use(cors());
