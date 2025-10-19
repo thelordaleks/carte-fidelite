@@ -238,18 +238,28 @@ app.get('/wallet/:code', async (req, res) => {
     const dbc = await getDb();
     const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
     if (!r.rows.length) return res.status(404).send('Carte inconnue');
+
     const card = r.rows[0];
     const modelPath = path.join(process.cwd(), "wallet-model");
-    const pass = await PKPass.from(modelPath, {
-      points: String(card.points || 0),
-      adh: `${card.prenom} ${card.nom}`,
-      serialNumber: card.code,
-      barcode: {
-        format: "PKBarcodeFormatCode128",
-        message: card.code,
-        messageEncoding: "utf-8"
+
+    console.log("== Wallet model contents ==");
+    console.log(fs.readdirSync(modelPath));
+
+    // 🟢 Nouvelle syntaxe correcte :
+    const pass = await PKPass.from(
+      { model: modelPath },  // <== c’est ici la différence
+      {
+        serialNumber: card.code,
+        points: String(card.points || 0),
+        adh: `${card.prenom} ${card.nom}`,
+        barcode: {
+          format: "PKBarcodeFormatCode128",
+          message: card.code,
+          messageEncoding: "utf-8"
+        }
       }
-    });
+    );
+
     res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
     res.setHeader('Content-Disposition', `attachment; filename="MDL-${card.code}.pkpass"`);
     res.send(await pass.asBuffer());
@@ -258,6 +268,7 @@ app.get('/wallet/:code', async (req, res) => {
     res.status(500).send("Erreur génération .pkpass");
   }
 });
+
 
 // Lancement du serveur
 initDb().then(() => {
