@@ -229,9 +229,8 @@ app.get('/barcode/:txt', async (req, res) => {
   }
 });
 
-// === Carte Wallet .pkpass non signée (mode test) ===
+// === Carte Wallet .pkpass non signée (mode test, gratuite) ===
 const { PKPass } = require("passkit-generator");
-
 
 app.get('/wallet/:code', async (req, res) => {
   try {
@@ -245,14 +244,9 @@ app.get('/wallet/:code', async (req, res) => {
     console.log("== Wallet model contents ==");
     console.log(fs.readdirSync(modelPath));
 
+    // ⚙️ Génère un pass NON SIGNÉ (aucun certificat requis)
     const pass = await PKPass.from(
-      {
-        model: modelPath,
-        // 👇 ajout du mode non signé :
-        certificates: {
-          disableSigning: true
-        }
-      },
+      modelPath,
       {
         serialNumber: card.code,
         description: "Carte fidélité MDL",
@@ -271,6 +265,9 @@ app.get('/wallet/:code', async (req, res) => {
             { key: "reduction", label: "Réduction", value: card.reduction || "—" }
           ]
         }
+      },
+      {
+        disableSigning: true // ✅ option globale correcte
       }
     );
 
@@ -282,6 +279,7 @@ app.get('/wallet/:code', async (req, res) => {
     res.status(500).send("Erreur génération .pkpass");
   }
 });
+
 
 
 // Lancement du serveur
