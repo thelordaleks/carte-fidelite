@@ -1,0 +1,11 @@
+{
+  "name": "Carte fidélité MDL Édouard Vaillant",
+  "short_name": "Carte MDL",
+  "start_url": "/app/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#007aff",
+  "icons": [
+    { "src": "/static/logo-mdl.png", "sizes": "192x192", "type": "image/png" }
+  ]
+}

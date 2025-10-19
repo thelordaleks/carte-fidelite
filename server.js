@@ -14,6 +14,7 @@ app.use(express.json());
 app.use(cors());
 app.use(morgan('dev'));
 app.use('/static', express.static(path.join(__dirname, 'static')));
+app.use('/app', express.static(path.join(__dirname, 'public/app')));
 
 // === ENV ===
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.SECRET || '';
@@ -185,7 +186,7 @@ app.post('/api/card/:code/points', requireAdmin, async (req, res) => {
   }
 });
 
-// Envoi d’e‑mail (HTML simple + lien de la carte). Ne modifie pas ton template carte.
+// Envoi d’e-mail (HTML simple + lien de la carte + lien vers l'app + Instagram)
 app.post('/api/card/:code/send', requireAdmin, async (req, res) => {
   try {
     const dbc = await getDb();
@@ -197,26 +198,57 @@ app.post('/api/card/:code/send', requireAdmin, async (req, res) => {
 
     const base = absoluteBaseUrl(req);
     const html = `
-      <div style="font-family:system-ui,Arial,sans-serif">
+      <div style="font-family:system-ui,Arial,sans-serif;line-height:1.5;color:#222;">
         <p>Bonjour ${[card.prenom, card.nom].filter(Boolean).join(' ') || ''},</p>
         <p>Voici votre carte fidélité.</p>
-        <p><a href="${base}/c/${encodeURIComponent(card.code)}">Ouvrir la carte</a></p>
-        <p style="margin-top:12px">Code: <strong>${card.code}</strong> — Points: <strong>${card.points||0}</strong></p>
-        <img src="${base}/barcode/${encodeURIComponent(card.code)}" alt="Code-barres" style="max-width:280px">
-      </div>`;
+        
+        <p>
+          <a href="${base}/c/${encodeURIComponent(card.code)}"
+             style="background:#007bff;color:white;padding:8px 14px;text-decoration:none;border-radius:6px;">
+             🎟️ Ouvrir ma carte fidélité
+          </a>
+        </p>
+
+        <p style="margin-top:12px">
+          Code : <strong>${card.code}</strong> — Points : <strong>${card.points || 0}</strong>
+        </p>
+        
+        <img src="${base}/barcode/${encodeURIComponent(card.code)}" alt="Code-barres" style="max-width:280px;">
+
+        <hr style="margin:20px 0;border:none;border-top:1px solid #ddd;">
+
+        <p>📱 Vous pouvez aussi ouvrir votre carte dans l’application mobile :</p>
+        <p>
+          <a href="${base}/app?code=${encodeURIComponent(card.code)}"
+             style="background:#28a745;color:white;padding:8px 14px;text-decoration:none;border-radius:6px;">
+             Ouvrir l’application
+          </a>
+        </p>
+
+        <p>📸 Suivez la MDL sur Instagram :</p>
+        <p>
+          <a href="https://www.instagram.com/mdl.edouardvaillant"
+             style="color:#e4405f;text-decoration:none;font-weight:bold;">
+             @mdl.edouardvaillant
+          </a>
+        </p>
+      </div>
+    `;
 
     const transporter = createTransporter();
     const info = await transporter.sendMail({
-      from: SMTP.from, to,
+      from: SMTP.from,
+      to,
       subject: `Votre carte fidélité (${card.code})`,
       html
     });
-    res.json({ ok:true, messageId: info.messageId });
+    res.json({ ok: true, messageId: info.messageId });
   } catch (e) {
     console.error('send mail failed:', e);
     res.status(500).json({ error: 'send-failed', detail: String(e.message || e) });
   }
 });
+
 
 // === Rendu de la carte: TON template inchangé ===
 app.get('/c/:code', async (req, res) => {

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ma carte fidélité - MDL Édouard Vaillant</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Carte fidélité MDL</h1>
+  </header>
+
+  <main>
+    <iframe id="carte" src="" frameborder="0"></iframe>
+
+    <a class="btn" href="https://www.instagram.com/mdlvaillant" target="_blank">
+      📸 Voir l’Instagram de la MDL
+    </a>
+  </main>
+
+  <script>
+    // Récupère le code dans l’URL ?code=XXXX
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      document.getElementById('carte').src = `/c/${encodeURIComponent(code)}`;
+    } else {
+      document.body.innerHTML = '<p>Code de carte manquant</p>';
+    }
+  </script>
+</body>
+</html>
