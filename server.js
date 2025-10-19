@@ -337,6 +337,64 @@ app.get('/wallet/:code', async (req, res) => {
     res.status(500).send('Erreur génération Wallet');
   }
 });
+// === Code-barres (visuel strict, pas de texte ajouté)
+app.get('/barcode/:txt', async (req, res) => {
+  try {
+    const png = await bwipjs.toBuffer({
+      bcid: 'code128',
+      text: req.params.txt,
+      scale: 3,
+      height: 12,
+      includetext: false,
+      backgroundcolor: 'FFFFFF'
+    });
+    res.setHeader('Content-Type', 'image/png');
+    res.send(png);
+  } catch {
+    res.status(400).send('bad-barcode');
+  }
+});
+
+
+// === Carte Wallet universelle (Android + iPhone)
+app.get('/wallet-universel/:code', async (req, res) => { 
+  try {
+    const { code } = req.params;
+    const dbc = await getDb();
+    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
+    if (!r.rows.length) return res.status(404).send('Carte inconnue');
+    const card = r.rows[0];
+
+    // Format universel type "Google Wallet JSON"
+    const data = {
+      issuerName: "MDL Édouard Vaillant",
+      programName: "Carte fidélité MDL",
+      accountId: card.code,
+      accountName: `${card.prenom} ${card.nom}`,
+      points: card.points || 0,
+      reduction: card.reduction || "—",
+      logo: `${absoluteBaseUrl(req)}/static/logo-mdl.png`,
+      backgroundColor: "#0078D7",
+      textColor: "#FFFFFF",
+      barcode: `${absoluteBaseUrl(req)}/barcode/${encodeURIComponent(card.code)}`
+    };
+
+    res.setHeader('Content-Disposition', `attachment; filename="MDL-${card.code}.json"`);
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error(e);
+    res.status(500).send('Erreur génération Wallet universel');
+  }
+});
+
+
+// === Lancement du serveur
+initDb().then(() => {
+  app.listen(PORT, () => console.log('Listening on', PORT));
+}).catch((e) => {
+  console.error('DB init failed:', e); process.exit(1);
+});
 
 initDb().then(() => {
   app.listen(PORT, () => console.log('Listening on', PORT));
