@@ -4,28 +4,29 @@
   <meta charset="utf-8">
   <title>Carte de fidélité</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <style>
     :root{
       /* dimensions de ton visuel: 1024x585 */
       --w:1024; --h:585;
 
-      /* Ajustements demandés */
+      /* Ajustements */
       --nom-left: 23%;
-      --nom-top: 66%;       /* avant 62% -> un peu plus bas */
+      --nom-top: 66%;
       --nom-width: 64%;
       --nom-height: 9%;
 
       --prenom-left: 23%;
-      --prenom-top: 76.5%;  /* avant 73.5% -> un peu plus bas */
+      --prenom-top: 76.5%;
       --prenom-width: 64%;
       --prenom-height: 9%;
 
-      --points-left: 22%;   /* avant 24% -> un peu plus à gauche */
+      --points-left: 22%;
       --points-top: 86.2%;
       --points-width: 22%;
       --points-height: 10%;
 
-      --reduc-left: 39%;    /* avant 41.8% -> un peu plus à gauche */
+      --reduc-left: 39%;
       --reduc-top: 86.2%;
       --reduc-width: 22%;
       --reduc-height: 10%;
@@ -33,9 +34,8 @@
       /* Code‑barres (centré en haut) */
       --bar-left: 10%;
       --bar-right: 10%;
-      --bar-top: 42%;       /* baisse/monte si besoin */
+      --bar-top: 42%;
     }
-
     html,body{margin:0;height:100%}
     body{
       background:#f5f7fb;display:grid;place-items:center;padding:16px;
@@ -59,6 +59,13 @@
       font-size: clamp(14px, 2.2vw, 24px); letter-spacing:.2px;
       transform: translateY(-50%);
     }
+    .field > .truncate{
+      min-width: 0;
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .nom{ left:var(--nom-left); top:var(--nom-top); width:var(--nom-width); height:var(--nom-height); }
     .prenom{ left:var(--prenom-left); top:var(--prenom-top); width:var(--prenom-width); height:var(--prenom-height); }
     .points{
@@ -71,33 +78,56 @@
       width:var(--reduc-width); height:var(--reduc-height);
       justify-content:center; font-weight:800;
     }
-
     /* Code‑barres */
     .barcode{
       position:absolute; left:var(--bar-left); right:var(--bar-right); top:var(--bar-top);
       display:flex; align-items:center; justify-content:center;
       transform: translateY(-50%);
-      pointer-events:none;   /* clics passent à travers */
+      pointer-events:none;
     }
     .barcode img{
       width: 80%;
-      max-width: 720px;      /* plus grand sur PC, s’adapte sur mobile */
+      max-width: 720px;
       height:auto;
       filter: drop-shadow(0 1px 0 rgba(255,255,255,.6));
+    }
+
+    @media (max-width: 520px){
+      .nom, .prenom{
+        font-size: clamp(11px, 3.4vw, 16px);
+        letter-spacing: .1px;
+      }
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="field nom">{{NOM}}</div>
-    <div class="field prenom">{{PRENOM}}</div>
+    <div class="field nom"><span class="truncate">{{NOM}}</span></div>
+    <div class="field prenom"><span class="truncate">{{PRENOM}}</span></div>
     <div class="field points">{{POINTS}}</div>
     <div class="field reduc">{{REDUCTION}}</div>
 
-    <!-- Code‑barres activé -->
     <div class="barcode">
       <img src="{{BARCODE_URL}}" alt="">
     </div>
   </div>
+
+  <script>
+  function fit(el, min=10, max=24, step=.5){
+    const span = el.querySelector('.truncate'); if(!span) return;
+    el.style.fontSize = max + 'px';
+    const w = el.clientWidth;
+    let size = max;
+    while (span.scrollWidth > w && size > min){
+      size -= step;
+      el.style.fontSize = size + 'px';
+    }
+  }
+  function fitAll(){
+    document.querySelectorAll('.nom, .prenom').forEach(el=>fit(el, 10, 24));
+  }
+  addEventListener('load', fitAll);
+  addEventListener('resize', ()=>{ clearTimeout(window.__fitT); window.__fitT = setTimeout(fitAll, 150); });
+  </script>
 </body>
 </html>
