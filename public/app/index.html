@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carte fidélité MDL</title>
+
+  <!-- Icône + manifest PWA -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="/static/logo-mdl.png">
+  <meta name="theme-color" content="#0078D7">
+
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
@@ -35,7 +41,7 @@
     }
     .btn {
       display: inline-block;
-      margin-top: 25px;
+      margin-top: 20px;
       background: #e4405f;
       color: white;
       text-decoration: none;
@@ -47,6 +53,9 @@
     }
     .btn:hover {
       transform: scale(1.05);
+    }
+    .wallet-btn {
+      background: #0078D7;
     }
     footer {
       margin-top: 30px;
@@ -60,8 +69,8 @@
   <main>
     <iframe id="carte" src=""></iframe>
     <div>
-  <a id="wallet" class="btn" target="_blank">💳 Ajouter au Wallet</a>
-</div>
+      <a id="wallet" class="btn wallet-btn" target="_blank">💳 Ajouter au Wallet</a>
+    </div>
     <div>
       <a href="https://www.instagram.com/mdl.edouardvaillant" class="btn" target="_blank">📸 Voir l’Instagram de la MDL</a>
     </div>
@@ -72,9 +81,19 @@
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     if (code) {
+      // Carte intégrée
       document.getElementById('carte').src = `/c/${encodeURIComponent(code)}`;
+      // Bouton Wallet
+      document.getElementById('wallet').href = `/wallet/${encodeURIComponent(code)}`;
     } else {
       document.querySelector('main').innerHTML = "<p>⚠️ Code de carte manquant.</p>";
+    }
+
+    // ✅ Enregistre le Service Worker (PWA installable)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/app/sw.js').then(() => {
+        console.log("Service Worker enregistré !");
+      });
     }
   </script>
 </body>
