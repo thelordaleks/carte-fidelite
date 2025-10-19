@@ -254,30 +254,37 @@ app.get('/wallet/:code', async (req, res) => {
     console.log(fs.readdirSync(modelPath));
 
     const pass = await PKPass.from(
-      {
-        model: modelPath,
-        disableSigning: true // pas de certificat requis
-      },
-      {
-        serialNumber: card.code,
-        description: "Carte fidélité MDL",
-        organizationName: "MDL Édouard Vaillant",
-        logoText: `${card.prenom} ${card.nom}`,
-        foregroundColor: "rgb(255,255,255)",
-        backgroundColor: "rgb(0,120,215)",
-        storeCard: {
-          primaryFields: [
-            { key: "points", label: "Points", value: String(card.points || 0) }
-          ],
-          secondaryFields: [
-            { key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }
-          ],
-          auxiliaryFields: [
-            { key: "reduction", label: "Réduction", value: card.reduction || "—" }
-          ]
-        }
-      }
-    );
+  {
+    model: modelPath,
+    certificates: {
+      wwdr: Buffer.alloc(0),  // simulacre de certificat
+      signerCert: Buffer.alloc(0),
+      signerKey: Buffer.alloc(0),
+      signerKeyPassphrase: '',
+      disableSigning: true
+    }
+  },
+  {
+    serialNumber: card.code,
+    description: "Carte fidélité MDL",
+    organizationName: "MDL Édouard Vaillant",
+    logoText: `${card.prenom} ${card.nom}`,
+    foregroundColor: "rgb(255,255,255)",
+    backgroundColor: "rgb(0,120,215)",
+    storeCard: {
+      primaryFields: [
+        { key: "points", label: "Points", value: String(card.points || 0) }
+      ],
+      secondaryFields: [
+        { key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }
+      ],
+      auxiliaryFields: [
+        { key: "reduction", label: "Réduction", value: card.reduction || "—" }
+      ]
+    }
+  }
+);
+
 
     res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
     res.setHeader('Content-Disposition', `attachment; filename="MDL-${card.code}.pkpass"`);
