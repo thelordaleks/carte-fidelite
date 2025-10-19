@@ -242,29 +242,30 @@ app.get('/wallet/:code', async (req, res) => {
     }
 
     // Injection des champs
-    passObj.serialNumber = card.code;
-    passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
-    passObj.description = passObj.description || "Carte fidélité MDL";
-    passObj.logoText = `${card.prenom} ${card.nom}`;
+passObj.serialNumber = card.code;
+passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
+passObj.description = passObj.description || "Carte fidélité MDL";
+passObj.logoText = `${card.prenom} ${card.nom}`;
 
-    // 🎨 Personnalisation visuelle (style carte beige/dorée)
-    passObj.foregroundColor = "rgb(0,0,0)"; // texte noir
-    passObj.backgroundColor = "rgb(255, 244, 230)"; // fond beige clair
-    passObj.labelColor = "rgb(120, 80, 30)"; // brun doré pour les labels
+// 🎨 Personnalisation visuelle (style carte beige/dorée)
+passObj.foregroundColor = "rgb(0,0,0)"; // texte noir
+passObj.backgroundColor = "rgb(255, 244, 230)"; // fond beige clair
+passObj.labelColor = "rgb(120, 80, 30)"; // brun doré pour les titres
 
-    // ✅ Icônes et logos (doivent être dans wallet-model.pass)
-    passObj.icon = "icon.png";
-    passObj.icon2x = "icon@2x.png";
-    passObj.logo = "logo.png";
-    passObj.logo2x = "logo@2x.png";
+// ✅ Liens vers tes icônes et logos existants
+passObj.icon = "icon.png";
+passObj.icon2x = "icon@2x.png";
+passObj.logo = "logo.png";
+passObj.logo2x = "logo@2x.png";
 
-    // ✅ Ajout du code-barres
-    passObj.barcode = {
-      format: "PKBarcodeFormatCode128",
-      message: card.code,
-      messageEncoding: "iso-8859-1"
-    };
-    passObj.barcodes = [passObj.barcode];
+// ✅ Ajout du code-barres
+passObj.barcode = {
+  format: "PKBarcodeFormatCode128",
+  message: card.code,
+  messageEncoding: "iso-8859-1"
+};
+passObj.barcodes = [passObj.barcode];
+
 
     // Champs affichés
     passObj.storeCard = passObj.storeCard || {};
