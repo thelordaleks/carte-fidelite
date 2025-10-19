@@ -1,4 +1,4 @@
-// server.js — compat legacy (SECRET, TEMPLATE_FILE) + Turso
+// server.js — Version rollback (zéro changement visuel)
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -6,13 +6,31 @@ const cors = require('cors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const bwipjs = require('bwip-js');
+const nodemailer = require('nodemailer');
 dotenv.config();
 
+const app = express();
+app.use(express.json());
+app.use(cors());
+app.use(morgan('dev'));
+app.use('/static', express.static(path.join(__dirname, 'static')));
+
+// === ENV ===
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.SECRET || '';
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(__dirname, 'template.html');
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ? process.env.PUBLIC_BASE_URL.replace(/\/+$/,'') : '';
 const PORT = process.env.PORT || 3000;
 
-// Turso client (ESM -> import dynamique)
+// SMTP (inchangé, classique)
+const SMTP = {
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  user: process.env.SMTP_USER,
+  pass: process.env.SMTP_PASS,
+  from: process.env.SMTP_FROM
+};
+
+// === Turso (libSQL) ===
 let db;
 async function getDb() {
   if (db) return db;
@@ -23,7 +41,6 @@ async function getDb() {
   });
   return db;
 }
-
 async function initDb() {
   const dbc = await getDb();
   await dbc.execute(`
@@ -35,30 +52,24 @@ async function initDb() {
       reduction TEXT,
       points INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
-    );
+    )
   `);
 }
 
-function readTemplate() {
-  try {
-    return fs.readFileSync(TEMPLATE_FILE, 'utf8');
-  } catch (e) {
-    console.error('Template introuvable:', TEMPLATE_FILE, e);
-    return '<h1>Template manquant</h1>';
-  }
-}
-
+// === Helpers ===
 function absoluteBaseUrl(req) {
-  // déduit automatiquement https://hote
-  const proto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0];
+  if (PUBLIC_BASE_URL) return PUBLIC_BASE_URL;
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https');
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   return `${proto}://${host}`;
 }
-
-function renderTemplate(rawTpl, data, baseUrl) {
-  // valeurs par défaut
+function readFileOrFallback(file, fallback='') {
+  try { return fs.readFileSync(file, 'utf8'); } catch { return fallback; }
+}
+function replaceTokens(html, data, baseUrl) {
+  // On ne touche PAS au style/HTML du template.
   const fullName = [data.prenom, data.nom].filter(Boolean).join(' ').trim();
-  const mapping = {
+  const map = {
     NOM: data.nom || '',
     PRENOM: data.prenom || '',
     FULLNAME: fullName,
@@ -66,101 +77,136 @@ function renderTemplate(rawTpl, data, baseUrl) {
     POINTS: String(data.points ?? 0),
     CODE: data.code || '',
     REDUCTION: data.reduction || '',
-    BARCODE_URL: `${baseUrl}/barcode/${encodeURIComponent(data.code)}`,
+    BARCODE_URL: `${baseUrl}/barcode/${encodeURIComponent(data.code || '')}`,
+    CARD_URL: `${baseUrl}/c/${encodeURIComponent(data.code || '')}`,
   };
-
-  let out = rawTpl;
-  // Remplacement strict: {{ KEY }} et %%KEY%%
-  for (const [k, v] of Object.entries(mapping)) {
-    const mustache = new RegExp(`{{\\s*${k}\\s*}}`, 'g'); // {{ KEY }}
-    const percent = new RegExp(`%%${k}%%`, 'g');          // %%KEY%%
-    out = out.replace(mustache, v).replace(percent, v);
+  let out = String(html || '');
+  for (const [k, v] of Object.entries(map)) {
+    // Jetons stricts uniquement → pas d’écrasement sauvage.
+    const patterns = [
+      new RegExp(`{{\\s*${k}\\s*}}`, 'g'),
+      new RegExp(`%%${k}%%`, 'g'),
+      new RegExp(`\\[\\[\\s*${k}\\s*\\]\\]`, 'g'),
+      new RegExp(`__${k}__`, 'g'),
+      new RegExp(`\\$\\{\\s*${k}\\s*\\}`, 'g')
+    ];
+    for (const p of patterns) out = out.replace(p, v);
   }
   return out;
 }
-
 function requireAdmin(req, res, next) {
   const h = req.headers.authorization || '';
-  const tok = h.startsWith('Bearer ') ? h.slice(7) : '';
-  if (!ADMIN_TOKEN) return res.status(500).json({ error: 'ADMIN/SECRET non défini' });
-  if (tok !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
-  return next();
+  const token = h.startsWith('Bearer ') ? h.slice(7) : '';
+  if (!ADMIN_TOKEN) return res.status(500).json({ error: 'ADMIN_TOKEN manquant' });
+  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'unauthorized' });
+  next();
+}
+function createTransporter() {
+  if (!SMTP.host || !SMTP.port || !SMTP.user || !SMTP.pass || !SMTP.from) {
+    throw new Error('Config SMTP incomplète (SMTP_HOST/PORT/USER/PASS/FROM)');
+  }
+  return nodemailer.createTransport({
+    host: SMTP.host, port: SMTP.port, secure: SMTP.port === 465,
+    auth: { user: SMTP.user, pass: SMTP.pass }
+  });
 }
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(morgan('dev'));
-app.use('/static', express.static(path.join(__dirname, 'static')));
-
-// Créer une carte
+// === Routes API ===
 app.post('/api/create-card', async (req, res) => {
   try {
-    const { nom = '', prenom = '', email = '', reduction = '' } = req.body || {};
-    const code = 'ADH' + Math.random().toString(36).slice(2, 10);
+    const { nom='', prenom='', email='', reduction='' } = req.body || {};
+    if (!nom && !prenom) return res.status(400).json({ error: 'nom/prenom requis' });
+    const code = genCode();
     const dbc = await getDb();
     await dbc.execute({
-      sql: 'INSERT INTO cards(code, nom, prenom, email, reduction, points) VALUES(?,?,?,?,?,0)',
-      args: [code, nom, prenom, email, reduction],
+      sql: 'INSERT INTO cards(code,nom,prenom,email,reduction,points) VALUES(?,?,?,?,?,0)',
+      args: [code, nom, prenom, email, reduction]
     });
-    res.json({ ok: true, code });
+    const base = absoluteBaseUrl(req);
+    res.json({ ok:true, code, url: `${base}/c/${encodeURIComponent(code)}` });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: 'create-card failed' });
+    res.status(500).json({ error: 'create-failed' });
   }
 });
 
-// Lire une carte (JSON)
-app.get('/api/card/:code', async (req, res) => {
+app.get('/api/card/:code', requireAdmin, async (req, res) => {
   try {
     const dbc = await getDb();
-    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
-    if (!r.rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json(r.rows[0]);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'get-card failed' });
-  }
-});
-
-// Mettre à jour points
-app.post('/api/card/:code/points', requireAdmin, async (req, res) => {
-  try {
-    const { delta, set } = req.body || {};
-    const dbc = await getDb();
-    if (typeof set === 'number') {
-      await dbc.execute({ sql: 'UPDATE cards SET points=? WHERE code=?', args: [set, req.params.code] });
-    } else if (typeof delta === 'number') {
-      await dbc.execute({ sql: 'UPDATE cards SET points = points + ? WHERE code=?', args: [delta, req.params.code] });
-    } else {
-      return res.status(400).json({ error: 'delta ou set requis' });
-    }
     const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
     res.json(r.rows[0] || {});
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: 'update-points failed' });
+    res.status(500).json({ error: 'read-failed' });
   }
 });
 
-// Page HTML de la carte = TON template + remplacements
+app.post('/api/card/:code/points', requireAdmin, async (req, res) => {
+  try {
+    const delta = Number(req.body?.delta || 0);
+    const dbc = await getDb();
+    const r = await dbc.execute({ sql: 'SELECT points FROM cards WHERE code=?', args: [req.params.code] });
+    if (!r.rows.length) return res.status(404).json({ error: 'Carte inconnue' });
+    const next = Math.max(0, Number(r.rows[0].points || 0) + delta);
+    await dbc.execute({ sql: 'UPDATE cards SET points=? WHERE code=?', args: [next, req.params.code] });
+    res.json({ ok:true, points: next });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'update-failed' });
+  }
+});
+
+// Envoi d’e‑mail (HTML simple + lien de la carte). Ne modifie pas ton template carte.
+app.post('/api/card/:code/send', requireAdmin, async (req, res) => {
+  try {
+    const dbc = await getDb();
+    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
+    if (!r.rows.length) return res.status(404).json({ error: 'Carte inconnue' });
+    const card = r.rows[0];
+    const to = (req.body && req.body.to) || card.email;
+    if (!to) return res.status(400).json({ error: 'email manquant' });
+
+    const base = absoluteBaseUrl(req);
+    const html = `
+      <div style="font-family:system-ui,Arial,sans-serif">
+        <p>Bonjour ${[card.prenom, card.nom].filter(Boolean).join(' ') || ''},</p>
+        <p>Voici votre carte fidélité.</p>
+        <p><a href="${base}/c/${encodeURIComponent(card.code)}">Ouvrir la carte</a></p>
+        <p style="margin-top:12px">Code: <strong>${card.code}</strong> — Points: <strong>${card.points||0}</strong></p>
+        <img src="${base}/barcode/${encodeURIComponent(card.code)}" alt="Code-barres" style="max-width:280px">
+      </div>`;
+
+    const transporter = createTransporter();
+    const info = await transporter.sendMail({
+      from: SMTP.from, to,
+      subject: `Votre carte fidélité (${card.code})`,
+      html
+    });
+    res.json({ ok:true, messageId: info.messageId });
+  } catch (e) {
+    console.error('send mail failed:', e);
+    res.status(500).json({ error: 'send-failed', detail: String(e.message || e) });
+  }
+});
+
+// === Rendu de la carte: TON template inchangé ===
 app.get('/c/:code', async (req, res) => {
   try {
     const dbc = await getDb();
     const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
     if (!r.rows.length) return res.status(404).send('Carte inconnue');
     const card = r.rows[0];
-    const tpl = readTemplate();
-    const html = renderTemplate(tpl, card, absoluteBaseUrl(req));
+    const tpl = readFileOrFallback(TEMPLATE_FILE, '<p>Template introuvable</p>');
+    const html = replaceTokens(tpl, card, absoluteBaseUrl(req));
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (e) {
     console.error(e);
-    res.status(500).send('render failed');
+    res.status(500).send('render-failed');
   }
 });
 
-// Code‑barres PNG
+// Code‑barres (visuel strict, pas de texte ajouté)
 app.get('/barcode/:txt', async (req, res) => {
   try {
     const png = await bwipjs.toBuffer({
@@ -169,15 +215,25 @@ app.get('/barcode/:txt', async (req, res) => {
       scale: 3,
       height: 12,
       includetext: false,
-      backgroundcolor: 'FFFFFF',
+      backgroundcolor: 'FFFFFF'
     });
     res.setHeader('Content-Type', 'image/png');
     res.send(png);
-  } catch (e) {
-    res.status(400).send('bad barcode');
+  } catch {
+    res.status(400).send('bad-barcode');
   }
 });
 
-initDb()
-  .then(() => app.listen(PORT, () => console.log('Listening on', PORT)))
-  .catch((e) => { console.error('DB init failed:', e); process.exit(1); });
+// === Utils ===
+function genCode() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+  let out = 'ADH';
+  for (let i=0;i<8;i++) out += alphabet[Math.floor(Math.random()*alphabet.length)];
+  return out;
+}
+
+initDb().then(() => {
+  app.listen(PORT, () => console.log('Listening on', PORT));
+}).catch((e) => {
+  console.error('DB init failed:', e); process.exit(1);
+});
