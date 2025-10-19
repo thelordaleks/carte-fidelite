@@ -1,140 +1,218 @@
-// server.js — minimal, compatible avec ton VBA actuel
-require('dotenv').config();
-
-const fs = require('fs');
-const fsp = require('fs/promises');
-const path = require('path');
+// server.js (CommonJS + import dynamique de @libsql/client)
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 const morgan = require('morgan');
+const dotenv = require('dotenv');
 const bwipjs = require('bwip-js');
 
+dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Dossier writable sur Render (éphémère, mais OK)
-const DATA_DIR = process.env.DATA_DIR || '/tmp/carte-fidelite';
-fs.mkdirSync(DATA_DIR, { recursive: true });
-console.log('DATA_DIR:', DATA_DIR);
-
-// Fichiers statiques (images + template)
-const STATIC_DIR = path.join(__dirname, 'static');
-const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(STATIC_DIR, 'template.html');
-
-// Middlewares
+app.use(express.json());
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan('combined'));
-app.use('/static', express.static(STATIC_DIR));
+app.use(morgan('dev'));
+app.use('/static', express.static(path.join(__dirname, 'static')));
 
-// Santé
-app.get('/health', (req, res) => res.json({ ok: true }));
+// ——— LibSQL/Turso client (via import ESM dynamique pour rester en CommonJS)
+let client;
+async function initDb() {
+  const { createClient } = await import('@libsql/client');
+  const DB_URL =
+    process.env.LIBSQL_URL ||
+    process.env.TURSO_DATABASE_URL ||
+    process.env.LIBSQL_DATABASE_URL; // tolérant aux noms
+  const DB_TOKEN =
+    process.env.LIBSQL_AUTH_TOKEN ||
+    process.env.TURSO_AUTH_TOKEN ||
+    process.env.DATABASE_AUTH_TOKEN;
 
-// Utilitaires
-function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if (!DB_URL) throw new Error('LIBSQL/TURSO URL manquante');
+  client = createClient({ url: DB_URL, authToken: DB_TOKEN });
+
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS cards (
+      code TEXT PRIMARY KEY,
+      nom TEXT,
+      prenom TEXT,
+      email TEXT,
+      points INTEGER DEFAULT 0,
+      reduction TEXT DEFAULT '',
+      created_at TEXT,
+      updated_at TEXT
+    );
+  `);
 }
-function baseUrl(req) {
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-  const host = req.headers['x-forwarded-host'] || req.get('host');
-  return `${proto}://${host}`;
+
+// ——— Utils
+function nowIso() { return new Date().toISOString(); }
+function publicBaseUrl() { return process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT||3000}`; }
+function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g,(c)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function genCode(n=8){
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans 0/O/1/I
+  let out=''; for(let i=0;i<n;i++) out+=chars[Math.floor(Math.random()*chars.length)];
+  return out;
 }
-function safeId(s) {
-  // ID basé sur le code: lettres/chiffres/_/- uniquement
-  return String(s || '').trim().replace(/[^a-zA-Z0-9_\-]/g, '');
+async function getCard(code){
+  const r = await client.execute({ sql:'SELECT * FROM cards WHERE code = ?', args:[code] });
+  return r.rows[0];
 }
-async function saveRecord(rec) {
-  const id = safeId(rec.id);
-  const file = path.join(DATA_DIR, `${id}.json`);
-  await fsp.writeFile(file, JSON.stringify(rec, null, 2), 'utf8');
-}
-function loadRecord(id) {
-  const sid = safeId(id);
-  const file = path.join(DATA_DIR, `${sid}.json`);
-  if (!fs.existsSync(file)) return null;
-  const raw = fs.readFileSync(file, 'utf8');
-  return JSON.parse(raw);
-}
-function loadTemplate() {
-  try { return fs.readFileSync(TEMPLATE_FILE, 'utf8'); }
-  catch (e) {
-    console.warn('Template introuvable, utilisation d’un fallback simple.');
-    return `<!doctype html><html><body><h1>Carte</h1><div>{{PRENOM}} {{NOM}} — {{CODE}}</div><img src="{{BARCODE_URL}}"></body></html>`;
+
+// ——— API: créer/mettre à jour une carte (upsert sur code)
+app.post('/api/create-card', async (req,res)=>{
+  try{
+    const { nom='', prenom='', email='', reduction='', code } = req.body || {};
+    const c = (code && String(code).trim()) || genCode();
+    const created_at = nowIso();
+    const updated_at = created_at;
+
+    await client.execute({
+      sql: `
+        INSERT INTO cards (code, nom, prenom, email, points, reduction, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+        ON CONFLICT(code) DO UPDATE SET
+          nom=excluded.nom,
+          prenom=excluded.prenom,
+          email=excluded.email,
+          reduction=excluded.reduction,
+          updated_at=excluded.updated_at
+      `,
+      args: [c, nom, prenom, email, reduction, created_at, updated_at]
+    });
+
+    res.json({
+      ok:true,
+      code: c,
+      url: `${publicBaseUrl()}/c/${encodeURIComponent(c)}`
+    });
+  }catch(e){
+    console.error(e);
+    res.status(500).json({ ok:false, error:'create_failed' });
   }
-}
+});
 
-// Route appelée par Excel
-app.post('/api/create-card', async (req, res) => {
-  try {
-    const { nom, prenom, email, code, points, reduction } = req.body || {};
-
-    if (!email)   return res.status(400).json({ error: 'email_required' });
-    if (!code)    return res.status(400).json({ error: 'code_required' });
-
-    const id = safeId(code);
-    const now = new Date().toISOString();
-
-    const record = {
-      id,
-      nom: String(nom || ''),
-      prenom: String(prenom || ''),
-      email: String(email || ''),
-      code: String(code || ''),
-      points: String(points || ''),
-      reduction: String(reduction || ''),
-      created_at: now,
-      updated_at: now
-    };
-
-    await saveRecord(record);
-
-    const url = `${baseUrl(req)}/c/${encodeURIComponent(id)}`;
-    // Ton VBA lit "url" (ou "link" en secours). On renvoie les deux pour compat.
-    return res.json({ ok: true, url, link: url });
-  } catch (e) {
-    console.error('create-card error:', e);
-    return res.status(500).json({ error: 'server_error', detail: e.message || String(e) });
+// ——— API: lire une carte
+app.get('/api/card/:code', async (req,res)=>{
+  try{
+    const row = await getCard(req.params.code);
+    if(!row) return res.status(404).json({ ok:false, error:'not_found' });
+    res.json({ ok:true, card: row });
+  }catch(e){
+    res.status(500).json({ ok:false, error:'read_failed' });
   }
 });
 
-// Page carte
-app.get('/c/:id', (req, res) => {
-  const rec = loadRecord(req.params.id);
-  if (!rec) return res.status(404).send('Carte introuvable.');
-  const tpl = loadTemplate();
-  const html = tpl
-    .replaceAll('{{NOM}}', escapeHtml(rec.nom))
-    .replaceAll('{{PRENOM}}', escapeHtml(rec.prenom))
-    .replaceAll('{{EMAIL}}', escapeHtml(rec.email))
-    .replaceAll('{{CODE}}', escapeHtml(rec.code))
-    .replaceAll('{{POINTS}}', escapeHtml(rec.points))
-    .replaceAll('{{REDUCTION}}', escapeHtml(rec.reduction))
-    .replaceAll('{{BARCODE_URL}}', `/barcode/${encodeURIComponent(rec.code)}`);
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  return res.send(html);
+// ——— API: MAJ des points (delta ou set), protégé par ADMIN_TOKEN
+function checkAdmin(req){
+  const header = req.headers.authorization || '';
+  const q = req.query.key || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : header || q;
+  return process.env.ADMIN_TOKEN && token === process.env.ADMIN_TOKEN;
+}
+app.post('/api/card/:code/points', async (req,res)=>{
+  try{
+    if(!checkAdmin(req)) return res.status(401).json({ ok:false, error:'unauthorized' });
+    const code = req.params.code;
+    const { delta, set } = req.body || {};
+    const row = await getCard(code);
+    if(!row) return res.status(404).json({ ok:false, error:'not_found' });
+
+    let newPoints = row.points ?? 0;
+    if (typeof set === 'number') newPoints = Math.trunc(set);
+    else if (typeof delta === 'number') newPoints = Math.trunc(newPoints + delta);
+
+    await client.execute({
+      sql: `UPDATE cards SET points=?, updated_at=? WHERE code=?`,
+      args: [newPoints, nowIso(), code]
+    });
+    res.json({ ok:true, code, points:newPoints });
+  }catch(e){
+    console.error(e);
+    res.status(500).json({ ok:false, error:'update_failed' });
+  }
 });
 
-// Code-barres PNG
-app.get('/barcode/:txt', (req, res) => {
-  const text = String(req.params.txt || '');
-  bwipjs.toBuffer(
-    { bcid: 'code128', text, scale: 3, height: 12, includetext: false },
-    (err, png) => {
-      if (err) {
-        console.error('barcode error:', err);
-        return res.status(500).send('barcode_error');
-      }
-      res.setHeader('Content-Type', 'image/png');
-      res.send(png);
-    }
-  );
+// ——— Page carte HTML
+const TEMPLATE_PATH = path.join(__dirname, 'template.html');
+const DEFAULT_TEMPLATE = `
+<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Carte fidélité</title>
+<style>
+  :root { --bg: #111; --fg: #fff; --accent:#0d6efd; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+  .wrap { max-width: 420px; margin: 16px auto; padding: 12px; }
+  .card {
+    position: relative; aspect-ratio: 16/9; border-radius: 16px; overflow: hidden;
+    background: #222 url('/static/carte-mdl.png') center/cover no-repeat;
+    box-shadow: 0 8px 28px rgba(0,0,0,.35);
+  }
+  .line { position: absolute; left: 6%; right: 6%; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+  .line.name { top: 36%; font-weight: 700; font-size: clamp(18px, 4.6vw, 28px); }
+  .line.points { top: 50%; font-weight: 700; font-size: clamp(16px, 4.2vw, 24px); }
+  .line.reduc { top: 62%; font-size: clamp(12px, 3.4vw, 16px); opacity:.9; }
+  .barcode { position: absolute; left: 6%; right: 6%; bottom: 8%; height: 48px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.92); border-radius:8px; }
+  .barcode img { height: 40px; }
+  .meta { text-align:center; margin-top:10px; opacity:.8; font-size: 13px; }
+  .btn { display:inline-block; background:var(--accent); color:#fff; padding:10px 14px; border-radius:10px; text-decoration:none; font-weight:600; }
+</style>
+</head><body>
+<div class="wrap">
+  <div class="card">
+    <div class="line name">{{PRENOM}} {{NOM}}</div>
+    <div class="line points">Points: {{POINTS}}</div>
+    <div class="line reduc">{{REDUCTION}}</div>
+    <div class="barcode"><img src="{{BARCODE_URL}}" alt="barcode"></div>
+  </div>
+  <div class="meta">Code: {{CODE}}</div>
+</div>
+</body></html>`;
+function loadTemplate(){
+  try{ return fs.readFileSync(TEMPLATE_PATH,'utf8'); }
+  catch{ return DEFAULT_TEMPLATE; }
+}
+
+app.get('/c/:code', async (req,res)=>{
+  try{
+    const row = await getCard(req.params.code);
+    if(!row) return res.status(404).send('Carte introuvable');
+    const tpl = loadTemplate();
+    const html = tpl
+      .replace('{{NOM}}', escapeHtml(row.nom||''))
+      .replace('{{PRENOM}}', escapeHtml(row.prenom||''))
+      .replace('{{POINTS}}', escapeHtml(String(row.points ?? 0)))
+      .replace('{{REDUCTION}}', escapeHtml(row.reduction||''))
+      .replace('{{BARCODE_URL}}', `/barcode/${encodeURIComponent(row.code)}`)
+      .replace('{{CODE}}', escapeHtml(row.code));
+    res.setHeader('Content-Type','text/html; charset=utf-8');
+    res.send(html);
+  }catch(e){
+    res.status(500).send('error');
+  }
 });
 
-// Filet de sécurité
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'internal_server_error', detail: err.message });
+// ——— Code‑barres PNG (Code128)
+app.get('/barcode/:txt', (req,res)=>{
+  try{
+    bwipjs.toBuffer({
+      bcid: 'code128',
+      text: String(req.params.txt),
+      scale: 3,
+      height: 14,
+      includetext: false,
+      backgroundcolor: 'FFFFFF'
+    }, (err, png) => {
+      if (err) return res.status(500).send('barcode_error');
+      res.type('png').send(png);
+    });
+  }catch{
+    res.status(500).send('barcode_error');
+  }
 });
 
-app.listen(PORT, () => console.log(`Listening on :${PORT}`));
+// ——— Lancement
+const PORT = process.env.PORT || 3000;
+initDb()
+  .then(()=> app.listen(PORT, ()=> console.log('Listening on', PORT)))
+  .catch((e)=> { console.error('DB init failed:', e); process.exit(1); });
