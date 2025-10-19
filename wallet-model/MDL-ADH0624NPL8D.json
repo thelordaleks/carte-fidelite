@@ -1,0 +1,12 @@
+{
+  "issuerName": "MDL Édouard Vaillant",
+  "programName": "Carte fidélité MDL",
+  "accountId": "ADH0624NPL8D",
+  "accountName": "Alexis DUHAMEL",
+  "points": 0,
+  "reduction": "0,00 €",
+  "logo": "https://carte-fidelite.onrender.com/static/logo-mdl.png",
+  "backgroundColor": "#0078D7",
+  "textColor": "#FFFFFF",
+  "barcode": "https://carte-fidelite.onrender.com/barcode/ADH0624NPL8D"
+}

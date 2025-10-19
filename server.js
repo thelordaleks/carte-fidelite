@@ -387,6 +387,44 @@ app.get('/wallet-universel/:code', async (req, res) => {
     res.status(500).send('Erreur génération Wallet universel');
   }
 });
+// === Carte Wallet (.pkpass) simple et non signée ===
+const { PKPass } = require("passkit-generator");
+
+
+app.get('/wallet/:code', async (req, res) => {
+  try {
+    const { code } = req.params;
+    const dbc = await getDb();
+    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [code] });
+    if (!r.rows.length) return res.status(404).send('Carte inconnue');
+    const card = r.rows[0];
+
+    const modelPath = path.join(process.cwd(), "wallet-model");
+
+    // Crée la carte .pkpass (sans signature)
+    const pass = await PKPass.from(
+      modelPath,
+      {
+        points: String(card.points || 0),
+        adh: `${card.prenom} ${card.nom}`,
+        serialNumber: card.code,
+        barcode: {
+          format: "PKBarcodeFormatCode128",
+          message: card.code,
+          messageEncoding: "utf-8"
+        }
+      }
+    );
+
+    // en-têtes HTTP
+    res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
+    res.setHeader('Content-Disposition', `attachment; filename="MDL-${card.code}.pkpass"`);
+    res.send(await pass.asBuffer());
+  } catch (e) {
+    console.error("Erreur .pkpass:", e);
+    res.status(500).send("Erreur génération .pkpass");
+  }
+});
 
 
 // === Lancement du serveur
