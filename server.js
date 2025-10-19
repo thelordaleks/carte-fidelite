@@ -257,10 +257,9 @@ app.get('/wallet/:code', async (req, res) => {
   {
     model: modelPath,
     certificates: {
-      wwdr: Buffer.alloc(0),  // simulacre de certificat
+      wwdr: Buffer.alloc(0),
       signerCert: Buffer.alloc(0),
       signerKey: Buffer.alloc(0),
-      signerKeyPassphrase: '',
       disableSigning: true
     }
   },
@@ -284,6 +283,7 @@ app.get('/wallet/:code', async (req, res) => {
     }
   }
 );
+
 
 
     res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
