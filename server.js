@@ -322,6 +322,45 @@ initDb()
     } catch (e) {
       console.warn("wallet-model.pass absent ou illisible:", e.message || e);
     }
+// ✅ API pour retrouver le dernier code adhérent
+const path = require("path");
+const fs = require("fs");
+
+const dataFile = path.join(__dirname, "data", "lastCodes.json");
+
+// Sauvegarde du code à chaque création
+app.post("/api/create-card", (req, res) => {
+  // ton code existant
+  const { nom, prenom, email, code } = req.body;
+
+  // sauvegarde dans ton fichier JSON
+  try {
+    const db = fs.existsSync(dataFile)
+      ? JSON.parse(fs.readFileSync(dataFile))
+      : {};
+    db[email] = code;
+    fs.writeFileSync(dataFile, JSON.stringify(db, null, 2));
+  } catch (e) {
+    console.error("Erreur enregistrement code", e);
+  }
+
+  res.json({ ok: true, url: `/c/${code}` });
+});
+
+// ✅ route pour récupérer le dernier code connu
+app.get("/api/last/:email", (req, res) => {
+  try {
+    if (!fs.existsSync(dataFile)) return res.json({});
+    const db = JSON.parse(fs.readFileSync(dataFile));
+    const email = req.params.email.toLowerCase();
+    if (db[email]) return res.json({ code: db[email] });
+    res.json({});
+  } catch (e) {
+    res.json({});
+  }
+});
+
+
     app.listen(PORT, () => console.log('Listening on', PORT));
   })
   .catch(e => {
