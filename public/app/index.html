@@ -140,6 +140,17 @@
   } else {
     document.querySelector('main').innerHTML = "<p>⚠️ Code de carte manquant.</p>";
   }
+  // ✅ Sauvegarde du code dans le stockage local
+if (code) {
+  localStorage.setItem('mdl_last_code', code);
+} else {
+  // Si pas de code dans l'URL, on reprend le dernier code connu
+  const lastCode = localStorage.getItem('mdl_last_code');
+  if (lastCode) {
+    window.location.href = `/app?code=${lastCode}`;
+  }
+}
+
 </script>
 </body>
 </html>
