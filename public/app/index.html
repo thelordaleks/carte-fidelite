@@ -114,16 +114,31 @@
       refreshCard();
       setInterval(refreshCard, 60000); // toutes les 60 secondes
 
-      // ✅ Enregistre le Service Worker (PWA installable)
+            // ✅ Enregistre le Service Worker (PWA installable)
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/app/sw.js')
           .then(() => console.log("Service Worker enregistré !"))
           .catch(err => console.error("SW error", err));
       }
 
-    } else {
-      document.querySelector('main').innerHTML = "<p>⚠️ Code de carte manquant.</p>";
-    }
+      // 👉 Ajoute ce bloc :
+      window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        window.deferredPrompt = event;
+        const btn = document.createElement('button');
+        btn.textContent = '📱 Installer l’application';
+        btn.className = 'btn wallet-btn';
+        btn.style.display = 'block';
+        btn.style.margin = '25px auto';
+        btn.onclick = () => {
+          window.deferredPrompt.prompt();
+          window.deferredPrompt.userChoice.then(() => {
+            window.deferredPrompt = null;
+          });
+        };
+        document.querySelector('main').appendChild(btn);
+      });
+
   </script>
 </body>
 </html>
