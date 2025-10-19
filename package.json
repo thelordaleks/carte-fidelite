@@ -9,12 +9,13 @@
     "node": "20.x"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "cors": "^2.8.5",
-    "morgan": "^1.10.0",
-    "dotenv": "^16.4.5",
-    "bwip-js": "^4.4.0",
     "@libsql/client": "^0.10.0",
-    "nodemailer": "^6.9.14"
+    "bwip-js": "^4.4.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.14",
+    "passkit-generator": "^3.5.2"
   }
 }
