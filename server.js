@@ -7,30 +7,40 @@ const jwt = require("jsonwebtoken");
 const bwipjs = require("bwip-js");
 
 const app = express();
+app.set("trust proxy", true);
+
+// ===== Config
 const PORT = process.env.PORT || 3000;
-const SECRET = process.env.SECRET || "change-moi";
+const SECRET = process.env.SECRET; // OBLIGATOIRE sur Render
 const TEMPLATE_FILE = process.env.TEMPLATE_FILE || path.join(__dirname, "static", "template.html");
 
-// Static (images, css, etc.)
+// ===== Middlewares
+app.use(express.json({ limit: "256kb" }));
 app.use("/static", express.static(path.join(__dirname, "static"), { maxAge: "1y", etag: true }));
 
-// --- helpers
+// ===== Helpers
+function fillTpl(tpl, map) {
+  let out = tpl;
+  for (const [k, v] of Object.entries(map)) out = out.split(`{{${k}}}`).join(String(v ?? ""));
+  return out;
+}
 function escapeHtml(s) {
   return String(s ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
-function fillTpl(tpl, map) {
-  let out = tpl;
-  for (const [k, v] of Object.entries(map)) out = out.split(`{{${k}}}`).join(v);
-  return out;
+// URL utilisée DANS LES MAILS (Render uniquement)
+function baseUrlForEmails() {
+  const host = process.env.RENDER_EXTERNAL_HOSTNAME; // fourni par Render
+  if (host) return `https://${host}`;
+  // fallback dev local seulement
+  return `http://localhost:${PORT}`;
 }
-function makeBaseUrl(req) {
-  const host = process.env.RENDER_EXTERNAL_HOSTNAME || req.headers.host || `localhost:${PORT}`;
-  const xf = (req.headers["x-forwarded-proto"] || "").toString().split(",")[0].trim();
-  const protocol = xf || (host.includes("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
+// URL basée sur la requête courante (utile pour l’image code‑barres)
+function baseUrlFromRequest(req) {
+  const host = req.headers.host;
+  const proto = (req.headers["x-forwarded-proto"] || "").split(",")[0] || (host?.includes("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
 }
 function euroCentsToString(cents) {
   if (cents == null || cents === "") return "";
@@ -38,23 +48,55 @@ function euroCentsToString(cents) {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
 }
 
-// Charge le template (aucune modif de style/markup)
+// ===== Template (HTML/CSS prêt à l’emploi)
 let templateHtml = fs.readFileSync(TEMPLATE_FILE, "utf8");
 
-// --- routes
+// ===== API: création du lien signé (utilisé par Excel/Outlook)
+app.post("/api/create-card", (req, res) => {
+  try {
+    if (!SECRET) {
+      return res.status(500).json({ error: "SECRET manquant (à définir dans Render > Environment)" });
+    }
+    const body = req.body || {};
+    // Normalisation champs
+    const payload = {
+      firstName: body.firstName ?? body.prenom ?? "",
+      lastName: body.lastName ?? body.nom ?? "",
+      email: body.email ?? "",
+      code: body.code ?? "",
+      points: body.points ?? "",
+      reduction: body.reduction ?? undefined,
+      reduction_cents: body.reduction_cents ?? undefined
+    };
 
-// Affichage carte via JWT
+    // JWT SANS expiration pour éviter “expiré” dans les mails anciens
+    const token = jwt.sign(payload, SECRET);
+
+    // Lien 100% Render (jamais localhost)
+    const url = `${baseUrlForEmails()}/card/t/${token}`;
+
+    return res.json({ url, token });
+  } catch (err) {
+    console.error("[/api/create-card] error:", err);
+    res.status(500).json({ error: "Erreur interne" });
+  }
+});
+
+// ===== Page carte: affiche à partir du token
 app.get("/card/t/:token", (req, res) => {
+  if (!SECRET) {
+    return res.status(500).type("html").send("<h1>SECRET manquant sur le serveur</h1>");
+  }
   try {
     const data = jwt.verify(req.params.token, SECRET);
 
-    const base = makeBaseUrl(req);
-    const code = data.code || data.CODE || "";
+    const base = baseUrlFromRequest(req);
+    const code = String(data.code || "");
     const barcodeUrl = `${base}/barcode/${encodeURIComponent(code)}.png?width=640&height=150`;
 
     const html = fillTpl(templateHtml, {
-      PRENOM: escapeHtml(data.firstName || data.prenom || ""),
-      NOM: escapeHtml(data.lastName || data.nom || ""),
+      PRENOM: escapeHtml(data.firstName || ""),
+      NOM: escapeHtml(data.lastName || ""),
       EMAIL: escapeHtml(data.email || ""),
       CODE: escapeHtml(code),
       POINTS: escapeHtml(data.points ?? ""),
@@ -66,12 +108,16 @@ app.get("/card/t/:token", (req, res) => {
 
     res.type("html").send(html);
   } catch (e) {
-    console.error(e);
-    res.status(400).type("html").send("<h1>Token invalide ou expiré</h1>");
+    console.error("[/card/t/:token] verify error:", e?.name, e?.message);
+    const msg =
+      e?.name === "TokenExpiredError" ? "Token expiré" :
+      e?.name === "JsonWebTokenError" ? "Token invalide" :
+      "Token invalide ou expiré";
+    res.status(400).type("html").send(`<h1>${msg}</h1>`);
   }
 });
 
-// Code‑barres PNG CODE128
+// ===== Image code‑barres
 app.get("/barcode/:code.png", async (req, res) => {
   try {
     const code = String(req.params.code || "");
@@ -89,32 +135,27 @@ app.get("/barcode/:code.png", async (req, res) => {
 
     res.type("png").send(png);
   } catch (err) {
-    console.error(err);
+    console.error("[/barcode] error:", err);
     res.status(400).type("text/plain").send("Erreur génération code‑barres");
   }
 });
 
-// Dev: génération de token (désactivée en prod)
-app.get("/dev/make-token", (req, res) => {
-  if (process.env.NODE_ENV === "production") {
-    return res.status(403).send("Désactivé en production");
-  }
-  const payload = {
-    firstName: req.query.firstName || "Emma",
-    lastName: req.query.lastName || "Martin",
-    email: req.query.email || "emma@example.com",
-    code: req.query.code || "MDL-123456",
-    points: req.query.points || "120",
-    reduction_cents: req.query.reduction_cents || "500"
-  };
-  const token = jwt.sign(payload, SECRET, { expiresIn: "7d" });
-  res.type("text/plain").send(token);
+// ===== Diagnostics simples
+app.get("/_diag", (req, res) => {
+  res.json({
+    ok: true,
+    render_host: process.env.RENDER_EXTERNAL_HOSTNAME || null,
+    has_secret: !!SECRET,
+    template_file: TEMPLATE_FILE
+  });
 });
 
 app.get("/", (req, res) => {
-  res.type("text/plain").send("OK. Utilisez /dev/make-token puis /card/t/<TOKEN> (en dev).");
+  res.type("text/plain").send("OK - utilisez POST /api/create-card pour obtenir l’URL de la carte.");
 });
 
 app.listen(PORT, () => {
-  console.log(`Serveur OK sur http://localhost:${PORT}`);
+  console.log(`✅ Serveur démarré sur port ${PORT}`);
+  if (!SECRET) console.warn("⚠️ SECRET non défini — ajoutez-le sur Render (Environment).");
+  if (!process.env.RENDER_EXTERNAL_HOSTNAME) console.warn("ℹ️ RENDER_EXTERNAL_HOSTNAME non détecté (OK en local).");
 });
