@@ -230,7 +230,8 @@ app.get('/barcode/:txt', async (req, res) => {
 });
 
 // === Carte Wallet .pkpass non signée (mode test) ===
-import { PKPass } from "passkit-generator";
+const { PKPass } = require("passkit-generator");
+
 
 app.get('/wallet/:code', async (req, res) => {
   try {
