@@ -7,7 +7,7 @@ const morgan = require('morgan');
 const dotenv = require('dotenv');
 const bwipjs = require('bwip-js');
 const nodemailer = require('nodemailer');
-const archiver = require('archiver'); // <-- nouveau
+const archiver = require('archiver'); // <-- pour créer les fichiers .pkpass (zip)
 dotenv.config();
 
 const app = express();
@@ -164,43 +164,6 @@ app.post('/api/create-card', async (req, res) => {
   }
 });
 
-// Envoi e-mail
-app.post('/api/card/:code/send', requireAdmin, async (req, res) => {
-  try {
-    const dbc = await getDb();
-    const r = await dbc.execute({ sql: 'SELECT * FROM cards WHERE code=?', args: [req.params.code] });
-    if (!r.rows.length) return res.status(404).json({ error: 'Carte inconnue' });
-    const card = r.rows[0];
-    const to = (req.body && req.body.to) || card.email;
-    if (!to) return res.status(400).json({ error: 'email manquant' });
-
-    const base = absoluteBaseUrl(req);
-    const html = `
-      <div style="font-family:system-ui,Arial,sans-serif;line-height:1.5;color:#222;">
-        <p>Bonjour ${[card.prenom, card.nom].filter(Boolean).join(' ') || ''},</p>
-        <p>Voici votre carte fidélité.</p>
-        <p><a href="${base}/c/${encodeURIComponent(card.code)}" style="background:#007bff;color:white;padding:8px 14px;text-decoration:none;border-radius:6px;">🎟️ Ouvrir ma carte fidélité</a></p>
-        <p style="margin-top:12px">Code : <strong>${card.code}</strong> — Points : <strong>${card.points || 0}</strong></p>
-        <img src="${base}/barcode/${encodeURIComponent(card.code)}" alt="Code-barres" style="max-width:280px;">
-        <hr style="margin:20px 0;border:none;border-top:1px solid #ddd;">
-        <p>📱 Vous pouvez aussi ouvrir votre carte dans l’application mobile :</p>
-        <p><a href="${base}/app?code=${encodeURIComponent(card.code)}" style="background:#28a745;color:white;padding:8px 14px;text-decoration:none;border-radius:6px;">Ouvrir l’application</a></p>
-        <p>📸 Suivez la MDL sur Instagram :</p>
-        <p><a href="https://www.instagram.com/mdl.edouardvaillant" style="color:#e4405f;text-decoration:none;font-weight:bold;">@mdl.edouardvaillant</a></p>
-      </div>`;
-    const transporter = createTransporter();
-    const info = await transporter.sendMail({
-      from: SMTP.from, to,
-      subject: `Votre carte fidélité (${card.code})`,
-      html
-    });
-    res.json({ ok: true, messageId: info.messageId });
-  } catch (e) {
-    console.error('send mail failed:', e);
-    res.status(500).json({ error: 'send-failed', detail: String(e.message || e) });
-  }
-});
-
 // Rendu HTML de la carte
 app.get('/c/:code', async (req, res) => {
   try {
@@ -236,7 +199,7 @@ app.get('/barcode/:txt', async (req, res) => {
   }
 });
 
-// === Carte Wallet .pkpass générée manuellement (gratuite) ===
+// === Carte Wallet .pkpass (non signée, gratuite) ===
 app.get('/wallet/:code', async (req, res) => {
   try {
     const { code } = req.params;
@@ -254,31 +217,18 @@ app.get('/wallet/:code', async (req, res) => {
       return res.status(500).send("Modèle wallet introuvable sur le serveur");
     }
 
-    // Lecture des fichiers du modèle (pass.json + images)
-    const files = fs.readdirSync(modelPath).filter(f => f[0] !== '.');
-
-    // Préparer les en-têtes pour renvoyer un .pkpass
+    // Création de l’archive ZIP .pkpass
     res.setHeader('Content-Type', 'application/vnd.apple.pkpass');
     res.setHeader('Content-Disposition', `attachment; filename="MDL-${card.code}.pkpass"`);
-
     const archive = archiver('zip', { zlib: { level: 9 } });
-    archive.on('warning', err => {
-      if (err.code === 'ENOENT') console.warn('archiver warning', err);
-      else console.error('archiver warning', err);
-    });
-    archive.on('error', err => {
-      console.error('archiver error', err);
-      try { res.status(500).end(); } catch {}
-    });
-
-    // Pipe l'archive directement dans la réponse HTTP
     archive.pipe(res);
 
-    // Ajoute tous les fichiers du dossier modèle sauf pass.json (on l'ajoute modifié plus bas)
+    const files = fs.readdirSync(modelPath).filter(f => f[0] !== '.');
+
     for (const f of files) {
       const full = path.join(modelPath, f);
       if (!fs.statSync(full).isFile()) continue;
-      if (f === 'pass.json') continue; // skip original, on injecte la version modifiée
+      if (f === 'pass.json') continue; // on le modifie plus bas
       archive.file(full, { name: f });
     }
 
@@ -287,60 +237,47 @@ app.get('/wallet/:code', async (req, res) => {
     let passObj = {};
     try {
       passObj = JSON.parse(fs.readFileSync(passJsonPath, 'utf8'));
-    } catch (err) {
-      console.warn('Impossible de lire/parse pass.json, on part d\'un objet vide', err);
+    } catch {
       passObj = {};
     }
 
-    // Injecte les champs dynamiques
+    // Injection des champs
     passObj.serialNumber = card.code;
     passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
     passObj.description = passObj.description || "Carte fidélité MDL";
     passObj.logoText = `${card.prenom} ${card.nom}`;
 
-    // S'assurer de la structure storeCard (ajuste en fonction de ton pass.json)
+    // ✅ Ajout du code-barres
+    passObj.barcode = {
+      format: "PKBarcodeFormatCode128",
+      message: card.code,
+      messageEncoding: "iso-8859-1"
+    };
+    passObj.barcodes = [passObj.barcode];
+
+    // Champs affichés
     passObj.storeCard = passObj.storeCard || {};
-    passObj.storeCard.primaryFields = [{ key: "points", label: "Points", value: String(card.points || 0) }];
-    passObj.storeCard.secondaryFields = [{ key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }];
-    passObj.storeCard.auxiliaryFields = [{ key: "reduction", label: "Réduction", value: card.reduction || "—" }];
+    passObj.storeCard.primaryFields = [
+      { key: "points", label: "Points", value: String(card.points || 0) }
+    ];
+    passObj.storeCard.secondaryFields = [
+      { key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }
+    ];
+    passObj.storeCard.auxiliaryFields = [
+      { key: "reduction", label: "Réduction", value: card.reduction || "—" }
+    ];
 
-    // Ajoute le pass.json modifié dans l'archive
+    // Ajoute le pass.json modifié
     archive.append(JSON.stringify(passObj, null, 2), { name: 'pass.json' });
+    archive.append('{}', { name: 'manifest.json' }); // vide
+    archive.append('', { name: 'signature' }); // vide
 
-    // Manifest minimal (vide) — Apple s'attend à trouver un manifest, on met {}.
-    archive.append('{}', { name: 'manifest.json' });
-
-    // Signature vide (nécessaire pour structure PKPass) — fichier vide
-    archive.append('', { name: 'signature' });
-
-    // Fin de l'archive — le stream est envoyé au client
     archive.finalize();
-
-    // NOTE: on ne fait pas de res.send() après finalize; la réponse sera envoyée par le stream
   } catch (e) {
-    console.error("Erreur .pkpass (zip):", e);
-    try { res.status(500).send("Erreur génération .pkpass"); } catch {}
+    console.error("Erreur .pkpass:", e);
+    res.status(500).send("Erreur génération .pkpass");
   }
 });
-// Injecte les champs dynamiques
-passObj.serialNumber = card.code;
-passObj.organizationName = passObj.organizationName || "MDL Édouard Vaillant";
-passObj.description = passObj.description || "Carte fidélité MDL";
-passObj.logoText = `${card.prenom} ${card.nom}`;
-
-// ✅ Ajout du code-barres
-passObj.barcode = {
-  format: "PKBarcodeFormatCode128",
-  message: card.code,
-  messageEncoding: "iso-8859-1"
-};
-passObj.barcodes = [passObj.barcode];
-
-// S'assurer de la structure storeCard
-passObj.storeCard = passObj.storeCard || {};
-passObj.storeCard.primaryFields = [{ key: "points", label: "Points", value: String(card.points || 0) }];
-passObj.storeCard.secondaryFields = [{ key: "nom", label: "Adhérent", value: `${card.prenom} ${card.nom}` }];
-passObj.storeCard.auxiliaryFields = [{ key: "reduction", label: "Réduction", value: card.reduction || "—" }];
 
 // === Lancement du serveur ===
 initDb()
@@ -352,7 +289,6 @@ initDb()
     } catch (e) {
       console.warn("wallet-model.pass absent ou illisible:", e.message || e);
     }
-
     app.listen(PORT, () => console.log('Listening on', PORT));
   })
   .catch(e => {
