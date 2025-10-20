@@ -45,7 +45,7 @@
       isolation: isolate;
     }
 
-    /* ✅ Image de fond indépendante sans zoom */
+    /* ✅ Image de fond stable même hors ligne */
     .card .bg {
       position: absolute;
       inset: 0;
@@ -57,10 +57,18 @@
       user-select: none;
       -webkit-user-drag: none;
       pointer-events: none;
+      transform: scale(1);
+      will-change: transform;
+      backface-visibility: hidden;
+    }
+
+    /* ✅ Champs toujours au-dessus du fond */
+    .field, .barcode {
+      position: absolute;
+      z-index: 2;
     }
 
     .field {
-      position: absolute;
       display: flex;
       align-items: center;
       padding: 0 1.2%;
@@ -74,7 +82,6 @@
       transform: translateY(-50%);
       min-width: 0;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
-      z-index: 1;
     }
 
     .field > .truncate {
@@ -91,11 +98,10 @@
     .reduc { left: var(--reduc-left); top: var(--reduc-top); width: var(--reduc-width); height: var(--reduc-height); justify-content: center; font-weight: 800; }
 
     .barcode {
-      position: absolute; left: var(--bar-left); right: var(--bar-right); top: var(--bar-top);
+      left: var(--bar-left); right: var(--bar-right); top: var(--bar-top);
       display: flex; align-items: center; justify-content: center;
       transform: translateY(-50%);
       pointer-events: none;
-      z-index: 1;
     }
 
     .barcode img {
@@ -124,24 +130,44 @@
   </div>
 
   <script>
-    function fitOne(el){
+    // 🔹 Ajuste la taille du texte pour tenir sur une ligne
+    function fitOne(el) {
       const span = el.querySelector('.truncate');
-      if(!span) return;
+      if (!span) return;
       const cs = getComputedStyle(document.documentElement);
       let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
       const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
       const boxW = el.clientWidth;
-      el.style.setProperty('--fs', size+'px');
-      while(span.scrollWidth > boxW && size > min){ size -= 0.5; el.style.setProperty('--fs', size+'px'); }
+      el.style.setProperty('--fs', size + 'px');
+      while (span.scrollWidth > boxW && size > min) {
+        size -= 0.5;
+        el.style.setProperty('--fs', size + 'px');
+      }
     }
-    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
+    function fitAll() {
+      document.querySelectorAll('.nom, .prenom').forEach(fitOne);
+    }
 
+    // ✅ Charge la bonne image selon densité d’écran et corrige l’affichage offline
     window.addEventListener('load', () => {
       const bg = document.querySelector('.bg');
       const ratio = window.devicePixelRatio || 1;
+
       if (ratio < 1.5) bg.src = '/static/carte-mdl-small.png';
       else if (ratio < 2.5) bg.src = '/static/carte-mdl-medium.png';
       else bg.src = '/static/carte-mdl.png';
+
+      // 🔹 Fix offline (repaint forcé)
+      if (bg) {
+        bg.addEventListener('load', () => {
+          bg.style.transform = 'scale(1) translateZ(0)';
+        });
+        setTimeout(() => {
+          bg.style.opacity = '0.99';
+          setTimeout(() => bg.style.opacity = '1', 150);
+        }, 300);
+      }
+
       fitAll();
     });
   </script>

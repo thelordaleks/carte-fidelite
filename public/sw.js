@@ -1,5 +1,5 @@
-// ✅ Service Worker – Carte fidélité offline complète (v12)
-const CACHE_NAME = "mdl-carte-v10";
+// ✅ Service Worker — Carte fidélité MDL (v11)
+const CACHE_NAME = "mdl-carte-v11";
 const STATIC_ASSETS = [
   "/app/index.html",
   "/app/manifest.json",
@@ -8,12 +8,14 @@ const STATIC_ASSETS = [
   "/static/icons/phone.png",
   "/static/icons/wallet.png",
   "/static/icons/instagram.png",
-  "/static/carte-mdl.png"
+  "/static/carte-mdl.png",
+  "/static/carte-mdl-small.png",
+  "/static/carte-mdl-medium.png"
 ];
 
-// Mise en cache initiale
+// 📦 Installation : met en cache les fichiers essentiels
 self.addEventListener("install", (event) => {
-  console.log("📦 Installation SW v10");
+  console.log("📦 Installation SW v11...");
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(STATIC_ASSETS))
@@ -21,23 +23,23 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// Nettoyage anciens caches
+// 🧹 Activation : supprime les anciens caches
 self.addEventListener("activate", (event) => {
-  console.log("🧹 Activation SW v10");
+  console.log("🧹 Activation SW v11");
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.map((k) => k !== CACHE_NAME && caches.delete(k)))
+      Promise.all(keys.map((key) => key !== CACHE_NAME && caches.delete(key)))
     )
   );
   self.clients.claim();
 });
 
-// Gestion du réseau + cache intelligent
+// 🌐 Gestion des requêtes réseau + cache intelligent
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // 🔹 Ignore les appels API (JSON, points, etc.)
+  // ⛔ Ignore les appels API
   if (url.pathname.startsWith("/api/")) return;
 
   // 🔹 Cartes (ex: /c/ADHxxxx)
@@ -49,18 +51,18 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
           return res;
         })
-        .catch(() =>
-          caches.match(req).then((cached) => {
-            if (cached) return cached;
-            // Si aucune version en cache, fallback visuel
-            return caches.match("/static/carte-mdl.png");
-          })
-        )
+        .catch(async () => {
+          // Si hors ligne, on affiche la dernière carte en cache
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          // Fallback : affiche juste l’image de la carte
+          return caches.match("/static/carte-mdl.png");
+        })
     );
     return;
   }
 
-  // 🔹 Fichiers statiques classiques
+  // 🔹 Autres fichiers statiques
   event.respondWith(
     fetch(req)
       .then((res) => {
@@ -70,4 +72,11 @@ self.addEventListener("fetch", (event) => {
       })
       .catch(() => caches.match(req))
   );
+});
+
+// 🔄 Permet de forcer le skipWaiting depuis l’app
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.action === "skipWaiting") {
+    self.skipWaiting();
+  }
 });
