@@ -32,16 +32,27 @@
       font-size: 20px;
       font-weight: bold;
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      position: relative;
+    }
+    #offlineBanner {
+      display: none;
+      background: #ffcc00;
+      color: #333;
+      padding: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      text-align: center;
     }
     main { padding: 20px; }
     iframe {
       width: 100%;
-      max-width: 450px;
-      height: 280px;
+      max-width: 420px;
+      height: 260px;
       border: none;
       border-radius: 12px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.15);
       overflow: hidden;
+      background: #fff;
     }
     .btn {
       display: inline-block;
@@ -81,7 +92,10 @@
   </style>
 </head>
 <body>
-  <header>Carte fidélité MDL</header>
+  <header>
+    Carte fidélité MDL
+    <div id="offlineBanner">⚠️ Mode hors ligne — données en cache</div>
+  </header>
 
   <main>
     <iframe id="carte" src=""></iframe>
@@ -125,12 +139,26 @@
           installBtn=$("#install"), refreshBtn=$("#refresh"),
           missing=$("#missing"), iosHelp=$("#ios-help"),
           inputCode=$("#input-code"), saveCode=$("#save-code"),
-          statusEl=$("#status");
+          statusEl=$("#status"), offlineBanner=$("#offlineBanner");
 
+    // ✅ Détection iOS
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isInStandalone = window.navigator.standalone === true;
     if(isIOS && !isInStandalone){ iosHelp.style.display="block"; }
 
+    // ✅ Détection hors-ligne
+    function updateOnlineStatus() {
+      if (navigator.onLine) {
+        offlineBanner.style.display = "none";
+      } else {
+        offlineBanner.style.display = "block";
+      }
+    }
+    window.addEventListener("online", updateOnlineStatus);
+    window.addEventListener("offline", updateOnlineStatus);
+    updateOnlineStatus();
+
+    // ✅ Installation PWA
     let deferredPrompt=null;
     window.addEventListener("beforeinstallprompt",e=>{
       e.preventDefault(); deferredPrompt=e;
@@ -139,9 +167,13 @@
     installBtn.addEventListener("click",()=>{
       if(!deferredPrompt)return;
       deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
+      deferredPrompt.userChoice.then(()=>{
+        deferredPrompt=null;
+        installBtn.style.display="none";
+      });
     });
 
+    // ✅ Chargement de la carte
     function mountWithCode(code){
       localStorage.setItem("mdl_last_code",code);
       iframe.src="/c/"+encodeURIComponent(code);
@@ -155,13 +187,16 @@
             statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
             iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
           } else statusEl.textContent="⚠️ Carte introuvable";
-        }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)");
+        }).catch(()=>{
+          statusEl.textContent="⚠️ Mode hors ligne — affichage en cache";
+        });
       }
 
       refreshBtn.onclick=refreshCard;
       setInterval(refreshCard,60000);
     }
 
+    // ✅ Initialisation
     document.addEventListener("DOMContentLoaded",()=>{
       let params=new URLSearchParams(window.location.search);
       let code=params.get("code");
@@ -191,29 +226,21 @@
         };
       }
 
-      // ✅ Service Worker avec mise à jour automatique
+      // ✅ Enregistrement du Service Worker
       if("serviceWorker" in navigator){
         navigator.serviceWorker.register("/sw.js").then(reg=>{
           console.log("✅ SW actif:", reg.scope);
-
-          // Force le rechargement de la carte après activation
-          if (iframe && localStorage.getItem("mdl_last_code")) {
-            setTimeout(()=>{
+          setTimeout(()=>{
+            if (iframe && localStorage.getItem("mdl_last_code")) {
               const code = localStorage.getItem("mdl_last_code");
               iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-            }, 1500);
-          }
-
-          // Vérifie toutes les 30 secondes s'il y a une nouvelle version du SW
-          setInterval(()=>{ reg.update(); }, 30000);
-
-          // Recharge automatiquement si une nouvelle version du SW est installée
+            }
+          }, 1500);
           reg.onupdatefound = ()=>{
             const newSW = reg.installing;
             newSW.onstatechange = ()=>{
               if(newSW.state === "installed" && navigator.serviceWorker.controller){
-                console.log("⚡ Nouvelle version détectée, rechargement !");
-                newSW.postMessage({ action: "skipWaiting" });
+                console.log("⚡ Nouvelle version détectée — mise à jour !");
                 window.location.reload();
               }
             };

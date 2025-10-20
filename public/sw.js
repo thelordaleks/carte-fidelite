@@ -1,6 +1,6 @@
-// ✅ Service Worker – version offline persistante (v9)
-const CACHE_NAME = "mdl-carte-v9";
-const ASSETS = [
+// ✅ Service Worker – Carte fidélité offline complète (v10)
+const CACHE_NAME = "mdl-carte-v10";
+const STATIC_ASSETS = [
   "/app/index.html",
   "/app/manifest.json",
   "/static/logo-mdl.png",
@@ -11,19 +11,19 @@ const ASSETS = [
   "/static/carte-mdl.png"
 ];
 
-// Installation : mise en cache des fichiers essentiels
+// Mise en cache initiale
 self.addEventListener("install", (event) => {
-  console.log("📦 Installation du SW (cache initial)...");
+  console.log("📦 Installation SW v10");
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
+      .then((cache) => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
   );
 });
 
-// Activation : nettoyage des anciens caches
+// Nettoyage anciens caches
 self.addEventListener("activate", (event) => {
-  console.log("🧹 Activation / nettoyage anciens caches...");
+  console.log("🧹 Activation SW v10");
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.map((k) => k !== CACHE_NAME && caches.delete(k)))
@@ -32,15 +32,15 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Stratégie : réseau d'abord, fallback cache (surtout pour /c/:code)
+// Gestion du réseau + cache intelligent
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Ne jamais intercepter les API dynamiques
+  // 🔹 Ignore les appels API (JSON, points, etc.)
   if (url.pathname.startsWith("/api/")) return;
 
-  // 📌 Spécial pour la carte (ex: /c/ADHXXXX)
+  // 🔹 Cartes (ex: /c/ADHxxxx)
   if (url.pathname.startsWith("/c/")) {
     event.respondWith(
       fetch(req)
@@ -49,16 +49,18 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
           return res;
         })
-        .catch(() => caches.match(req).then((cached) => {
-          if (cached) return cached;
-          // fallback visuel si rien en cache
-          return caches.match("/static/carte-mdl.png");
-        }))
+        .catch(() =>
+          caches.match(req).then((cached) => {
+            if (cached) return cached;
+            // Si aucune version en cache, fallback visuel
+            return caches.match("/static/carte-mdl.png");
+          })
+        )
     );
     return;
   }
 
-  // Autres ressources statiques (index, images, etc.)
+  // 🔹 Fichiers statiques classiques
   event.respondWith(
     fetch(req)
       .then((res) => {
