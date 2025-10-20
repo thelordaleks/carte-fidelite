@@ -3,80 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carte fidélité MDL (Debug)</title>
-
+  <title>Carte fidélité MDL</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="/static/logo-mdl.png">
   <meta name="theme-color" content="#0078D7">
-
   <style>
-    body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #f2f4f8;
-      color: #333;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
-    header {
-      background: #0078D7;
-      color: white;
-      padding: 15px 10px;
-      font-size: 20px;
-      font-weight: bold;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    main { padding: 20px; }
-    iframe {
-      width: 100%;
-      max-width: 450px;
-      height: 280px;
-      border: none;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-      overflow: hidden;
-    }
-    .btn {
-      display: inline-block;
-      margin-top: 20px;
-      background: #e4405f;
-      color: white;
-      text-decoration: none;
-      font-weight: bold;
-      padding: 12px 22px;
-      border-radius: 8px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.2);
-      transition: transform 0.2s ease;
-    }
-    .btn:hover { transform: scale(1.05); }
-    .wallet-btn { background: #0078D7; }
-    footer {
-      margin-top: 30px;
-      font-size: 13px;
-      color: #666;
-    }
-    .status {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #0078D7;
-    }
-    #debug {
-      text-align: left;
-      background: #fffbe6;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 10px;
-      margin: 10px;
-      font-size: 13px;
-      color: #333;
-      white-space: pre-wrap;
-    }
+    body {font-family:"Segoe UI",Arial,sans-serif;background:#f2f4f8;color:#333;margin:0;text-align:center}
+    header {background:#0078D7;color:#fff;padding:15px;font-size:20px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,0.2)}
+    main {padding:20px}
+    iframe {width:100%;max-width:450px;height:280px;border:none;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,0.15)}
+    .btn {display:inline-block;margin-top:20px;background:#e4405f;color:#fff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:8px;box-shadow:0 3px 8px rgba(0,0,0,0.2);transition:transform .2s}
+    .btn:hover {transform:scale(1.05)}
+    .wallet-btn {background:#0078D7}
+    footer {margin-top:30px;font-size:13px;color:#666}
+    .status {margin-top:10px;font-size:14px;color:#0078D7}
   </style>
 </head>
 <body>
-  <header>Carte fidélité MDL — MODE DEBUG</header>
+  <header>Carte fidélité MDL</header>
   <main>
-    <div id="debug">Chargement debug...</div>
     <iframe id="carte" src=""></iframe>
     <div>
       <a id="wallet" class="btn wallet-btn" target="_blank">💳 Ajouter au Wallet</a>
@@ -90,54 +35,43 @@
   <footer>© MDL Édouard Vaillant</footer>
 
   <script>
-  (function fixOldUrl() {
-    const m = window.location.href.match(/\/app\/\?code=([^&]+)/);
-    if (m && !window.location.search.includes("code=")) {
-      window.location.replace(`/app?code=${m[1]}`);
-    }
-  })();
-
   document.addEventListener("DOMContentLoaded", async () => {
-    const debug = document.getElementById("debug");
     const params = new URLSearchParams(window.location.search);
-    let code = params.get("code");
-    let oldCode = localStorage.getItem("mdl_last_code");
+    let code = params.get("code") || localStorage.getItem("mdl_last_code");
     const statusEl = document.getElementById("status");
 
-    // Détecte si c’est une PWA installée
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-                         window.navigator.standalone;
+    // ✅ Sauvegarde immédiate si un code est présent
+    if (code) localStorage.setItem("mdl_last_code", code);
 
-    // Si code trouvé dans URL → sauvegarde immédiate
-    if (code) {
-      localStorage.setItem("mdl_last_code", code);
-      oldCode = code;
-    } else {
-      code = oldCode;
+    // ✅ Si aucun code, on essaie de charger depuis serveur (si un email a été enregistré)
+    if (!code) {
+      const email = localStorage.getItem("mdl_email");
+      if (email) {
+        try {
+          const res = await fetch(`/api/last/${encodeURIComponent(email)}`);
+          const data = await res.json();
+          if (data.code) {
+            code = data.code;
+            localStorage.setItem("mdl_last_code", code);
+          }
+        } catch (e) { console.log("Erreur récupération code serveur", e); }
+      }
     }
 
-    // ✅ Debug info
-    debug.textContent = 
-      "📋 DEBUG INFOS\n" +
-      "URL: " + window.location.href + "\n" +
-      "Code détecté: " + (code || "(aucun)") + "\n" +
-      "Dernier code stocké: " + (oldCode || "(aucun)") + "\n" +
-      "localStorage keys: " + JSON.stringify(Object.keys(localStorage)) + "\n" +
-      "localStorage.mdl_last_code: " + localStorage.getItem("mdl_last_code") + "\n" +
-      "Mode installé PWA: " + (isStandalone ? "✅ OUI" : "❌ NON") + "\n" +
-      "UserAgent: " + navigator.userAgent + "\n";
-
+    // ⚠️ Ne jamais afficher d’erreur si un code existe en local
     if (!code) {
-      document.querySelector("main").innerHTML +=
-        "<p style='color:red'>⚠️ Code de carte manquant.<br>Ouvre ton lien e-mail une première fois pour l’associer à ton appareil.</p>";
+      document.querySelector("main").innerHTML =
+        "<p>⚠️ Code de carte manquant.<br>Ouvre ton lien e-mail une première fois pour l’associer à ton appareil.</p>";
       return;
     }
 
+    // ✅ Affiche la carte
     const iframe = document.getElementById("carte");
     const wallet = document.getElementById("wallet");
     iframe.src = `/c/${encodeURIComponent(code)}`;
     wallet.href = `/wallet/${encodeURIComponent(code)}`;
 
+    // ✅ Rafraîchit toutes les 60 secondes
     async function refreshCard() {
       try {
         const res = await fetch(`/api/get-card/${encodeURIComponent(code)}`);
@@ -163,7 +97,7 @@
     }
 
     window.addEventListener("appinstalled", () => {
-      console.log("PWA installée, re-sauvegarde du code :", code);
+      console.log("PWA installée, sauvegarde code :", code);
       localStorage.setItem("mdl_last_code", code);
     });
 
