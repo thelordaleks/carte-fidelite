@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carte fidélité MDL</title>
+  <title>Carte fidélité MDL (Debug)</title>
 
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="/static/logo-mdl.png">
@@ -60,11 +60,23 @@
       font-size: 14px;
       color: #0078D7;
     }
+    #debug {
+      text-align: left;
+      background: #fffbe6;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 10px;
+      font-size: 13px;
+      color: #333;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
-  <header>Carte fidélité MDL</header>
+  <header>Carte fidélité MDL — MODE DEBUG</header>
   <main>
+    <div id="debug">Chargement debug...</div>
     <iframe id="carte" src=""></iframe>
     <div>
       <a id="wallet" class="btn wallet-btn" target="_blank">💳 Ajouter au Wallet</a>
@@ -78,7 +90,6 @@
   <footer>© MDL Édouard Vaillant</footer>
 
   <script>
-  // ✅ Corrige les anciens liens /app/?code=...
   (function fixOldUrl() {
     const m = window.location.href.match(/\/app\/\?code=([^&]+)/);
     if (m && !window.location.search.includes("code=")) {
@@ -87,33 +98,46 @@
   })();
 
   document.addEventListener("DOMContentLoaded", async () => {
+    const debug = document.getElementById("debug");
     const params = new URLSearchParams(window.location.search);
     let code = params.get("code");
+    let oldCode = localStorage.getItem("mdl_last_code");
     const statusEl = document.getElementById("status");
 
-    // ✅ Si code trouvé dans URL → on le sauvegarde tout de suite
+    // Détecte si c’est une PWA installée
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                         window.navigator.standalone;
+
+    // Si code trouvé dans URL → sauvegarde immédiate
     if (code) {
       localStorage.setItem("mdl_last_code", code);
-      console.log("Code sauvegardé :", code);
+      oldCode = code;
     } else {
-      // sinon, on tente de le relire du cache local
-      code = localStorage.getItem("mdl_last_code");
+      code = oldCode;
     }
 
-    // ✅ Si aucun code → on affiche le message d’erreur
+    // ✅ Debug info
+    debug.textContent = 
+      "📋 DEBUG INFOS\n" +
+      "URL: " + window.location.href + "\n" +
+      "Code détecté: " + (code || "(aucun)") + "\n" +
+      "Dernier code stocké: " + (oldCode || "(aucun)") + "\n" +
+      "localStorage keys: " + JSON.stringify(Object.keys(localStorage)) + "\n" +
+      "localStorage.mdl_last_code: " + localStorage.getItem("mdl_last_code") + "\n" +
+      "Mode installé PWA: " + (isStandalone ? "✅ OUI" : "❌ NON") + "\n" +
+      "UserAgent: " + navigator.userAgent + "\n";
+
     if (!code) {
-      document.querySelector("main").innerHTML =
-        "<p>⚠️ Code de carte manquant.<br>Ouvre ton lien e-mail une première fois pour l’associer à ton appareil.</p>";
+      document.querySelector("main").innerHTML +=
+        "<p style='color:red'>⚠️ Code de carte manquant.<br>Ouvre ton lien e-mail une première fois pour l’associer à ton appareil.</p>";
       return;
     }
 
-    // ✅ Affichage de la carte
     const iframe = document.getElementById("carte");
     const wallet = document.getElementById("wallet");
     iframe.src = `/c/${encodeURIComponent(code)}`;
     wallet.href = `/wallet/${encodeURIComponent(code)}`;
 
-    // ✅ Rafraîchissement automatique
     async function refreshCard() {
       try {
         const res = await fetch(`/api/get-card/${encodeURIComponent(code)}`);
@@ -132,20 +156,17 @@
     refreshCard();
     setInterval(refreshCard, 60000);
 
-    // ✅ Installation PWA
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js")
         .then(() => console.log("Service Worker OK"))
         .catch(err => console.error("Erreur SW", err));
     }
 
-    // ✅ Sauvegarde lors de l’installation
     window.addEventListener("appinstalled", () => {
-      console.log("PWA installée — sauvegarde du code :", code);
+      console.log("PWA installée, re-sauvegarde du code :", code);
       localStorage.setItem("mdl_last_code", code);
     });
 
-    // ✅ Bouton installer l’app
     window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault();
       window.deferredPrompt = event;
