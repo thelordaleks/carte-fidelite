@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.mdlvaillant.carte",
+        "paths": [ "/app/*", "/c/*" ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [ "TEAMID.com.mdlvaillant.carte" ]
+  }
+}

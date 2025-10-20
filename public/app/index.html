@@ -9,6 +9,12 @@
   <link rel="icon" href="/static/logo-mdl.png">
   <meta name="theme-color" content="#0078D7">
 
+  <!-- ✅ Compatibilité iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Carte MDL">
+  <link rel="apple-touch-icon" href="/static/logo-mdl.png">
+
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
@@ -52,13 +58,10 @@
     .wallet-btn { background: #0078D7; }
     .install-btn { background: #34A853; }
     .refresh-btn { background: #6c757d; }
-    footer {
-      margin-top: 30px;
-      font-size: 13px;
-      color: #666;
-    }
+    footer { margin-top: 30px; font-size: 13px; color: #666; }
     .status { margin-top: 10px; font-size: 14px; color: #0078D7; }
-    #missing {
+
+    #missing, #ios-help {
       max-width: 520px;
       margin: 20px auto;
       background: #fff;
@@ -102,31 +105,47 @@
       <input id="input-code" type="text" placeholder="Ex. ADH0XXXXXXX" />
       <button id="save-code" class="btn wallet-btn">Enregistrer ce code</button>
     </div>
+
+    <!-- ✅ Aide spéciale iPhone -->
+    <div id="ios-help" style="display:none;">
+      <h3>📱 Installer la carte sur ton iPhone</h3>
+      <p>1️⃣ Appuie sur le bouton <strong>Partager</strong> (⬆️ dans un carré)<br>
+         2️⃣ Choisis <strong>“Ajouter à l’écran d’accueil”</strong></p>
+      <img src="https://developer.apple.com/design/human-interface-guidelines/ios/images/icons/share_2x.png" alt="Partager" style="height:40px;margin-top:10px;">
+    </div>
   </main>
 
   <footer>© MDL Vaillant</footer>
 
-  <!-- ✅ Polyfill automatique pour anciens Android -->
-  <script src="https://polyfill.io/v3/polyfill.min.js?features=es2015,fetch,Promise,URLSearchParams,Symbol,Array.prototype.includes"></script>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es2015,fetch,Promise,URLSearchParams"></script>
 
   <script>
-  (function() {
-    function $(s){return document.querySelector(s);}
-    var statusEl=$("#status"), iframe=$("#carte"),
-        walletBtn=$("#wallet"), installBtn=$("#install"),
-        refreshBtn=$("#refresh"), missing=$("#missing"),
-        inputCode=$("#input-code"), saveCode=$("#save-code");
+  (function(){
+    const $ = s => document.querySelector(s);
+    const iframe=$("#carte"), walletBtn=$("#wallet"),
+          installBtn=$("#install"), refreshBtn=$("#refresh"),
+          missing=$("#missing"), iosHelp=$("#ios-help"),
+          inputCode=$("#input-code"), saveCode=$("#save-code"),
+          statusEl=$("#status");
 
-    var deferredPrompt=null;
-    window.addEventListener("beforeinstallprompt",function(e){
+    // 🔍 Détection iOS
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isInStandalone = window.navigator.standalone === true;
+
+    // ✅ Aide affichée seulement si iOS non installé
+    if(isIOS && !isInStandalone){
+      iosHelp.style.display="block";
+    }
+
+    let deferredPrompt=null;
+    window.addEventListener("beforeinstallprompt",e=>{
       e.preventDefault(); deferredPrompt=e;
       installBtn.style.display="inline-block";
     });
-
-    installBtn.addEventListener("click",function(){
+    installBtn.addEventListener("click",()=>{
       if(!deferredPrompt)return;
       deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(function(){deferredPrompt=null;installBtn.style.display="none";});
+      deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
     });
 
     function mountWithCode(code){
@@ -137,28 +156,26 @@
 
       function refreshCard(){
         fetch("/api/get-card/"+encodeURIComponent(code))
-          .then(function(r){return r.json();})
-          .then(function(data){
-            if(data && data.ok){
-              statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-              iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-            } else statusEl.textContent="⚠️ Carte introuvable";
-          })
-          .catch(function(){statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)";});
+        .then(r=>r.json()).then(data=>{
+          if(data && data.ok){
+            statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
+            iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+          } else statusEl.textContent="⚠️ Carte introuvable";
+        }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)"));
       }
 
       refreshBtn.onclick=refreshCard;
       setInterval(refreshCard,60000);
     }
 
-    document.addEventListener("DOMContentLoaded",function(){
-      var params=new URLSearchParams(window.location.search);
-      var code=params.get("code");
-      var stored=localStorage.getItem("mdl_last_code");
+    document.addEventListener("DOMContentLoaded",()=>{
+      let params=new URLSearchParams(window.location.search);
+      let code=params.get("code");
+      const stored=localStorage.getItem("mdl_last_code");
 
       if(code){
         localStorage.setItem("mdl_last_code",code);
-        var url=new URL(window.location.href);
+        const url=new URL(window.location.href);
         url.searchParams.delete("code");
         history.replaceState({}, "", url.toString());
       } else {
@@ -169,8 +186,8 @@
         mountWithCode(code);
       } else {
         missing.style.display="block";
-        saveCode.onclick=function(){
-          var c=(inputCode.value||"").trim().toUpperCase();
+        saveCode.onclick=()=>{
+          const c=(inputCode.value||"").trim().toUpperCase();
           if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
             alert("Code invalide. Exemple : ADH0XXXXXXX");
             return;
@@ -182,8 +199,8 @@
 
       if("serviceWorker" in navigator){
         navigator.serviceWorker.register("/sw.js")
-          .then(function(){console.log("Service Worker OK");})
-          .catch(function(e){console.error("Erreur SW",e);});
+          .then(()=>console.log("SW OK"))
+          .catch(e=>console.error("Erreur SW",e));
       }
     });
   })();
