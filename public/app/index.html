@@ -149,17 +149,19 @@
     });
 
     function mountWithCode(code){
-      localStorage.setItem("mdl_last_code",code);
-      iframe.src="/c/"+encodeURIComponent(code);
-      walletBtn.href="/wallet/"+encodeURIComponent(code);
-      statusEl.textContent="Chargement de la carte…";
+      localStorage.setItem("mdl_last_code", code);
+      const origin = window.location.origin; // ✅ URL absolue du site
+
+      iframe.src = `${origin}/c/${encodeURIComponent(code)}?t=${Date.now()}`;
+      walletBtn.href = `${origin}/wallet/${encodeURIComponent(code)}`;
+      statusEl.textContent = "Chargement de la carte…";
 
       function refreshCard(){
-        fetch("/api/get-card/"+encodeURIComponent(code))
+        fetch(`${origin}/api/get-card/${encodeURIComponent(code)}`)
         .then(r=>r.json()).then(data=>{
           if(data && data.ok){
             statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-            iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+            iframe.src=`${origin}/c/${encodeURIComponent(code)}?t=${Date.now()}`;
           } else statusEl.textContent="⚠️ Carte introuvable";
         }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)"));
       }
