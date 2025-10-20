@@ -151,31 +151,53 @@
   </div>
 
   <script>
-    // 🔹 Ajustement automatique du texte
-    function fitOne(el){
-      const span = el.querySelector('.truncate');
-      if(!span) return;
-      const cs = getComputedStyle(document.documentElement);
-      let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
-      const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
-      const boxW = el.clientWidth;
-      el.style.setProperty('--fs', size+'px');
-      while(span.scrollWidth > boxW && size > min){ size -= 0.5; el.style.setProperty('--fs', size+'px'); }
-    }
-    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
+  // 🔹 Ajustement automatique du texte
+  function fitOne(el){
+    const span = el.querySelector('.truncate');
+    if(!span) return;
+    const cs = getComputedStyle(document.documentElement);
+    let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
+    const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
+    const boxW = el.clientWidth;
+    el.style.setProperty('--fs', size+'px');
+    while(span.scrollWidth > boxW && size > min){ size -= 0.5; el.style.setProperty('--fs', size+'px'); }
+  }
 
-    window.addEventListener('load', () => {
-      const bg = document.querySelector('.bg');
-      fitAll();
+  function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
 
-      // ✅ clic sur code-barres → zoom plein écran
-      const card = document.getElementById('carte');
-      const barcode = document.getElementById('barcode');
+  window.addEventListener('load', () => {
+    const bg = document.querySelector('.bg');
+    fitAll();
 
-      barcode.addEventListener('click', () => {
-        card.classList.toggle('zoomed');
-      });
+    const card = document.getElementById('carte');
+    const barcode = document.getElementById('barcode');
+
+    barcode.addEventListener('click', async () => {
+      card.classList.toggle('zoomed');
+
+      // ✅ Si on vient de passer en mode zoom → essaie de verrouiller l’écran en paysage
+      if (card.classList.contains('zoomed')) {
+        try {
+          await screen.orientation.lock('landscape');
+        } catch(e) {
+          console.warn('🔄 Impossible de forcer le mode paysage sur cet appareil :', e);
+        }
+      } else {
+        // ✅ Quand on sort du zoom → revient en mode portrait
+        try {
+          await screen.orientation.lock('portrait');
+        } catch(e) {
+          // Certains appareils ne supportent pas le déverrouillage : on ignore
+        }
+      }
     });
-  </script>
+
+    // ✅ Si on change manuellement d’orientation → ajuste les textes
+    window.addEventListener('orientationchange', () => {
+      setTimeout(fitAll, 300);
+    });
+  });
+</script>
+
 </body>
 </html>
