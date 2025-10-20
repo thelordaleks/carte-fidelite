@@ -173,26 +173,48 @@
     const barcode = document.getElementById('barcode');
 
     barcode.addEventListener('click', async () => {
+      const body = document.body;
+      const html = document.documentElement;
+
+      // ✅ Mode plein écran total
       card.classList.toggle('zoomed');
 
-      // ✅ Si on vient de passer en mode zoom → essaie de verrouiller l’écran en paysage
       if (card.classList.contains('zoomed')) {
+        body.style.background = "#000";
+        html.style.overflow = "hidden";
+        body.style.overflow = "hidden";
+        card.style.position = "fixed";
+        card.style.inset = "0";
+        card.style.margin = "auto";
+        card.style.width = "100vw";
+        card.style.height = "100vh";
+        card.style.zIndex = "9999";
+        card.style.borderRadius = "0";
+        card.style.background = "#000";
+        card.style.display = "flex";
+        card.style.alignItems = "center";
+        card.style.justifyContent = "center";
+
         try {
           await screen.orientation.lock('landscape');
         } catch(e) {
-          console.warn('🔄 Impossible de forcer le mode paysage sur cet appareil :', e);
+          console.warn("📱 Impossible de verrouiller en paysage", e);
+          alert("📱 Tourne ton téléphone pour mieux voir la carte");
         }
       } else {
-        // ✅ Quand on sort du zoom → revient en mode portrait
+        // ✅ Retour à la vue normale
+        body.style.background = "#f5f7fb";
+        html.style.overflow = "";
+        body.style.overflow = "";
+        card.removeAttribute("style");
+        card.classList.remove("zoomed");
         try {
           await screen.orientation.lock('portrait');
-        } catch(e) {
-          // Certains appareils ne supportent pas le déverrouillage : on ignore
-        }
+        } catch(e) {}
       }
     });
 
-    // ✅ Si on change manuellement d’orientation → ajuste les textes
+    // ✅ Ajustement après changement d’orientation
     window.addEventListener('orientationchange', () => {
       setTimeout(fitAll, 300);
     });
