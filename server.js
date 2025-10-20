@@ -314,15 +314,31 @@ app.get('/wallet/:code', async (req, res) => {
   }
 });
 // === Route spéciale Apple Universal Links ===
+// Sert le fichier "apple-app-site-association" sans compression, sans cache et avec le bon type MIME
 app.get('/apple-app-site-association', (req, res) => {
   const filePath = path.join(__dirname, 'apple-app-site-association');
-  if (fs.existsSync(filePath)) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'apple-app-site-association introuvable' });
+    }
+
+    // En-têtes requis par Apple
     res.setHeader('Content-Type', 'application/json');
-    res.sendFile(filePath);
-  } else {
-    res.status(404).json({ error: 'apple-app-site-association introuvable' });
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Content-Disposition', 'inline'); // pas de téléchargement
+
+    // Lecture et envoi du contenu brut
+    const data = fs.readFileSync(filePath, 'utf8');
+    res.send(data);
+
+  } catch (e) {
+    console.error("Erreur AASA:", e);
+    res.status(500).json({ error: 'Erreur lecture apple-app-site-association' });
   }
 });
+
 
 // === Lancement du serveur ===
 initDb()
