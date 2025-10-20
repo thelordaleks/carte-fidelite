@@ -30,8 +30,6 @@
       padding: 12px;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: #1a1f2c;
-      -webkit-text-size-adjust: none;
-      text-size-adjust: none;
     }
 
     .card {
@@ -42,27 +40,21 @@
       border-radius: 16px;
       overflow: hidden;
       box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      background: #fff;
       isolation: isolate;
     }
 
-    /* ✅ Image de fond stable même hors ligne */
-    .card .bg {
+    /* ✅ Fond qui reste propre même offline */
+    .card::before {
+      content: "";
       position: absolute;
       inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      object-position: center center;
+      background: center / contain no-repeat url('/static/carte-mdl.png');
       z-index: 0;
-      user-select: none;
-      -webkit-user-drag: none;
       pointer-events: none;
-      transform: scale(1);
-      will-change: transform;
-      backface-visibility: hidden;
+      image-rendering: auto;
     }
 
-    /* ✅ Champs toujours au-dessus du fond */
     .field, .barcode {
       position: absolute;
       z-index: 2;
@@ -119,9 +111,6 @@
 </head>
 <body>
   <div class="card">
-    <!-- ✅ image de fond indépendante -->
-    <img class="bg" src="/static/carte-mdl.png" alt="Fond carte">
-    <!-- ✅ contenu par-dessus -->
     <div class="field nom"><span class="truncate">{{NOM}}</span></div>
     <div class="field prenom"><span class="truncate">{{PRENOM}}</span></div>
     <div class="field points">{{POINTS}}</div>
@@ -130,46 +119,24 @@
   </div>
 
   <script>
-    // 🔹 Ajuste la taille du texte pour tenir sur une ligne
-    function fitOne(el) {
+    // Ajustement auto du texte
+    function fitOne(el){
       const span = el.querySelector('.truncate');
-      if (!span) return;
+      if(!span) return;
       const cs = getComputedStyle(document.documentElement);
       let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
       const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
       const boxW = el.clientWidth;
-      el.style.setProperty('--fs', size + 'px');
-      while (span.scrollWidth > boxW && size > min) {
+      el.style.setProperty('--fs', size+'px');
+      while(span.scrollWidth > boxW && size > min){
         size -= 0.5;
-        el.style.setProperty('--fs', size + 'px');
+        el.style.setProperty('--fs', size+'px');
       }
     }
-    function fitAll() {
-      document.querySelectorAll('.nom, .prenom').forEach(fitOne);
-    }
+    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
 
-    // ✅ Charge la bonne image selon densité d’écran et corrige l’affichage offline
-    window.addEventListener('load', () => {
-      const bg = document.querySelector('.bg');
-      const ratio = window.devicePixelRatio || 1;
-
-      if (ratio < 1.5) bg.src = '/static/carte-mdl-small.png';
-      else if (ratio < 2.5) bg.src = '/static/carte-mdl-medium.png';
-      else bg.src = '/static/carte-mdl.png';
-
-      // 🔹 Fix offline (repaint forcé)
-      if (bg) {
-        bg.addEventListener('load', () => {
-          bg.style.transform = 'scale(1) translateZ(0)';
-        });
-        setTimeout(() => {
-          bg.style.opacity = '0.99';
-          setTimeout(() => bg.style.opacity = '1', 150);
-        }, 300);
-      }
-
-      fitAll();
-    });
+    window.addEventListener('load', fitAll);
+    window.addEventListener('resize', fitAll);
   </script>
 </body>
 </html>
