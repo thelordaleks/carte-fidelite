@@ -141,9 +141,43 @@
       deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
     });
 
-    // ✅ Partie modifiée : gestion du cache hors ligne
-    function mountWithCode(code){
-      localStorage.setItem("mdl_last_code",code);
+    // ✅ IndexedDB pour compatibilité iOS
+    function saveCodeToDB(code){
+      return new Promise((resolve,reject)=>{
+        const req=indexedDB.open("mdl-db",1);
+        req.onupgradeneeded=()=>req.result.createObjectStore("config");
+        req.onsuccess=()=>{
+          const tx=req.result.transaction("config","readwrite");
+          tx.objectStore("config").put(code,"lastCode");
+          tx.oncomplete=resolve;
+          tx.onerror=reject;
+        };
+        req.onerror=reject;
+      });
+    }
+
+    function getCodeFromDB(){
+      return new Promise((resolve,reject)=>{
+        const req=indexedDB.open("mdl-db",1);
+        req.onsuccess=()=>{
+          const tx=req.result.transaction("config","readonly");
+          const get=tx.objectStore("config").get("lastCode");
+          get.onsuccess=()=>resolve(get.result);
+          get.onerror=reject;
+        };
+        req.onerror=reject;
+      });
+    }
+
+    async function mountWithCode(code){
+      if(!code) code = await getCodeFromDB();
+      if(!code){
+        missing.style.display="block";
+        return;
+      }
+
+      await saveCodeToDB(code);
+      localStorage.setItem("mdl_last_code", code);
       iframe.src="/c/"+encodeURIComponent(code);
       walletBtn.href="/wallet/"+encodeURIComponent(code);
       statusEl.textContent="Chargement de la carte…";
@@ -153,7 +187,6 @@
         .then(r=>r.json()).then(data=>{
           if(data && data.ok){
             statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-            // ✅ On ne force le refresh que si on est connecté
             if (navigator.onLine) {
               iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
             }
@@ -169,13 +202,14 @@
       setInterval(refreshCard,60000);
     }
 
-    document.addEventListener("DOMContentLoaded",()=>{
+    document.addEventListener("DOMContentLoaded",async ()=>{
       let params=new URLSearchParams(window.location.search);
       let code=params.get("code");
-      const stored=localStorage.getItem("mdl_last_code");
+      const stored=localStorage.getItem("mdl_last_code") || await getCodeFromDB();
 
       if(code){
-        localStorage.setItem("mdl_last_code",code);
+        await saveCodeToDB(code);
+        localStorage.setItem("mdl_last_code", code);
         const url=new URL(window.location.href);
         url.searchParams.delete("code");
         history.replaceState({}, "", url.toString());
@@ -187,12 +221,13 @@
         mountWithCode(code);
       } else {
         missing.style.display="block";
-        saveCode.onclick=()=>{
+        saveCode.onclick=async ()=>{
           const c=(inputCode.value||"").trim().toUpperCase();
           if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
             alert("Code invalide. Exemple : ADH0XXXXXXX");
             return;
           }
+          await saveCodeToDB(c);
           localStorage.setItem("mdl_last_code",c);
           location.href="/app?code="+encodeURIComponent(c);
         };
