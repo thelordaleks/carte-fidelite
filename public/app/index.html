@@ -155,7 +155,7 @@
             statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
             iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
           } else statusEl.textContent="⚠️ Carte introuvable";
-        }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)"));
+        }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)");
       }
 
       refreshBtn.onclick=refreshCard;
