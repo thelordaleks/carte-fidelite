@@ -61,18 +61,28 @@
       overscroll-behavior: none;
     }
 
-    .card {
-      position: relative;
-      aspect-ratio: var(--w) / var(--h);
-      width: min(95vw, 860px);
-      max-height: 92vh;
-      background: #fff url('/static/carte-mdl.png') center/cover no-repeat;
-      border-radius: 16px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-      overflow: hidden;
-      touch-action: none;
-      transform: translateZ(0);
-    }
+   .card {
+  position: relative;
+  aspect-ratio: var(--w) / var(--h);
+  width: min(95vw, 860px);
+  max-height: 92vh;
+
+  /* ✅ Correction du zoom hors ligne */
+  background-color: #fff;
+  background-image: url('/static/carte-mdl.png');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain; /* <- empêche tout zoom */
+  background-attachment: local; /* <- évite les bugs de rendu cache */
+
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  overflow: hidden;
+  touch-action: none;
+  transform: translateZ(0);
+  isolation: isolate; /* protège le calque du cache */
+}
+
 
     .field {
       position: absolute;
@@ -217,6 +227,18 @@
         if (!document.hidden) setTimeout(fitAll, 60);
       });
     })();
+    // 🔧 Fix visuel si affichage depuis cache (offline)
+window.addEventListener("load", () => {
+  const card = document.querySelector(".card");
+  if (card) {
+    // Force le navigateur à recalculer le fond si affiché depuis cache
+    const bg = getComputedStyle(card).backgroundImage;
+    if (bg && bg.includes("carte-mdl.png")) {
+      card.style.backgroundImage = bg.replace(/url\(["']?(.*?)["']?\)/, "url($1?t=" + Date.now() + ")");
+    }
+  }
+});
+
   </script>
 </body>
 </html>
