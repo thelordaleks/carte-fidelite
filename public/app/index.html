@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carte fidélité MDL</title>
 
+  <!-- Manifest et icône -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="/static/logo-mdl.png">
   <meta name="theme-color" content="#0078D7">
@@ -117,8 +118,6 @@
 
   <footer>© MDL Vaillant</footer>
 
-  <script src="https://polyfill.io/v3/polyfill.min.js?features=es2015,fetch,Promise,URLSearchParams"></script>
-
   <script>
   (function(){
     const $ = s => document.querySelector(s);
@@ -128,14 +127,9 @@
           inputCode=$("#input-code"), saveCode=$("#save-code"),
           statusEl=$("#status");
 
-    // 🔍 Détection iOS
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isInStandalone = window.navigator.standalone === true;
-
-    // ✅ Aide affichée seulement si iOS non installé
-    if(isIOS && !isInStandalone){
-      iosHelp.style.display="block";
-    }
+    if(isIOS && !isInStandalone){ iosHelp.style.display="block"; }
 
     let deferredPrompt=null;
     window.addEventListener("beforeinstallprompt",e=>{
@@ -149,19 +143,17 @@
     });
 
     function mountWithCode(code){
-      localStorage.setItem("mdl_last_code", code);
-      const origin = window.location.origin; // ✅ URL absolue du site
-
-      iframe.src = `${origin}/c/${encodeURIComponent(code)}?t=${Date.now()}`;
-      walletBtn.href = `${origin}/wallet/${encodeURIComponent(code)}`;
-      statusEl.textContent = "Chargement de la carte…";
+      localStorage.setItem("mdl_last_code",code);
+      iframe.src="/c/"+encodeURIComponent(code);
+      walletBtn.href="/wallet/"+encodeURIComponent(code);
+      statusEl.textContent="Chargement de la carte…";
 
       function refreshCard(){
-        fetch(`${origin}/api/get-card/${encodeURIComponent(code)}`)
+        fetch("/api/get-card/"+encodeURIComponent(code))
         .then(r=>r.json()).then(data=>{
           if(data && data.ok){
             statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-            iframe.src=`${origin}/c/${encodeURIComponent(code)}?t=${Date.now()}`;
+            iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
           } else statusEl.textContent="⚠️ Carte introuvable";
         }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)"));
       }
@@ -201,8 +193,17 @@
 
       if("serviceWorker" in navigator){
         navigator.serviceWorker.register("/sw.js")
-          .then(()=>console.log("SW OK"))
-          .catch(e=>console.error("Erreur SW",e));
+          .then(reg=>{
+            console.log("✅ SW actif:", reg.scope);
+            // ⬇️ Force le rechargement de la carte après activation du SW
+            if (iframe && localStorage.getItem("mdl_last_code")) {
+              setTimeout(()=>{
+                const code = localStorage.getItem("mdl_last_code");
+                iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+              }, 1500);
+            }
+          })
+          .catch(e=>console.error("❌ Erreur SW",e));
       }
     });
   })();
