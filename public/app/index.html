@@ -3,17 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Carte fidélité MDL Vaillant</title>
+  <title>Carte fidélité MDL</title>
 
-  <!-- PWA / iOS / Android -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="/static/logo-mdl.png">
   <meta name="theme-color" content="#0078D7">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="MDL Vaillant">
-  <link rel="apple-touch-icon" href="/static/logo-mdl.png">
 
   <style>
     body {
@@ -80,10 +74,39 @@
       border: 1px solid #ccc;
       font-size: 15px;
     }
+    /* 🔹 Bannière installation automatique */
+    #install-banner {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #0078D7;
+      color: #fff;
+      padding: 12px;
+      text-align: center;
+      font-weight: 500;
+      box-shadow: 0 -2px 6px rgba(0,0,0,0.25);
+      z-index: 1000;
+      animation: slideUp .5s ease;
+    }
+    #install-banner button {
+      background: #fff;
+      color: #0078D7;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      margin-left: 10px;
+      font-weight: bold;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
-  <header>Carte fidélité MDL Vaillant</header>
+  <header>Carte fidélité MDL</header>
 
   <main>
     <iframe id="carte" src=""></iframe>
@@ -113,6 +136,12 @@
 
   <footer>© MDL Vaillant</footer>
 
+  <!-- 🔹 Bannière auto install -->
+  <div id="install-banner">
+    📱 Installer la carte fidélité MDL
+    <button id="banner-install-btn">Installer</button>
+  </div>
+
   <script>
     const $ = (sel) => document.querySelector(sel);
     const statusEl = $("#status");
@@ -123,12 +152,26 @@
     const missing = $("#missing");
     const inputCode = $("#input-code");
     const saveCode = $("#save-code");
+    const banner = $("#install-banner");
+    const bannerBtn = $("#banner-install-btn");
 
     let deferredPrompt = null;
+
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
+      // affiche bannière auto
+      banner.style.display = "block";
       installBtn.style.display = "inline-block";
+    });
+
+    bannerBtn.addEventListener("click", async () => {
+      banner.style.display = "none";
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+      }
     });
 
     installBtn.addEventListener("click", async () => {
@@ -168,19 +211,6 @@
       const params = new URLSearchParams(window.location.search);
       let code = params.get("code");
       const storedCode = localStorage.getItem("mdl_last_code");
-
-      // Si lien d'installation depuis le mail
-      const installParam = params.get("install");
-      if (installParam === "true" && "serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js")
-          .then(() => console.log("SW OK pour installation rapide"))
-          .catch(console.error);
-
-        // Affiche le bouton automatiquement
-        setTimeout(() => {
-          installBtn.style.display = "inline-block";
-        }, 800);
-      }
 
       if (code) {
         localStorage.setItem("mdl_last_code", code);
