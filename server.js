@@ -173,6 +173,52 @@ app.get("/barcode/:txt", async (req, res) => {
     res.status(400).send("bad-barcode");
   }
 });
+// === Route spéciale Apple Universal Links ===
+// Sert le fichier "apple-app-site-association" sans extension ni cache
+app.get('/apple-app-site-association', (req, res) => {
+  const filePath = path.join(__dirname, 'apple-app-site-association');
+  try {
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'apple-app-site-association introuvable' });
+    }
+
+    // ✅ En-têtes Apple obligatoires
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Content-Disposition', 'inline');
+
+    const data = fs.readFileSync(filePath, 'utf8');
+    res.send(data);
+  } catch (e) {
+    console.error("Erreur AASA:", e);
+    res.status(500).json({ error: 'Erreur lecture apple-app-site-association' });
+  }
+});
+
+// Variante .well-known (Safari vérifie aussi ce chemin)
+app.get('/.well-known/apple-app-site-association', (req, res) => {
+  const filePath = path.join(__dirname, 'public', '.well-known', 'apple-app-site-association');
+  try {
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'apple-app-site-association manquant dans .well-known' });
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Content-Disposition', 'inline');
+
+    const data = fs.readFileSync(filePath, 'utf8');
+    res.send(data);
+  } catch (e) {
+    console.error("Erreur AASA (.well-known):", e);
+    res.status(500).json({ error: 'Erreur lecture AASA .well-known' });
+  }
+});
+
 
 initDb().then(() => {
   app.listen(PORT, () => console.log("✅ Serveur MDL actif sur le port", PORT));
