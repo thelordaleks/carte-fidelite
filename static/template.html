@@ -22,7 +22,7 @@
       margin: 0;
       height: 100%;
       background: #f5f7fb;
-      overflow: hidden; /* ✅ empêche la barre de scroll globale */
+      overflow: hidden;
     }
 
     body {
@@ -44,32 +44,28 @@
       overflow: hidden;
       box-shadow: 0 8px 30px rgba(0,0,0,0.12);
       isolation: isolate;
-      transition: transform 0.4s ease, width 0.4s ease, height 0.4s ease;
+      transition: all 0.4s ease-in-out;
       background: #fff;
     }
 
-    /* ✅ mode zoom paysage plein écran */
+    /* ✅ Mode zoom plein écran avec transition fluide */
     .card.zoomed {
-      position: fixed;
-      inset: 0;
-      width: 100vw;
-      height: 100vh;
-      max-height: none;
-      z-index: 9999;
-      background: #000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 0;
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-height: none !important;
+      z-index: 9999 !important;
+      background: #000 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      border-radius: 0 !important;
+      transform: scale(1) !important;
+      transition: all 0.4s ease-in-out !important;
     }
 
-    .card.zoomed img.bg {
-      object-fit: contain;
-      max-width: 100%;
-      max-height: 100%;
-    }
-
-    /* ✅ Image de fond indépendante sans zoom excessif */
+    /* ✅ Image de fond */
     .card .bg {
       position: absolute;
       inset: 0;
@@ -102,6 +98,7 @@
       min-width: 0;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
       z-index: 2;
+      transition: opacity 0.3s ease;
     }
 
     .field > .truncate {
@@ -118,8 +115,13 @@
     .reduc { left: var(--reduc-left); top: var(--reduc-top); width: var(--reduc-width); height: var(--reduc-height); justify-content: center; font-weight: 800; }
 
     .barcode {
-      position: absolute; left: var(--bar-left); right: var(--bar-right); top: var(--bar-top);
-      display: flex; align-items: center; justify-content: center;
+      position: absolute;
+      left: var(--bar-left);
+      right: var(--bar-right);
+      top: var(--bar-top);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transform: translateY(-50%);
       cursor: pointer;
       z-index: 3;
@@ -132,6 +134,7 @@
       filter: drop-shadow(0 1px 0 rgba(255,255,255,.6));
       user-select: none;
       -webkit-user-drag: none;
+      transition: transform 0.3s ease;
     }
 
     @media (max-width: 520px) {
@@ -151,72 +154,48 @@
   </div>
 
   <script>
-  // 🔹 Ajustement automatique du texte
-  function fitOne(el){
-    const span = el.querySelector('.truncate');
-    if(!span) return;
-    const cs = getComputedStyle(document.documentElement);
-    let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
-    const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
-    const boxW = el.clientWidth;
-    el.style.setProperty('--fs', size+'px');
-    while(span.scrollWidth > boxW && size > min){
-      size -= 0.5;
+    function fitOne(el){
+      const span = el.querySelector('.truncate');
+      if(!span) return;
+      const cs = getComputedStyle(document.documentElement);
+      let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
+      const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
+      const boxW = el.clientWidth;
       el.style.setProperty('--fs', size+'px');
-    }
-  }
-
-  function fitAll(){
-    document.querySelectorAll('.nom, .prenom').forEach(fitOne);
-  }
-
-  window.addEventListener('load', () => {
-    fitAll();
-
-    const card = document.getElementById('carte');
-    const barcode = document.getElementById('barcode');
-
-    barcode.addEventListener('click', async () => {
-      // Si la carte est déjà zoomée → retour à la normale
-      if (card.classList.contains('zoomed')) {
-        card.classList.remove('zoomed');
-        document.body.style.background = "#f5f7fb";
-        try { await screen.orientation.unlock(); } catch(e) {}
-        return;
+      while(span.scrollWidth > boxW && size > min){
+        size -= 0.5;
+        el.style.setProperty('--fs', size+'px');
       }
+    }
 
-      // Sinon → activer le zoom plein écran + paysage
-      card.classList.add('zoomed');
-      document.body.style.background = "#000";
+    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
 
-      Object.assign(card.style, {
-        position: "fixed",
-        inset: "0",
-        margin: "auto",
-        width: "100vw",
-        height: "100vh",
-        borderRadius: "0",
-        zIndex: "9999",
-        background: "#000",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        transform: "none"
+    window.addEventListener('load', () => {
+      fitAll();
+      const card = document.querySelector('.card');
+      const barcode = document.querySelector('.barcode');
+
+      barcode.addEventListener('click', async () => {
+        if (card.classList.contains('zoomed')) {
+          // 🔹 Retour normal
+          card.classList.remove('zoomed');
+          try { await screen.orientation.unlock(); } catch(e) {}
+          document.exitFullscreen?.();
+        } else {
+          // 🔹 Plein écran fluide
+          card.classList.add('zoomed');
+          if (card.requestFullscreen) {
+            await card.requestFullscreen().catch(()=>{});
+          } else if (card.webkitRequestFullscreen) {
+            card.webkitRequestFullscreen();
+          }
+          try { await screen.orientation.lock('landscape'); } catch(e) {}
+          setTimeout(fitAll, 300);
+        }
       });
 
-      // Force le mode paysage si possible (Android, Chrome, etc.)
-      try {
-        await screen.orientation.lock('landscape');
-      } catch(e) {
-        // Certains navigateurs (ex: iOS Safari) ne le permettent pas
-      }
+      window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
     });
-
-    // Ajustement du texte si on tourne manuellement l’écran
-    window.addEventListener('orientationchange', () => {
-      setTimeout(fitAll, 300);
-    });
-  });
-</script>
+  </script>
 </body>
 </html>
