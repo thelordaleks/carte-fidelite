@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carte fidélité MDL</title>
 
-  <!-- Manifest et icône -->
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="/static/logo-mdl.png">
   <meta name="theme-color" content="#0078D7">
@@ -129,7 +128,7 @@
         inputCode=$("#input-code"), saveCode=$("#save-code"),
         statusEl=$("#status");
 
-  // --- AJOUT : petite console de debug visible ---
+  // Console debug
   const debugBox = document.createElement("pre");
   debugBox.id = "debug";
   debugBox.style.cssText = `
@@ -145,11 +144,9 @@
     debugBox.textContent += "\n" + line;
     debugBox.scrollTop = debugBox.scrollHeight;
   }
-  // ---------------------------------------------
 
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone === true;
-
   log("🧭 Détection appareil :", {isIOS, isStandalone});
 
   if(isIOS && !isStandalone){ iosHelp.style.display="block"; }
@@ -165,7 +162,6 @@
     deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
   });
 
-  // IndexedDB
   function saveCodeToDB(code){
     return new Promise((resolve,reject)=>{
       const req=indexedDB.open("mdl-db",1);
@@ -215,17 +211,18 @@
 
           if(navigator.onLine){
             if(isIOS && isStandalone){
-              log("📱 iOS mode standalone → tentative chargement direct HTML carte");
+              log("📱 iOS standalone → chargement direct HTML carte");
               try {
                 const cardRes = await fetch("/c/"+encodeURIComponent(code));
                 log("📄 /c/ réponse", cardRes.status);
                 const html = await cardRes.text();
 
-                if(html && html.includes("<html")){
-                  log("🎉 HTML carte chargé, insertion dans le container");
+                if(html && html.trim().length > 0){
+                  log("🎉 HTML carte chargé");
                   iframe.style.display="none";
                   cardContainer.style.display="block";
                   cardContainer.innerHTML = html;
+                  cardContainer.style.height="auto";
                 } else {
                   log("⚠️ HTML vide → fallback iFrame");
                   iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
