@@ -58,18 +58,6 @@
       color: #666;
     }
     .status { margin-top: 10px; font-size: 14px; color: #0078D7; }
-    #debug {
-      display: none;
-      text-align: left;
-      white-space: pre-wrap;
-      background: #fffbe6;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 10px;
-      margin: 10px;
-      font-size: 13px;
-      color: #333;
-    }
     #missing {
       max-width: 520px;
       margin: 20px auto;
@@ -92,9 +80,6 @@
   <header>Carte fidélité MDL</header>
 
   <main>
-    <!-- Debug box (activable via ?debug=1) -->
-    <div id="debug">Chargement…</div>
-
     <iframe id="carte" src=""></iframe>
 
     <div>
@@ -123,9 +108,7 @@
   <footer>© MDL Édouard Vaillant</footer>
 
   <script>
-    // Utils
     const $ = (sel) => document.querySelector(sel);
-    const debugEl = $("#debug");
     const statusEl = $("#status");
     const iframe = $("#carte");
     const walletBtn = $("#wallet");
@@ -135,20 +118,13 @@
     const inputCode = $("#input-code");
     const saveCode = $("#save-code");
 
-    function logDebug(lines) {
-      debugEl.textContent = lines.join("\n");
-    }
-    function showDebugBox(show) {
-      debugEl.style.display = show ? "block" : "none";
-    }
-
-    // Gestion PWA
     let deferredPrompt = null;
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
       installBtn.style.display = "inline-block";
     });
+
     installBtn.addEventListener("click", async () => {
       if (!deferredPrompt) return;
       deferredPrompt.prompt();
@@ -163,7 +139,6 @@
       walletBtn.href = `/wallet/${encodeURIComponent(code)}`;
       statusEl.textContent = "Chargement de la carte…";
 
-      // auto-refresh toutes les 60s
       async function refreshCard() {
         try {
           const res = await fetch(`/api/get-card/${encodeURIComponent(code)}`);
@@ -174,50 +149,32 @@
           } else {
             statusEl.textContent = "⚠️ Carte introuvable";
           }
-        } catch (e) {
+        } catch {
           statusEl.textContent = "⚠️ Impossible de mettre à jour (hors ligne ?)";
         }
       }
+
       refreshBtn.onclick = refreshCard;
       setInterval(refreshCard, 60000);
     }
 
     document.addEventListener("DOMContentLoaded", async () => {
-      // Debug visible si ?debug=1
-      const showDbg = (new URLSearchParams(location.search).get("debug") === "1");
-      showDebugBox(showDbg);
-
       const params = new URLSearchParams(window.location.search);
       let code = params.get("code");
-      const codeFromStorage = localStorage.getItem("mdl_last_code");
-      const isStandalone =
-        window.matchMedia("(display-mode: standalone)").matches ||
-        navigator.standalone;
+      const storedCode = localStorage.getItem("mdl_last_code");
 
-      const lines = [];
-      lines.push("📋 DEBUG INFOS");
-      lines.push("URL: " + window.location.href);
-      lines.push("Code (URL): " + (code || "(aucun)"));
-      lines.push("Code (localStorage): " + (codeFromStorage || "(aucun)"));
-      lines.push("Mode PWA installée: " + (isStandalone ? "✅ OUI" : "❌ NON"));
-      lines.push("Keys localStorage: " + JSON.stringify(Object.keys(localStorage)));
-      if (showDbg) logDebug(lines);
-
-      // Si on arrive avec un code dans l’URL, on le pose et on nettoie l’URL
       if (code) {
         localStorage.setItem("mdl_last_code", code);
-        // Nettoie l’URL pour les prochaines ouvertures PWA
         const url = new URL(window.location.href);
         url.searchParams.delete("code");
         window.history.replaceState({}, "", url.toString());
       } else {
-        code = codeFromStorage || "";
+        code = storedCode || "";
       }
 
       if (code) {
         await mountWithCode(code);
       } else {
-        // Affiche le mini-formulaire
         missing.style.display = "block";
         saveCode.onclick = () => {
           const c = (inputCode.value || "").trim().toUpperCase();
@@ -226,11 +183,10 @@
             return;
           }
           localStorage.setItem("mdl_last_code", c);
-          location.href = `/app?code=${encodeURIComponent(c)}`; // rechargement propre
+          location.href = `/app?code=${encodeURIComponent(c)}`;
         };
       }
 
-      // Enregistrer le service worker (PWA installable/offline)
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.register("/sw.js")
           .then(() => console.log("Service Worker OK"))
