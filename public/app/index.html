@@ -34,7 +34,7 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
     main { padding: 20px; }
-    iframe {
+    iframe, #carte-container {
       width: 100%;
       max-width: 450px;
       height: 280px;
@@ -42,6 +42,8 @@
       border-radius: 12px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.15);
       overflow: hidden;
+      background: #fff;
+      margin: auto;
     }
     .btn {
       display: inline-block;
@@ -85,6 +87,7 @@
 
   <main>
     <iframe id="carte" src=""></iframe>
+    <div id="carte-container" style="display:none;"></div>
 
     <div>
       <a id="wallet" class="btn wallet-btn" href="#" target="_blank">💳 Ajouter au Wallet</a>
@@ -120,8 +123,8 @@
   <script>
   (function(){
     const $ = s => document.querySelector(s);
-    const iframe=$("#carte"), walletBtn=$("#wallet"),
-          installBtn=$("#install"), refreshBtn=$("#refresh"),
+    const iframe=$("#carte"), cardContainer=$("#carte-container"),
+          walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
           missing=$("#missing"), iosHelp=$("#ios-help"),
           inputCode=$("#input-code"), saveCode=$("#save-code"),
           statusEl=$("#status");
@@ -141,7 +144,7 @@
       deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
     });
 
-    // ✅ IndexedDB pour compatibilité iOS
+    // IndexedDB
     function saveCodeToDB(code){
       return new Promise((resolve,reject)=>{
         const req=indexedDB.open("mdl-db",1);
@@ -171,34 +174,43 @@
 
     async function mountWithCode(code){
       if(!code) code = await getCodeFromDB();
-      if(!code){
-        missing.style.display="block";
-        return;
-      }
+      if(!code){ missing.style.display="block"; return; }
 
       await saveCodeToDB(code);
       localStorage.setItem("mdl_last_code", code);
-      iframe.src="/c/"+encodeURIComponent(code);
       walletBtn.href="/wallet/"+encodeURIComponent(code);
       statusEl.textContent="Chargement de la carte…";
 
-      function refreshCard(){
-        fetch("/api/get-card/"+encodeURIComponent(code))
-        .then(r=>r.json()).then(data=>{
+      async function refreshCard(){
+        try {
+          const res = await fetch("/api/get-card/"+encodeURIComponent(code));
+          const data = await res.json();
           if(data && data.ok){
             statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-            if (navigator.onLine) {
-              iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
+
+            if(navigator.onLine){
+              if(isIOS && isInStandalone){
+                // 👉 Charger directement le HTML de la carte sur iOS
+                iframe.style.display="none";
+                cardContainer.style.display="block";
+                const cardRes = await fetch("/c/"+encodeURIComponent(code));
+                const html = await cardRes.text();
+                cardContainer.innerHTML = html;
+              } else {
+                // 👉 Android / PC : via iframe
+                iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
+              }
             }
           } else {
             statusEl.textContent="⚠️ Carte introuvable";
           }
-        }).catch(()=>{
-          statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)";
-        });
+        } catch(e){
+          statusEl.textContent="⚠️ Hors ligne — carte en cache";
+        }
       }
 
       refreshBtn.onclick=refreshCard;
+      await refreshCard();
       setInterval(refreshCard,60000);
     }
 
