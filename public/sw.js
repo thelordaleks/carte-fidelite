@@ -1,5 +1,5 @@
-// ✅ Nouvelle version pour forcer la mise à jour
-const CACHE_NAME = "mdl-carte-v6";
+// ✅ Service Worker version 7 — PWA Carte MDL
+const CACHE_NAME = "mdl-carte-v7";
 const ASSETS = [
   "/app/index.html",
   "/app/manifest.json",
@@ -12,42 +12,40 @@ const ASSETS = [
 
 // Installation : mise en cache des fichiers essentiels
 self.addEventListener("install", event => {
-  console.log("📦 Service Worker: installation...");
+  console.log("📦 Installation du SW...");
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting()) // activation immédiate
+      .then(() => self.skipWaiting())
   );
 });
 
-// Activation : nettoyage des anciennes versions
+// Activation : nettoyage des anciens caches
 self.addEventListener("activate", event => {
   console.log("🧹 Nettoyage anciens caches...");
   event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.map(k => {
-        if (k !== CACHE_NAME) return caches.delete(k);
-      }))
+      Promise.all(keys.map(k => k !== CACHE_NAME && caches.delete(k)))
     )
   );
-  self.clients.claim(); // prend le contrôle sans attendre
+  self.clients.claim();
 });
 
-// Stratégie : "Network first" puis fallback cache
+// Stratégie : réseau d'abord, cache ensuite
 self.addEventListener("fetch", event => {
   const req = event.request;
+  const url = new URL(req.url);
 
-  // On ignore les appels API pour éviter de cacher les points
-  if (req.url.includes("/api/")) return;
+  // ⛔ Ignore les appels API (points, nom, etc.)
+  if (url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
     fetch(req)
       .then(res => {
-        // On met à jour le cache silencieusement
-        const resClone = res.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(req, resClone));
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, clone));
         return res;
       })
-      .catch(() => caches.match(req)) // fallback offline
+      .catch(() => caches.match(req))
   );
 });
