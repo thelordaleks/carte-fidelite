@@ -218,6 +218,36 @@ app.get('/.well-known/apple-app-site-association', (req, res) => {
     res.status(500).json({ error: 'Erreur lecture AASA .well-known' });
   }
 });
+// === Gestion du Service Worker : version auto + anti-cache ===
+app.get("/sw.js", (req, res) => {
+  // 🔹 chemin du fichier SW réel dans ton dossier public
+  const swPath = path.join(__dirname, "public", "sw.js");
+
+  try {
+    if (!fs.existsSync(swPath)) {
+      return res.status(404).send("// sw.js introuvable");
+    }
+
+    // 🔹 version unique basée sur l'heure de déploiement
+    const version = process.env.BUILD_ID || new Date().toISOString();
+
+    // 🔹 lecture du contenu et injection de la version
+    let content = fs.readFileSync(swPath, "utf8");
+    content = `// build:${version}\n` + content;
+
+    // 🔹 en-têtes pour empêcher le cache navigateur
+    res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    // 🔹 envoi du fichier final
+    res.send(content);
+  } catch (e) {
+    console.error("Erreur envoi sw.js:", e);
+    res.status(500).send("// Erreur serveur envoi sw.js");
+  }
+});
 
 
 initDb().then(() => {
