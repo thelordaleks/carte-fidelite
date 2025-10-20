@@ -121,137 +121,151 @@
   <footer>© MDL Vaillant</footer>
 
   <script>
-  (function(){
-    const $ = s => document.querySelector(s);
-    const iframe=$("#carte"), cardContainer=$("#carte-container"),
-          walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
-          missing=$("#missing"), iosHelp=$("#ios-help"),
-          inputCode=$("#input-code"), saveCode=$("#save-code"),
-          statusEl=$("#status");
+(function(){
+  const $ = s => document.querySelector(s);
+  const iframe=$("#carte"), cardContainer=$("#carte-container"),
+        walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
+        missing=$("#missing"), iosHelp=$("#ios-help"),
+        inputCode=$("#input-code"), saveCode=$("#save-code"),
+        statusEl=$("#status");
 
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isInStandalone = window.navigator.standalone === true;
-    if(isIOS && !isInStandalone){ iosHelp.style.display="block"; }
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isStandalone = window.navigator.standalone === true;
 
-    let deferredPrompt=null;
-    window.addEventListener("beforeinstallprompt",e=>{
-      e.preventDefault(); deferredPrompt=e;
-      installBtn.style.display="inline-block";
+  if(isIOS && !isStandalone){ iosHelp.style.display="block"; }
+
+  let deferredPrompt=null;
+  window.addEventListener("beforeinstallprompt",e=>{
+    e.preventDefault(); deferredPrompt=e;
+    installBtn.style.display="inline-block";
+  });
+  installBtn.addEventListener("click",()=>{
+    if(!deferredPrompt)return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
+  });
+
+  // IndexedDB (persistance code)
+  function saveCodeToDB(code){
+    return new Promise((resolve,reject)=>{
+      const req=indexedDB.open("mdl-db",1);
+      req.onupgradeneeded=()=>req.result.createObjectStore("config");
+      req.onsuccess=()=>{
+        const tx=req.result.transaction("config","readwrite");
+        tx.objectStore("config").put(code,"lastCode");
+        tx.oncomplete=resolve;
+        tx.onerror=reject;
+      };
+      req.onerror=reject;
     });
-    installBtn.addEventListener("click",()=>{
-      if(!deferredPrompt)return;
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
+  }
+  function getCodeFromDB(){
+    return new Promise((resolve,reject)=>{
+      const req=indexedDB.open("mdl-db",1);
+      req.onsuccess=()=>{
+        const tx=req.result.transaction("config","readonly");
+        const get=tx.objectStore("config").get("lastCode");
+        get.onsuccess=()=>resolve(get.result);
+        get.onerror=reject;
+      };
+      req.onerror=reject;
     });
+  }
 
-    // IndexedDB
-    function saveCodeToDB(code){
-      return new Promise((resolve,reject)=>{
-        const req=indexedDB.open("mdl-db",1);
-        req.onupgradeneeded=()=>req.result.createObjectStore("config");
-        req.onsuccess=()=>{
-          const tx=req.result.transaction("config","readwrite");
-          tx.objectStore("config").put(code,"lastCode");
-          tx.oncomplete=resolve;
-          tx.onerror=reject;
-        };
-        req.onerror=reject;
-      });
-    }
+  async function mountWithCode(code){
+    if(!code) code = await getCodeFromDB();
+    if(!code){ missing.style.display="block"; return; }
 
-    function getCodeFromDB(){
-      return new Promise((resolve,reject)=>{
-        const req=indexedDB.open("mdl-db",1);
-        req.onsuccess=()=>{
-          const tx=req.result.transaction("config","readonly");
-          const get=tx.objectStore("config").get("lastCode");
-          get.onsuccess=()=>resolve(get.result);
-          get.onerror=reject;
-        };
-        req.onerror=reject;
-      });
-    }
+    await saveCodeToDB(code);
+    localStorage.setItem("mdl_last_code", code);
+    walletBtn.href="/wallet/"+encodeURIComponent(code);
+    statusEl.textContent="Chargement de la carte…";
 
-    async function mountWithCode(code){
-      if(!code) code = await getCodeFromDB();
-      if(!code){ missing.style.display="block"; return; }
+    async function refreshCard(){
+      try {
+        const res = await fetch("/api/get-card/"+encodeURIComponent(code));
+        const data = await res.json();
 
-      await saveCodeToDB(code);
-      localStorage.setItem("mdl_last_code", code);
-      walletBtn.href="/wallet/"+encodeURIComponent(code);
-      statusEl.textContent="Chargement de la carte…";
+        if(data && data.ok){
+          statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
 
-      async function refreshCard(){
-        try {
-          const res = await fetch("/api/get-card/"+encodeURIComponent(code));
-          const data = await res.json();
-          if(data && data.ok){
-            statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-
-            if(navigator.onLine){
-              if(isIOS && isInStandalone){
-                // 👉 Charger directement le HTML de la carte sur iOS
-                iframe.style.display="none";
-                cardContainer.style.display="block";
+          if(navigator.onLine){
+            if(isIOS && isStandalone){
+              // 🧩 iOS : on tente le chargement direct
+              try {
                 const cardRes = await fetch("/c/"+encodeURIComponent(code));
                 const html = await cardRes.text();
-                cardContainer.innerHTML = html;
-              } else {
-                // 👉 Android / PC : via iframe
-                iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
-              }
-            }
-          } else {
-            statusEl.textContent="⚠️ Carte introuvable";
-          }
-        } catch(e){
-          statusEl.textContent="⚠️ Hors ligne — carte en cache";
-        }
-      }
 
-      refreshBtn.onclick=refreshCard;
-      await refreshCard();
-      setInterval(refreshCard,60000);
+                // si on a bien reçu du HTML
+                if(html && html.includes("<html")){
+                  iframe.style.display="none";
+                  cardContainer.style.display="block";
+                  cardContainer.innerHTML = html;
+                } else {
+                  // fallback : on garde l’iframe
+                  iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+                }
+              } catch(e){
+                // fallback si iOS bloque le fetch()
+                iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+              }
+            } else {
+              // Android / Desktop
+              iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+            }
+          }
+        } else {
+          statusEl.textContent="⚠️ Carte introuvable";
+        }
+      } catch(e){
+        statusEl.textContent="⚠️ Hors ligne — carte en cache";
+      }
     }
 
-    document.addEventListener("DOMContentLoaded",async ()=>{
-      let params=new URLSearchParams(window.location.search);
-      let code=params.get("code");
-      const stored=localStorage.getItem("mdl_last_code") || await getCodeFromDB();
+    refreshBtn.onclick=refreshCard;
+    await refreshCard();
+    setInterval(refreshCard,60000);
+  }
 
-      if(code){
-        await saveCodeToDB(code);
-        localStorage.setItem("mdl_last_code", code);
-        const url=new URL(window.location.href);
-        url.searchParams.delete("code");
-        history.replaceState({}, "", url.toString());
-      } else {
-        code=stored||"";
-      }
+  document.addEventListener("DOMContentLoaded",async ()=>{
+    let params=new URLSearchParams(window.location.search);
+    let code=params.get("code");
+    const stored=localStorage.getItem("mdl_last_code") || await getCodeFromDB();
 
-      if(code){
-        mountWithCode(code);
-      } else {
-        missing.style.display="block";
-        saveCode.onclick=async ()=>{
-          const c=(inputCode.value||"").trim().toUpperCase();
-          if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
-            alert("Code invalide. Exemple : ADH0XXXXXXX");
-            return;
-          }
-          await saveCodeToDB(c);
-          localStorage.setItem("mdl_last_code",c);
-          location.href="/app?code="+encodeURIComponent(c);
-        };
-      }
+    if(code){
+      await saveCodeToDB(code);
+      localStorage.setItem("mdl_last_code", code);
+      const url=new URL(window.location.href);
+      url.searchParams.delete("code");
+      history.replaceState({}, "", url.toString());
+    } else {
+      code=stored||"";
+    }
 
-      if("serviceWorker" in navigator){
-        navigator.serviceWorker.register("/sw.js")
-          .then(reg=>console.log("✅ SW actif:", reg.scope))
-          .catch(e=>console.error("❌ Erreur SW",e));
-      }
-    });
-  })();
-  </script>
+    if(code){
+      mountWithCode(code);
+    } else {
+      missing.style.display="block";
+      saveCode.onclick=async ()=>{
+        const c=(inputCode.value||"").trim().toUpperCase();
+        if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
+          alert("Code invalide. Exemple : ADH0XXXXXXX");
+          return;
+        }
+        await saveCodeToDB(c);
+        localStorage.setItem("mdl_last_code",c);
+        location.href="/app?code="+encodeURIComponent(c);
+      };
+    }
+
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("/sw.js")
+        .then(reg=>console.log("✅ SW actif:", reg.scope))
+        .catch(e=>console.error("❌ Erreur SW",e));
+    }
+  });
+})();
+</script>
+
 </body>
 </html>
