@@ -3,45 +3,19 @@
 <head>
   <meta charset="utf-8">
   <title>Carte de fidélité</title>
-
-  <!-- Empêche le zoom et stabilise l’affichage sur mobile -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#f5f7fb">
 
   <style>
     :root {
-      /* Dimensions base (ratio 1024x585) */
-      --w: 1024; 
+      --w: 1024;
       --h: 585;
-
-      /* Positions des champs */
-      --nom-left: 23%;
-      --nom-top: 66%;
-      --nom-width: 64%;
-      --nom-height: 9%;
-
-      --prenom-left: 23%;
-      --prenom-top: 76.5%;
-      --prenom-width: 64%;
-      --prenom-height: 9%;
-
-      --points-left: 22%;
-      --points-top: 86.2%;
-      --points-width: 22%;
-      --points-height: 10%;
-
-      --reduc-left: 39%;
-      --reduc-top: 86.2%;
-      --reduc-width: 22%;
-      --reduc-height: 10%;
-
-      --bar-left: 10%;
-      --bar-right: 10%;
-      --bar-top: 42%;
-
-      /* Bornes de taille texte */
-      --max-fs: 24px;
-      --min-fs: 10px;
+      --nom-left: 23%; --nom-top: 66%; --nom-width: 64%; --nom-height: 9%;
+      --prenom-left: 23%; --prenom-top: 76.5%; --prenom-width: 64%; --prenom-height: 9%;
+      --points-left: 22%; --points-top: 86.2%; --points-width: 22%; --points-height: 10%;
+      --reduc-left: 39%; --reduc-top: 86.2%; --reduc-width: 22%; --reduc-height: 10%;
+      --bar-left: 10%; --bar-right: 10%; --bar-top: 42%;
+      --max-fs: 24px; --min-fs: 10px;
     }
 
     html, body {
@@ -58,31 +32,31 @@
       color: #1a1f2c;
       -webkit-text-size-adjust: none;
       text-size-adjust: none;
-      overscroll-behavior: none;
     }
 
-   .card {
-  position: relative;
-  aspect-ratio: var(--w) / var(--h);
-  width: min(95vw, 860px);
-  max-height: 92vh;
+    .card {
+      position: relative;
+      aspect-ratio: var(--w) / var(--h);
+      width: min(95vw, 860px);
+      max-height: 92vh;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      isolation: isolate;
+    }
 
-  /* ✅ Correction du zoom hors ligne */
-  background-color: #fff;
-  background-image: url('/static/carte-mdl.png');
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: contain; /* <- empêche tout zoom */
-  background-attachment: local; /* <- évite les bugs de rendu cache */
-
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-  overflow: hidden;
-  touch-action: none;
-  transform: translateZ(0);
-  isolation: isolate; /* protège le calque du cache */
-}
-
+    .card img.bg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      z-index: 0;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
 
     .field {
       position: absolute;
@@ -95,50 +69,32 @@
       overflow: hidden;
       text-overflow: ellipsis;
       font-size: var(--fs, clamp(12px, 2.2vw, 22px));
-      letter-spacing: 0.2px;
+      letter-spacing: .2px;
       transform: translateY(-50%);
       min-width: 0;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
+      z-index: 1;
     }
 
     .field > .truncate {
       min-width: 0;
       display: block;
-      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .nom {
-      left: var(--nom-left); top: var(--nom-top);
-      width: var(--nom-width); height: var(--nom-height);
-    }
-    .prenom {
-      left: var(--prenom-left); top: var(--prenom-top);
-      width: var(--prenom-width); height: var(--prenom-height);
-    }
-    .points {
-      left: var(--points-left); top: var(--points-top);
-      width: var(--points-width); height: var(--points-height);
-      justify-content: center; font-weight: 800;
-    }
-    .reduc {
-      left: var(--reduc-left); top: var(--reduc-top);
-      width: var(--reduc-width); height: var(--reduc-height);
-      justify-content: center; font-weight: 800;
-    }
+    .nom { left: var(--nom-left); top: var(--nom-top); width: var(--nom-width); height: var(--nom-height); }
+    .prenom { left: var(--prenom-left); top: var(--prenom-top); width: var(--prenom-width); height: var(--prenom-height); }
+    .points { left: var(--points-left); top: var(--points-top); width: var(--points-width); height: var(--points-height); justify-content: center; font-weight: 800; }
+    .reduc { left: var(--reduc-left); top: var(--reduc-top); width: var(--reduc-width); height: var(--reduc-height); justify-content: center; font-weight: 800; }
 
-    /* Code-barres */
     .barcode {
-      position: absolute; 
-      left: var(--bar-left); 
-      right: var(--bar-right); 
-      top: var(--bar-top);
-      display: flex; 
-      align-items: center; 
-      justify-content: center;
+      position: absolute; left: var(--bar-left); right: var(--bar-right); top: var(--bar-top);
+      display: flex; align-items: center; justify-content: center;
       transform: translateY(-50%);
       pointer-events: none;
+      z-index: 1;
     }
 
     .barcode img {
@@ -146,99 +102,47 @@
       max-width: 720px;
       height: auto;
       filter: drop-shadow(0 1px 0 rgba(255,255,255,.6));
-      user-select: none;
-      -webkit-user-drag: none;
     }
 
-    /* Petits écrans */
     @media (max-width: 520px) {
-      :root {
-        --max-fs: 10px;
-        --min-fs: 8px;
-        --nom-width: 60%;
-        --prenom-width: 60%;
-      }
+      :root { --max-fs: 10px; --min-fs: 8px; --nom-width: 60%; --prenom-width: 60%; }
       .card { width: 100%; border-radius: 10px; }
-      .nom, .prenom { letter-spacing: .1px; }
     }
   </style>
 </head>
 <body>
   <div class="card">
+    <img class="bg" src="/static/carte-mdl.png" alt="Fond carte" loading="eager" decoding="sync">
     <div class="field nom"><span class="truncate">{{NOM}}</span></div>
     <div class="field prenom"><span class="truncate">{{PRENOM}}</span></div>
     <div class="field points">{{POINTS}}</div>
     <div class="field reduc">{{REDUCTION}}</div>
-    <div class="barcode">
-      <img src="{{BARCODE_URL}}" alt="Code-barres" loading="eager" decoding="sync">
-    </div>
+    <div class="barcode"><img src="{{BARCODE_URL}}" alt="Code-barres"></div>
   </div>
 
   <script>
-    // 🔹 Ajuste automatiquement la taille du texte pour que tout tienne sur une ligne
-    function fitOne(el) {
+    // Ajustement auto texte
+    function fitOne(el){
       const span = el.querySelector('.truncate');
-      if (!span) return;
+      if(!span) return;
       const cs = getComputedStyle(document.documentElement);
-      const max = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
+      let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
       const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
-
-      let size = max, guard = 0;
-      el.style.setProperty('--fs', size + 'px');
       const boxW = el.clientWidth;
-      if (!boxW) return;
-
-      while (span.scrollWidth > boxW && size > min && guard++ < 120) {
-        size -= 0.5;
-        el.style.setProperty('--fs', size + 'px');
-      }
+      el.style.setProperty('--fs', size+'px');
+      while(span.scrollWidth > boxW && size > min){ size -= 0.5; el.style.setProperty('--fs', size+'px'); }
     }
+    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
 
-    function fitAll() {
-      document.querySelectorAll('.nom, .prenom').forEach(fitOne);
-    }
-
-    (async function init() {
-      try {
-        if (document.fonts && document.fonts.ready) await document.fonts.ready;
-      } catch(e) {}
+    // Redimension auto selon densité écran
+    window.addEventListener('load', () => {
+      const bg = document.querySelector('.bg');
+      const ratio = window.devicePixelRatio || 1;
+      if (ratio < 1.5) bg.src = '/static/carte-mdl-small.png';
+      else if (ratio < 2.5) bg.src = '/static/carte-mdl-medium.png';
+      else bg.src = '/static/carte-mdl.png';
       fitAll();
-
-      const card = document.querySelector('.card');
-      if (window.ResizeObserver && card) {
-        const ro = new ResizeObserver(() => {
-          clearTimeout(window.__fitT);
-          window.__fitT = setTimeout(fitAll, 60);
-        });
-        ro.observe(card);
-      }
-
-      addEventListener('resize', () => {
-        clearTimeout(window.__fitT);
-        window.__fitT = setTimeout(fitAll, 60);
-      });
-
-      addEventListener('orientationchange', () => {
-        clearTimeout(window.__fitT);
-        window.__fitT = setTimeout(fitAll, 60);
-      });
-
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) setTimeout(fitAll, 60);
-      });
-    })();
-    // 🔧 Fix visuel si affichage depuis cache (offline)
-window.addEventListener("load", () => {
-  const card = document.querySelector(".card");
-  if (card) {
-    // Force le navigateur à recalculer le fond si affiché depuis cache
-    const bg = getComputedStyle(card).backgroundImage;
-    if (bg && bg.includes("carte-mdl.png")) {
-      card.style.backgroundImage = bg.replace(/url\(["']?(.*?)["']?\)/, "url($1?t=" + Date.now() + ")");
-    }
-  }
-});
-
+    });
   </script>
 </body>
 </html>
