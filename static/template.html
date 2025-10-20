@@ -160,66 +160,63 @@
     const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
     const boxW = el.clientWidth;
     el.style.setProperty('--fs', size+'px');
-    while(span.scrollWidth > boxW && size > min){ size -= 0.5; el.style.setProperty('--fs', size+'px'); }
+    while(span.scrollWidth > boxW && size > min){
+      size -= 0.5;
+      el.style.setProperty('--fs', size+'px');
+    }
   }
 
-  function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
+  function fitAll(){
+    document.querySelectorAll('.nom, .prenom').forEach(fitOne);
+  }
 
   window.addEventListener('load', () => {
-    const bg = document.querySelector('.bg');
     fitAll();
 
     const card = document.getElementById('carte');
     const barcode = document.getElementById('barcode');
 
     barcode.addEventListener('click', async () => {
-      const body = document.body;
-      const html = document.documentElement;
-
-      // ✅ Mode plein écran total
-      card.classList.toggle('zoomed');
-
+      // Si la carte est déjà zoomée → retour à la normale
       if (card.classList.contains('zoomed')) {
-        body.style.background = "#000";
-        html.style.overflow = "hidden";
-        body.style.overflow = "hidden";
-        card.style.position = "fixed";
-        card.style.inset = "0";
-        card.style.margin = "auto";
-        card.style.width = "100vw";
-        card.style.height = "100vh";
-        card.style.zIndex = "9999";
-        card.style.borderRadius = "0";
-        card.style.background = "#000";
-        card.style.display = "flex";
-        card.style.alignItems = "center";
-        card.style.justifyContent = "center";
+        card.classList.remove('zoomed');
+        document.body.style.background = "#f5f7fb";
+        try { await screen.orientation.unlock(); } catch(e) {}
+        return;
+      }
 
-        try {
-          await screen.orientation.lock('landscape');
-        } catch(e) {
-          console.warn("📱 Impossible de verrouiller en paysage", e);
-          alert("📱 Tourne ton téléphone pour mieux voir la carte");
-        }
-      } else {
-        // ✅ Retour à la vue normale
-        body.style.background = "#f5f7fb";
-        html.style.overflow = "";
-        body.style.overflow = "";
-        card.removeAttribute("style");
-        card.classList.remove("zoomed");
-        try {
-          await screen.orientation.lock('portrait');
-        } catch(e) {}
+      // Sinon → activer le zoom plein écran + paysage
+      card.classList.add('zoomed');
+      document.body.style.background = "#000";
+
+      Object.assign(card.style, {
+        position: "fixed",
+        inset: "0",
+        margin: "auto",
+        width: "100vw",
+        height: "100vh",
+        borderRadius: "0",
+        zIndex: "9999",
+        background: "#000",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transform: "none"
+      });
+
+      // Force le mode paysage si possible (Android, Chrome, etc.)
+      try {
+        await screen.orientation.lock('landscape');
+      } catch(e) {
+        // Certains navigateurs (ex: iOS Safari) ne le permettent pas
       }
     });
 
-    // ✅ Ajustement après changement d’orientation
+    // Ajustement du texte si on tourne manuellement l’écran
     window.addEventListener('orientationchange', () => {
       setTimeout(fitAll, 300);
     });
   });
 </script>
-
 </body>
 </html>
