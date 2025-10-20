@@ -1,4 +1,4 @@
-const CACHE_NAME = "mdl-carte-v2";
+const CACHE_NAME = "mdl-carte-v5";
 const ASSETS = [
   "/app/index.html",
   "/app/manifest.json",
