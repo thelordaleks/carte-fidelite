@@ -155,7 +155,7 @@
             statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
             iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
           } else statusEl.textContent="⚠️ Carte introuvable";
-        }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)");
+        }).catch(()=>statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)"));
       }
 
       refreshBtn.onclick=refreshCard;
@@ -191,19 +191,34 @@
         };
       }
 
+      // ✅ Service Worker avec mise à jour automatique
       if("serviceWorker" in navigator){
-        navigator.serviceWorker.register("/sw.js")
-          .then(reg=>{
-            console.log("✅ SW actif:", reg.scope);
-            // ⬇️ Force le rechargement de la carte après activation du SW
-            if (iframe && localStorage.getItem("mdl_last_code")) {
-              setTimeout(()=>{
-                const code = localStorage.getItem("mdl_last_code");
-                iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-              }, 1500);
-            }
-          })
-          .catch(e=>console.error("❌ Erreur SW",e));
+        navigator.serviceWorker.register("/sw.js").then(reg=>{
+          console.log("✅ SW actif:", reg.scope);
+
+          // Force le rechargement de la carte après activation
+          if (iframe && localStorage.getItem("mdl_last_code")) {
+            setTimeout(()=>{
+              const code = localStorage.getItem("mdl_last_code");
+              iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+            }, 1500);
+          }
+
+          // Vérifie toutes les 30 secondes s'il y a une nouvelle version du SW
+          setInterval(()=>{ reg.update(); }, 30000);
+
+          // Recharge automatiquement si une nouvelle version du SW est installée
+          reg.onupdatefound = ()=>{
+            const newSW = reg.installing;
+            newSW.onstatechange = ()=>{
+              if(newSW.state === "installed" && navigator.serviceWorker.controller){
+                console.log("⚡ Nouvelle version détectée, rechargement !");
+                newSW.postMessage({ action: "skipWaiting" });
+                window.location.reload();
+              }
+            };
+          };
+        }).catch(e=>console.error("❌ Erreur SW",e));
       }
     });
   })();
