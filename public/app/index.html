@@ -129,10 +129,28 @@
         inputCode=$("#input-code"), saveCode=$("#save-code"),
         statusEl=$("#status");
 
+  // --- AJOUT : petite console de debug visible ---
+  const debugBox = document.createElement("pre");
+  debugBox.id = "debug";
+  debugBox.style.cssText = `
+    background:#000;color:#0f0;font-size:11px;
+    text-align:left;max-width:480px;margin:15px auto;
+    padding:8px;border-radius:8px;white-space:pre-wrap;
+    overflow:auto;max-height:180px;
+  `;
+  document.body.appendChild(debugBox);
+  function log(...msg){
+    const line = msg.map(m=>typeof m==="object"?JSON.stringify(m):m).join(" ");
+    console.log(...msg);
+    debugBox.textContent += "\n" + line;
+    debugBox.scrollTop = debugBox.scrollHeight;
+  }
+  // ---------------------------------------------
+
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone === true;
 
-  console.log("🧭 Détection appareil :", {isIOS, isStandalone});
+  log("🧭 Détection appareil :", {isIOS, isStandalone});
 
   if(isIOS && !isStandalone){ iosHelp.style.display="block"; }
 
@@ -175,9 +193,9 @@
   }
 
   async function mountWithCode(code){
-    console.log("🚀 mountWithCode()", code);
+    log("🚀 mountWithCode()", code);
     if(!code) code = await getCodeFromDB();
-    if(!code){ missing.style.display="block"; console.log("❌ Aucun code trouvé"); return; }
+    if(!code){ missing.style.display="block"; log("❌ Aucun code trouvé"); return; }
 
     await saveCodeToDB(code);
     localStorage.setItem("mdl_last_code", code);
@@ -185,48 +203,48 @@
     statusEl.textContent="Chargement de la carte…";
 
     async function refreshCard(){
-      console.log("🔄 refreshCard() → tentative fetch API");
+      log("🔄 refreshCard() → tentative fetch API");
       try {
         const res = await fetch("/api/get-card/"+encodeURIComponent(code));
-        console.log("📡 /api/get-card status:", res.status);
+        log("📡 /api/get-card status:", res.status);
         const data = await res.json();
 
         if(data && data.ok){
-          console.log("✅ Données carte OK");
+          log("✅ Données carte OK");
           statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
 
           if(navigator.onLine){
             if(isIOS && isStandalone){
-              console.log("📱 iOS mode standalone → tentative chargement direct HTML carte");
+              log("📱 iOS mode standalone → tentative chargement direct HTML carte");
               try {
                 const cardRes = await fetch("/c/"+encodeURIComponent(code));
-                console.log("📄 /c/ réponse", cardRes.status);
+                log("📄 /c/ réponse", cardRes.status);
                 const html = await cardRes.text();
 
                 if(html && html.includes("<html")){
-                  console.log("🎉 HTML carte chargé, insertion dans le container");
+                  log("🎉 HTML carte chargé, insertion dans le container");
                   iframe.style.display="none";
                   cardContainer.style.display="block";
                   cardContainer.innerHTML = html;
                 } else {
-                  console.log("⚠️ HTML vide → fallback iFrame");
+                  log("⚠️ HTML vide → fallback iFrame");
                   iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
                 }
               } catch(e){
-                console.warn("⚠️ Erreur fetch /c/ → fallback iframe", e);
+                log("⚠️ Erreur fetch /c/ → fallback iframe", e);
                 iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
               }
             } else {
-              console.log("💻 Android/Desktop → refresh iframe");
+              log("💻 Android/Desktop → refresh iframe");
               iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
             }
           }
         } else {
-          console.warn("⚠️ Carte introuvable côté serveur");
+          log("⚠️ Carte introuvable côté serveur");
           statusEl.textContent="⚠️ Carte introuvable";
         }
       } catch(e){
-        console.error("🚨 Erreur globale refreshCard()", e);
+        log("🚨 Erreur globale refreshCard()", e);
         statusEl.textContent="⚠️ Hors ligne — carte en cache";
       }
     }
@@ -237,13 +255,13 @@
   }
 
   document.addEventListener("DOMContentLoaded",async ()=>{
-    console.log("🌐 DOMContentLoaded");
+    log("🌐 DOMContentLoaded");
     let params=new URLSearchParams(window.location.search);
     let code=params.get("code");
     const stored=localStorage.getItem("mdl_last_code") || await getCodeFromDB();
 
     if(code){
-      console.log("💾 Code détecté dans URL:", code);
+      log("💾 Code détecté dans URL:", code);
       await saveCodeToDB(code);
       localStorage.setItem("mdl_last_code", code);
       const url=new URL(window.location.href);
@@ -251,14 +269,14 @@
       history.replaceState({}, "", url.toString());
     } else {
       code=stored||"";
-      console.log("📦 Code chargé depuis stockage:", code);
+      log("📦 Code chargé depuis stockage:", code);
     }
 
     if(code){
       mountWithCode(code);
     } else {
       missing.style.display="block";
-      console.log("❌ Aucun code → affichage formulaire");
+      log("❌ Aucun code → affichage formulaire");
       saveCode.onclick=async ()=>{
         const c=(inputCode.value||"").trim().toUpperCase();
         if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
@@ -273,13 +291,12 @@
 
     if("serviceWorker" in navigator){
       navigator.serviceWorker.register("/sw.js")
-        .then(reg=>console.log("✅ SW actif:", reg.scope))
-        .catch(e=>console.error("❌ Erreur SW",e));
+        .then(reg=>log("✅ SW actif:", reg.scope))
+        .catch(e=>log("❌ Erreur SW",e));
     }
   });
 })();
 </script>
-
 
 </body>
 </html>
