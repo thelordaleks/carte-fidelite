@@ -1,10 +1,23 @@
 .card {
   position: relative;
-  width: min(92vw, 560px);
-  aspect-ratio: 3/4;
-  margin: 0 auto;
-  background: #fff;
+  aspect-ratio: var(--w) / var(--h);
+  width: min(95vw, 860px);
+  max-height: 92vh;
+
+  /* ✅ Correction du zoom hors ligne */
+  background-color: #fff;
+  background-image: url('/static/carte-mdl.png');
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: contain; /* <- avant c’était cover (qui étirait hors ligne) */
+
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  overflow: hidden;
+  touch-action: none;
+  transform: translateZ(0);
 }
+
 
 /* Variables de position (en %) – ajustables à chaud */
 :root{
