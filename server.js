@@ -11,6 +11,7 @@ const archiver = require('archiver'); // pour créer les fichiers .pkpass (zip)
 dotenv.config();
 
 const app = express();
+app.disable('etag');
 app.use(express.json());
 app.use(cors());
 app.use(morgan('dev'));
