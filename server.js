@@ -313,6 +313,16 @@ app.get('/wallet/:code', async (req, res) => {
     res.status(500).send("Erreur génération .pkpass");
   }
 });
+// === Route spéciale Apple Universal Links ===
+app.get('/apple-app-site-association', (req, res) => {
+  const filePath = path.join(__dirname, 'apple-app-site-association');
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/json');
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'apple-app-site-association introuvable' });
+  }
+});
 
 // === Lancement du serveur ===
 initDb()
