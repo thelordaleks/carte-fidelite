@@ -3,14 +3,18 @@
 <head>
   <meta charset="utf-8">
   <title>Carte de fidélité</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Empêche le zoom et stabilise l’affichage sur mobile -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#f5f7fb">
 
   <style>
-    :root{
-      /* Visuel 1024x585 */
-      --w: 1024; --h: 585;
+    :root {
+      /* Dimensions base (ratio 1024x585) */
+      --w: 1024; 
+      --h: 585;
 
-      /* Zones */
+      /* Positions des champs */
       --nom-left: 23%;
       --nom-top: 66%;
       --nom-width: 64%;
@@ -35,35 +39,42 @@
       --bar-right: 10%;
       --bar-top: 42%;
 
-      /* Bornes de taille pour l'auto-fit JS */
+      /* Bornes de taille texte */
       --max-fs: 24px;
       --min-fs: 10px;
     }
 
-    html, body { margin: 0; height: 100%; }
-    body{
+    html, body {
+      margin: 0;
+      height: 100%;
       background: #f5f7fb;
-      display: grid;
-      place-items: center;
-      padding: 16px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: #1a1f2c;
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
     }
 
-    .card{
+    body {
+      display: grid;
+      place-items: center;
+      padding: 12px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: #1a1f2c;
+      -webkit-text-size-adjust: none;
+      text-size-adjust: none;
+      overscroll-behavior: none;
+    }
+
+    .card {
       position: relative;
       aspect-ratio: var(--w) / var(--h);
-      width: min(92vw, 860px);
+      width: min(95vw, 860px);
       max-height: 92vh;
       background: #fff url('/static/carte-mdl.png') center/cover no-repeat;
       border-radius: 16px;
-      box-shadow: 0 10px 40px rgba(0,0,0,.10);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
       overflow: hidden;
+      touch-action: none;
+      transform: translateZ(0);
     }
 
-    .field{
+    .field {
       position: absolute;
       display: flex;
       align-items: center;
@@ -73,12 +84,14 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      font-size: var(--fs, clamp(14px, 2.2vw, 24px));
-      letter-spacing: .2px;
+      font-size: var(--fs, clamp(12px, 2.2vw, 22px));
+      letter-spacing: 0.2px;
       transform: translateY(-50%);
-      min-width: 0; /* essentiel pour ellipsis dans flex */
+      min-width: 0;
+      text-shadow: 0 1px 1px rgba(255,255,255,0.6);
     }
-    .field > .truncate{
+
+    .field > .truncate {
       min-width: 0;
       display: block;
       white-space: nowrap;
@@ -86,48 +99,57 @@
       text-overflow: ellipsis;
     }
 
-    .nom{
+    .nom {
       left: var(--nom-left); top: var(--nom-top);
       width: var(--nom-width); height: var(--nom-height);
     }
-    .prenom{
+    .prenom {
       left: var(--prenom-left); top: var(--prenom-top);
       width: var(--prenom-width); height: var(--prenom-height);
     }
-    .points{
+    .points {
       left: var(--points-left); top: var(--points-top);
       width: var(--points-width); height: var(--points-height);
       justify-content: center; font-weight: 800;
     }
-    .reduc{
+    .reduc {
       left: var(--reduc-left); top: var(--reduc-top);
       width: var(--reduc-width); height: var(--reduc-height);
       justify-content: center; font-weight: 800;
     }
 
     /* Code-barres */
-    .barcode{
-      position: absolute; left: var(--bar-left); right: var(--bar-right); top: var(--bar-top);
-      display: flex; align-items: center; justify-content: center;
+    .barcode {
+      position: absolute; 
+      left: var(--bar-left); 
+      right: var(--bar-right); 
+      top: var(--bar-top);
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
       transform: translateY(-50%);
       pointer-events: none;
     }
-    .barcode img{
+
+    .barcode img {
       width: 80%;
       max-width: 720px;
       height: auto;
       filter: drop-shadow(0 1px 0 rgba(255,255,255,.6));
+      user-select: none;
+      -webkit-user-drag: none;
     }
 
-    /* Réglages spécifiques mobile */
-    @media (max-width: 520px){
-      :root{
-        --max-fs: 9px;       /* taille max un peu plus petite */
+    /* Petits écrans */
+    @media (max-width: 520px) {
+      :root {
+        --max-fs: 10px;
         --min-fs: 8px;
-        --nom-width: 60%;     /* zones un peu plus larges */
+        --nom-width: 60%;
         --prenom-width: 60%;
       }
-      .nom, .prenom{ letter-spacing: .1px; }
+      .card { width: 100%; border-radius: 10px; }
+      .nom, .prenom { letter-spacing: .1px; }
     }
   </style>
 </head>
@@ -143,9 +165,10 @@
   </div>
 
   <script>
-    // Réduit la taille du texte pour que ça tienne sur une ligne dans la zone.
-    function fitOne(el){
-      const span = el.querySelector('.truncate'); if(!span) return;
+    // 🔹 Ajuste automatiquement la taille du texte pour que tout tienne sur une ligne
+    function fitOne(el) {
+      const span = el.querySelector('.truncate');
+      if (!span) return;
       const cs = getComputedStyle(document.documentElement);
       const max = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
       const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
@@ -153,28 +176,46 @@
       let size = max, guard = 0;
       el.style.setProperty('--fs', size + 'px');
       const boxW = el.clientWidth;
-
       if (!boxW) return;
 
-      while (span.scrollWidth > boxW && size > min && guard++ < 120){
-        size -= 0.5; // pas trop gros pas trop fin
+      while (span.scrollWidth > boxW && size > min && guard++ < 120) {
+        size -= 0.5;
         el.style.setProperty('--fs', size + 'px');
       }
     }
-    function fitAll(){
+
+    function fitAll() {
       document.querySelectorAll('.nom, .prenom').forEach(fitOne);
     }
-    (async function init(){
-      try{ if (document.fonts && document.fonts.ready) await document.fonts.ready; }catch(e){}
+
+    (async function init() {
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      } catch(e) {}
       fitAll();
+
       const card = document.querySelector('.card');
-      if (window.ResizeObserver && card){
-        const ro = new ResizeObserver(()=>{ clearTimeout(window.__fitT); window.__fitT = setTimeout(fitAll, 60); });
+      if (window.ResizeObserver && card) {
+        const ro = new ResizeObserver(() => {
+          clearTimeout(window.__fitT);
+          window.__fitT = setTimeout(fitAll, 60);
+        });
         ro.observe(card);
       }
-      addEventListener('resize', ()=>{ clearTimeout(window.__fitT); window.__fitT = setTimeout(fitAll, 60); });
-      addEventListener('orientationchange', ()=>{ clearTimeout(window.__fitT); window.__fitT = setTimeout(fitAll, 60); });
-      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(fitAll, 60); });
+
+      addEventListener('resize', () => {
+        clearTimeout(window.__fitT);
+        window.__fitT = setTimeout(fitAll, 60);
+      });
+
+      addEventListener('orientationchange', () => {
+        clearTimeout(window.__fitT);
+        window.__fitT = setTimeout(fitAll, 60);
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) setTimeout(fitAll, 60);
+      });
     })();
   </script>
 </body>
