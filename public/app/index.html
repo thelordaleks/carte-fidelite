@@ -120,7 +120,7 @@
 
   <footer>© MDL Vaillant</footer>
 
-  <script>
+<script>
 (function(){
   const $ = s => document.querySelector(s);
   const iframe=$("#carte"), cardContainer=$("#carte-container"),
@@ -131,6 +131,8 @@
 
   const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isStandalone = window.navigator.standalone === true;
+
+  console.log("🧭 Détection appareil :", {isIOS, isStandalone});
 
   if(isIOS && !isStandalone){ iosHelp.style.display="block"; }
 
@@ -145,7 +147,7 @@
     deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
   });
 
-  // IndexedDB (persistance code)
+  // IndexedDB
   function saveCodeToDB(code){
     return new Promise((resolve,reject)=>{
       const req=indexedDB.open("mdl-db",1);
@@ -173,8 +175,9 @@
   }
 
   async function mountWithCode(code){
+    console.log("🚀 mountWithCode()", code);
     if(!code) code = await getCodeFromDB();
-    if(!code){ missing.style.display="block"; return; }
+    if(!code){ missing.style.display="block"; console.log("❌ Aucun code trouvé"); return; }
 
     await saveCodeToDB(code);
     localStorage.setItem("mdl_last_code", code);
@@ -182,42 +185,48 @@
     statusEl.textContent="Chargement de la carte…";
 
     async function refreshCard(){
+      console.log("🔄 refreshCard() → tentative fetch API");
       try {
         const res = await fetch("/api/get-card/"+encodeURIComponent(code));
+        console.log("📡 /api/get-card status:", res.status);
         const data = await res.json();
 
         if(data && data.ok){
+          console.log("✅ Données carte OK");
           statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
 
           if(navigator.onLine){
             if(isIOS && isStandalone){
-              // 🧩 iOS : on tente le chargement direct
+              console.log("📱 iOS mode standalone → tentative chargement direct HTML carte");
               try {
                 const cardRes = await fetch("/c/"+encodeURIComponent(code));
+                console.log("📄 /c/ réponse", cardRes.status);
                 const html = await cardRes.text();
 
-                // si on a bien reçu du HTML
                 if(html && html.includes("<html")){
+                  console.log("🎉 HTML carte chargé, insertion dans le container");
                   iframe.style.display="none";
                   cardContainer.style.display="block";
                   cardContainer.innerHTML = html;
                 } else {
-                  // fallback : on garde l’iframe
+                  console.log("⚠️ HTML vide → fallback iFrame");
                   iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
                 }
               } catch(e){
-                // fallback si iOS bloque le fetch()
+                console.warn("⚠️ Erreur fetch /c/ → fallback iframe", e);
                 iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
               }
             } else {
-              // Android / Desktop
+              console.log("💻 Android/Desktop → refresh iframe");
               iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
             }
           }
         } else {
+          console.warn("⚠️ Carte introuvable côté serveur");
           statusEl.textContent="⚠️ Carte introuvable";
         }
       } catch(e){
+        console.error("🚨 Erreur globale refreshCard()", e);
         statusEl.textContent="⚠️ Hors ligne — carte en cache";
       }
     }
@@ -228,11 +237,13 @@
   }
 
   document.addEventListener("DOMContentLoaded",async ()=>{
+    console.log("🌐 DOMContentLoaded");
     let params=new URLSearchParams(window.location.search);
     let code=params.get("code");
     const stored=localStorage.getItem("mdl_last_code") || await getCodeFromDB();
 
     if(code){
+      console.log("💾 Code détecté dans URL:", code);
       await saveCodeToDB(code);
       localStorage.setItem("mdl_last_code", code);
       const url=new URL(window.location.href);
@@ -240,12 +251,14 @@
       history.replaceState({}, "", url.toString());
     } else {
       code=stored||"";
+      console.log("📦 Code chargé depuis stockage:", code);
     }
 
     if(code){
       mountWithCode(code);
     } else {
       missing.style.display="block";
+      console.log("❌ Aucun code → affichage formulaire");
       saveCode.onclick=async ()=>{
         const c=(inputCode.value||"").trim().toUpperCase();
         if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
@@ -266,6 +279,7 @@
   });
 })();
 </script>
+
 
 </body>
 </html>
