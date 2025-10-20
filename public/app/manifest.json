@@ -1,13 +1,13 @@
 {
-  "name": "Carte Fidélité MDL Édouard Vaillant",
-  "short_name": "MDL Carte",
-  "description": "Carte de fidélité numérique de la MDL Édouard Vaillant",
-  "start_url": "/app/index.html",
+  "name": "Carte fidélité MDL Vaillant",
+  "short_name": "MDL Vaillant",
+  "description": "Application officielle de la carte de fidélité de la MDL Vaillant.",
+  "start_url": "/app/?source=pwa",
   "scope": "/app/",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0078D7",
+  "background_color": "#f2f4f8",
   "theme_color": "#0078D7",
+  "orientation": "portrait",
   "icons": [
     {
       "src": "/static/logo-mdl.png",
@@ -19,5 +19,15 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ]
+  ],
+  "screenshots": [
+    {
+      "src": "/static/carte-mdl.png",
+      "type": "image/png",
+      "sizes": "1080x1920"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "fr",
+  "dir": "ltr"
 }
