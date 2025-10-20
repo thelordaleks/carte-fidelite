@@ -1,4 +1,4 @@
-// ✅ Service Worker – Carte fidélité offline complète (v11)
+// ✅ Service Worker – Carte fidélité offline complète (v12)
 const CACHE_NAME = "mdl-carte-v10";
 const STATIC_ASSETS = [
   "/app/index.html",
