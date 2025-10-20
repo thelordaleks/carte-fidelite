@@ -74,35 +74,6 @@
       border: 1px solid #ccc;
       font-size: 15px;
     }
-    /* 🔹 Bannière installation automatique */
-    #install-banner {
-      display: none;
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: #0078D7;
-      color: #fff;
-      padding: 12px;
-      text-align: center;
-      font-weight: 500;
-      box-shadow: 0 -2px 6px rgba(0,0,0,0.25);
-      z-index: 1000;
-      animation: slideUp .5s ease;
-    }
-    #install-banner button {
-      background: #fff;
-      color: #0078D7;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      margin-left: 10px;
-      font-weight: bold;
-    }
-    @keyframes slideUp {
-      from { transform: translateY(100%); }
-      to { transform: translateY(0); }
-    }
   </style>
 </head>
 <body>
@@ -125,7 +96,6 @@
 
     <div class="status" id="status"></div>
 
-    <!-- Bloc affiché si code manquant -->
     <div id="missing" style="display:none;">
       <h3>⚠️ Code de carte manquant</h3>
       <p>Ouvre d’abord le lien reçu par e-mail ou saisis ton code ci-dessous pour l’associer à cet appareil.</p>
@@ -136,112 +106,87 @@
 
   <footer>© MDL Vaillant</footer>
 
-  <!-- 🔹 Bannière auto install -->
-  <div id="install-banner">
-    📱 Installer la carte fidélité MDL
-    <button id="banner-install-btn">Installer</button>
-  </div>
+  <!-- ✅ Polyfill automatique pour anciens Android -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es2015,fetch,Promise,URLSearchParams,Symbol,Array.prototype.includes"></script>
 
   <script>
-    const $ = (sel) => document.querySelector(sel);
-    const statusEl = $("#status");
-    const iframe = $("#carte");
-    const walletBtn = $("#wallet");
-    const installBtn = $("#install");
-    const refreshBtn = $("#refresh");
-    const missing = $("#missing");
-    const inputCode = $("#input-code");
-    const saveCode = $("#save-code");
-    const banner = $("#install-banner");
-    const bannerBtn = $("#banner-install-btn");
+  (function() {
+    function $(s){return document.querySelector(s);}
+    var statusEl=$("#status"), iframe=$("#carte"),
+        walletBtn=$("#wallet"), installBtn=$("#install"),
+        refreshBtn=$("#refresh"), missing=$("#missing"),
+        inputCode=$("#input-code"), saveCode=$("#save-code");
 
-    let deferredPrompt = null;
-
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      // affiche bannière auto
-      banner.style.display = "block";
-      installBtn.style.display = "inline-block";
+    var deferredPrompt=null;
+    window.addEventListener("beforeinstallprompt",function(e){
+      e.preventDefault(); deferredPrompt=e;
+      installBtn.style.display="inline-block";
     });
 
-    bannerBtn.addEventListener("click", async () => {
-      banner.style.display = "none";
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        deferredPrompt = null;
-      }
-    });
-
-    installBtn.addEventListener("click", async () => {
-      if (!deferredPrompt) return;
+    installBtn.addEventListener("click",function(){
+      if(!deferredPrompt)return;
       deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      installBtn.style.display = "none";
+      deferredPrompt.userChoice.then(function(){deferredPrompt=null;installBtn.style.display="none";});
     });
 
-    async function mountWithCode(code) {
-      localStorage.setItem("mdl_last_code", code);
-      iframe.src = `/c/${encodeURIComponent(code)}`;
-      walletBtn.href = `/wallet/${encodeURIComponent(code)}`;
-      statusEl.textContent = "Chargement de la carte…";
+    function mountWithCode(code){
+      localStorage.setItem("mdl_last_code",code);
+      iframe.src="/c/"+encodeURIComponent(code);
+      walletBtn.href="/wallet/"+encodeURIComponent(code);
+      statusEl.textContent="Chargement de la carte…";
 
-      async function refreshCard() {
-        try {
-          const res = await fetch(`/api/get-card/${encodeURIComponent(code)}`);
-          const data = await res.json();
-          if (data && data.ok) {
-            statusEl.textContent = `✅ Dernière mise à jour : ${new Date().toLocaleTimeString()}`;
-            iframe.src = `/c/${encodeURIComponent(code)}?t=${Date.now()}`;
-          } else {
-            statusEl.textContent = "⚠️ Carte introuvable";
-          }
-        } catch {
-          statusEl.textContent = "⚠️ Impossible de mettre à jour (hors ligne ?)";
-        }
+      function refreshCard(){
+        fetch("/api/get-card/"+encodeURIComponent(code))
+          .then(function(r){return r.json();})
+          .then(function(data){
+            if(data && data.ok){
+              statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
+              iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+            } else statusEl.textContent="⚠️ Carte introuvable";
+          })
+          .catch(function(){statusEl.textContent="⚠️ Impossible de mettre à jour (hors ligne ?)";});
       }
 
-      refreshBtn.onclick = refreshCard;
-      setInterval(refreshCard, 60000);
+      refreshBtn.onclick=refreshCard;
+      setInterval(refreshCard,60000);
     }
 
-    document.addEventListener("DOMContentLoaded", async () => {
-      const params = new URLSearchParams(window.location.search);
-      let code = params.get("code");
-      const storedCode = localStorage.getItem("mdl_last_code");
+    document.addEventListener("DOMContentLoaded",function(){
+      var params=new URLSearchParams(window.location.search);
+      var code=params.get("code");
+      var stored=localStorage.getItem("mdl_last_code");
 
-      if (code) {
-        localStorage.setItem("mdl_last_code", code);
-        const url = new URL(window.location.href);
+      if(code){
+        localStorage.setItem("mdl_last_code",code);
+        var url=new URL(window.location.href);
         url.searchParams.delete("code");
-        window.history.replaceState({}, "", url.toString());
+        history.replaceState({}, "", url.toString());
       } else {
-        code = storedCode || "";
+        code=stored||"";
       }
 
-      if (code) {
-        await mountWithCode(code);
+      if(code){
+        mountWithCode(code);
       } else {
-        missing.style.display = "block";
-        saveCode.onclick = () => {
-          const c = (inputCode.value || "").trim().toUpperCase();
-          if (!/^ADH[A-Z0-9]{8,}$/.test(c)) {
+        missing.style.display="block";
+        saveCode.onclick=function(){
+          var c=(inputCode.value||"").trim().toUpperCase();
+          if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
             alert("Code invalide. Exemple : ADH0XXXXXXX");
             return;
           }
-          localStorage.setItem("mdl_last_code", c);
-          location.href = `/app?code=${encodeURIComponent(c)}`;
+          localStorage.setItem("mdl_last_code",c);
+          location.href="/app?code="+encodeURIComponent(c);
         };
       }
 
-      if ("serviceWorker" in navigator) {
+      if("serviceWorker" in navigator){
         navigator.serviceWorker.register("/sw.js")
-          .then(() => console.log("Service Worker OK"))
-          .catch(err => console.error("Erreur SW", err));
+          .then(function(){console.log("Service Worker OK");})
+          .catch(function(e){console.error("Erreur SW",e);});
       }
     });
+  })();
   </script>
 </body>
 </html>
