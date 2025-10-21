@@ -18,7 +18,7 @@
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
-      background: linear-gradient(to bottom, #f2e2c4 0%, #f9f5ef 40%, #ffffff 100%);
+      background: linear-gradient(to bottom, #f5e8cf 0%, #f9f5ef 40%, #ffffff 100%);
       color: #333;
       margin: 0;
       padding: 0;
@@ -52,26 +52,30 @@
 
     #theme-toggle:hover { transform: scale(1.15); }
 
-    main { padding: 20px; }
+    main { 
+      padding: 10px 20px 60px; 
+    }
 
+    /* === Carte === */
     iframe, #carte-container {
       width: 100%;
       max-width: 450px;
       height: 280px;
       border: none;
-      border-radius: 18px;
+      border-radius: 0;
       overflow: hidden;
       background: transparent !important;
-      margin: 25px auto;
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15);
+      margin: 10px auto 0;
       opacity: 0;
       transition: opacity 0.6s ease-in;
+      transform: translateY(-15px); /* ⬆️ carte un peu plus haut */
     }
 
     iframe.loaded {
       opacity: 1;
     }
 
+    /* === Boutons === */
     .btn {
       display: inline-block;
       margin: 12px 8px;
@@ -97,17 +101,6 @@
     .install-btn { background: #34A853; }
     .refresh-btn { background: #6c757d; }
 
-    footer {
-      position: fixed;
-      bottom: 10px;
-      left: 0;
-      width: 100%;
-      text-align: center;
-      font-size: 13px;
-      color: #666;
-      background: none;
-    }
-
     .status {
       position: fixed;
       bottom: 40px;
@@ -118,21 +111,14 @@
       color: #c0872f;
     }
 
-    #missing, #ios-help {
-      max-width: 520px;
-      margin: 20px auto;
-      border-radius: 12px;
-      padding: 15px;
-      background: transparent;
-    }
-
-    #missing input {
-      width: calc(100% - 20px);
-      padding: 10px;
-      margin: 8px 0;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 15px;
+    footer {
+      position: fixed;
+      bottom: 10px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-size: 13px;
+      color: #666;
     }
 
     #net-status {
@@ -152,22 +138,12 @@
 
     #net-status.offline { background: #b32626; }
 
-    /* 🌙 Mode sombre */
-    body.dark {
-      background: linear-gradient(to bottom, #1a1a1a 0%, #0f0f0f 100%);
-      color: #f9f5ef;
-    }
-    body.dark header { background: #1e1e1e; color: #c0872f; }
-    body.dark iframe, body.dark #carte-container { background: transparent; }
-    body.dark .btn { background: #c0872f; color: white; }
-    body.dark footer { color: #ccc; }
-
-    /* === Section Vie de la MDL === */
+    /* === Vie de la MDL === */
     .mdl-info {
-      margin: 40px auto 100px;
+      margin: 40px auto 60px; /* ⬆️ section un peu plus haute */
       text-align: center;
       border-radius: 16px;
-      padding: 20px;
+      padding: 10px;
       max-width: 420px;
       background: transparent;
     }
@@ -203,6 +179,16 @@
     }
 
     .mdl-links .btn-link:hover { background: #a47225; }
+
+    /* 🌙 Mode sombre */
+    body.dark {
+      background: linear-gradient(to bottom, #1a1a1a 0%, #0f0f0f 100%);
+      color: #f9f5ef;
+    }
+    body.dark header { background: #1e1e1e; color: #c0872f; }
+    body.dark iframe, body.dark #carte-container { background: transparent; }
+    body.dark .btn { background: #c0872f; color: white; }
+    body.dark footer { color: #ccc; }
   </style>
 </head>
 
@@ -214,7 +200,6 @@
 
   <main>
     <iframe id="carte" src=""></iframe>
-    <div id="carte-container" style="display:none;"></div>
 
     <div>
       <a id="wallet" class="btn wallet-btn" href="#" target="_blank">💳 Ajouter au Wallet</a>
@@ -223,21 +208,6 @@
     </div>
 
     <div class="status" id="status"></div>
-
-    <div id="missing" style="display:none;">
-      <h3>⚠️ Code de carte manquant</h3>
-      <p>Ouvre le lien reçu par e-mail ou saisis ton code ci-dessous pour l’associer à cet appareil.</p>
-      <input id="input-code" type="text" placeholder="Ex. ADH0XXXXXXX" />
-      <button id="save-code" class="btn wallet-btn">Enregistrer</button>
-    </div>
-
-    <div id="ios-help" style="display:none;">
-      <h3>📱 Installer sur iPhone</h3>
-      <p>1️⃣ Appuie sur <strong>Partager</strong> (⬆️)<br>
-         2️⃣ Choisis <strong>“Ajouter à l’écran d’accueil”</strong></p>
-      <img src="https://developer.apple.com/design/human-interface-guidelines/ios/images/icons/share_2x.png"
-           alt="Partager" style="height:40px;margin-top:10px;">
-    </div>
 
     <!-- === Section Vie de la MDL === -->
     <section class="mdl-info">
@@ -265,7 +235,7 @@
   <div id="net-status">🟢 En ligne</div>
 
   <script>
-  // 🌗 Gestion du thème clair / sombre
+  // 🌗 Thème clair/sombre
   (function() {
     const toggle = document.getElementById('theme-toggle');
     const body = document.body;
@@ -284,123 +254,11 @@
     });
   })();
 
-  // 🌫️ Effet de fade-in sur la carte quand elle se charge
+  // 🌫️ Fade-in sur la carte
   document.addEventListener("DOMContentLoaded", () => {
     const iframe = document.getElementById("carte");
     iframe.addEventListener("load", () => iframe.classList.add("loaded"));
   });
-  </script>
-
-  <!-- Script principal -->
-  <script>
-  (function(){
-    const $ = s => document.querySelector(s);
-    const iframe=$("#carte"), cardContainer=$("#carte-container"),
-          walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
-          missing=$("#missing"), iosHelp=$("#ios-help"),
-          inputCode=$("#input-code"), saveCode=$("#save-code"),
-          statusEl=$("#status"), netStatus=$("#net-status");
-
-    const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isStandalone=window.navigator.standalone===true;
-    if(isIOS&&!isStandalone){iosHelp.style.display="block";}
-
-    let deferredPrompt=null;
-    window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBtn.style.display="inline-block";});
-    installBtn.addEventListener("click",()=>{if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});});
-
-    const saveCodeToDB=code=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onupgradeneeded=()=>r.result.createObjectStore("config");r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");tx.objectStore("config").put(code,"lastCode");tx.oncomplete=res;tx.onerror=rej;};r.onerror=rej;});
-    const getCodeFromDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");const g=tx.objectStore("config").get("lastCode");g.onsuccess=()=>res(g.result);g.onerror=rej;};r.onerror=rej;});
-
-    async function precacheCarte(code){
-      if(!('caches' in window)) return;
-      try{
-        const keys = await caches.keys();
-        const cacheName = keys.find(k=>k.startsWith('mdl-carte-')) || 'mdl-carte-v18';
-        const cache = await caches.open(cacheName);
-        const url = '/c/'+encodeURIComponent(code);
-        const res = await fetch(url,{cache:'reload'});
-        if(res.ok) await cache.put(url,res.clone());
-      }catch{}
-    }
-
-    async function mountWithCode(code){
-      if(!code) code=await getCodeFromDB();
-      if(!code){missing.style.display="block";return;}
-      await saveCodeToDB(code);
-      localStorage.setItem("mdl_last_code",code);
-      walletBtn.href="/wallet/"+encodeURIComponent(code);
-      statusEl.textContent="Chargement de la carte…";
-
-      async function refreshCard(){
-        try{
-          const res=await fetch("/api/get-card/"+encodeURIComponent(code));
-          const data=await res.json();
-          if(data&&data.ok){
-            statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-            if(navigator.onLine){
-              iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-              await precacheCarte(code);
-            }
-          }else{
-            statusEl.textContent="⚠️ Carte introuvable";
-          }
-        }catch{
-          statusEl.textContent="⚠️ Hors ligne — carte en cache";
-          iframe.src="/c/"+encodeURIComponent(code);
-        }
-      }
-
-      refreshBtn.onclick=refreshCard;
-      await refreshCard();
-      setInterval(refreshCard,60000);
-    }
-
-    function updateNetworkStatus(){
-      if(navigator.onLine){
-        netStatus.textContent="🟢 En ligne";
-        netStatus.classList.remove("offline");
-      } else {
-        netStatus.textContent="🔴 Hors ligne";
-        netStatus.classList.add("offline");
-      }
-    }
-    window.addEventListener("online",updateNetworkStatus);
-    window.addEventListener("offline",updateNetworkStatus);
-    updateNetworkStatus();
-
-    document.addEventListener("DOMContentLoaded",async()=>{
-      const params=new URLSearchParams(window.location.search);
-      let code=params.get("code");
-      const stored=localStorage.getItem("mdl_last_code")||await getCodeFromDB();
-      if(code){
-        await saveCodeToDB(code);
-        localStorage.setItem("mdl_last_code",code);
-        const url=new URL(window.location.href);
-        url.searchParams.delete("code");
-        history.replaceState({},'',url);
-      }else{
-        code=stored||"";
-      }
-
-      if(code){
-        mountWithCode(code);
-      }else{
-        missing.style.display="block";
-        saveCode.onclick=async()=>{
-          const c=(inputCode.value||"").trim().toUpperCase();
-          if(!/^ADH[A-Z0-9]{8,}$/.test(c)){alert("Code invalide");return;}
-          await saveCodeToDB(c);
-          localStorage.setItem("mdl_last_code",c);
-          location.href="/app?code="+encodeURIComponent(c);
-        };
-      }
-
-      if("serviceWorker" in navigator){
-        navigator.serviceWorker.register("/sw.js").catch(()=>{});
-      }
-    });
-  })();
   </script>
 </body>
 </html>
