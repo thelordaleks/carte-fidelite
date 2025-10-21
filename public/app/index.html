@@ -55,28 +55,17 @@
     padding: 10px 20px 80px;
   }
 
-  /* === Correction cadre blanc de la carte === */
-  #carte-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: transparent !important;
-    margin: 0 auto;
-    padding: 0;
-    border: none;
-    box-shadow: none !important;
-  }
-
+  /* === Carte sans cadre blanc === */
   iframe#carte {
     width: 100%;
-    max-width: 440px; /* légèrement réduit pour gommer le bord */
-    height: 270px;    /* ajusté pour un meilleur centrage */
+    max-width: 440px;
+    height: 270px;
     border: none;
     outline: none;
     background: transparent !important;
     box-shadow: none !important;
     border-radius: 0;
-    transform: scale(1.02); /* zoom léger pour cacher le contour blanc */
+    transform: scale(1.02);
     transform-origin: center;
     overflow: hidden;
   }
@@ -104,10 +93,17 @@
   .install-btn { background: #34A853; }
   .refresh-btn { background: #6c757d; }
 
+  /* ✅ Statut tout en bas */
   .status {
-    margin-top: 5px;
+    position: fixed;
+    left: 0;
+    bottom: 64px;
+    width: 100%;
+    text-align: center;
     font-size: 14px;
     color: #c0872f;
+    pointer-events: none;
+    z-index: 10;
   }
 
   footer {
@@ -136,15 +132,17 @@
   }
   #net-status.offline { background: #b32626; }
 
+  /* ✅ Vie de la MDL remontée */
   .mdl-info {
-    margin: 30px auto 60px;
+    margin: 15px auto 60px;
     text-align: center;
     border-radius: 16px;
     padding: 10px;
     max-width: 420px;
     background: transparent;
-    transform: translateY(-15px);
+    transform: translateY(-25px);
   }
+
   .mdl-info h3 { color: #c0872f; margin-bottom: 15px; }
 
   .instagram-feed iframe {
@@ -181,48 +179,6 @@
   body.dark iframe#carte { filter: brightness(0.92); }
   body.dark .btn { background: #c0872f; color: white; }
   body.dark footer { color: #ccc; }
-
-    /* === Section Vie de la MDL === */
-    .mdl-info {
-      margin: 30px auto 80px;
-      text-align: center;
-      border-radius: 16px;
-      padding: 20px;
-      max-width: 420px;
-      background: transparent;
-    }
-
-    .mdl-info h3 {
-      color: #c0872f;
-      margin-bottom: 15px;
-    }
-
-    .instagram-feed iframe {
-      width: 100%;
-      height: 400px;
-      border-radius: 12px;
-      overflow: hidden;
-      margin-bottom: 15px;
-      background: transparent;
-    }
-
-    .mdl-links {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .mdl-links .btn-link {
-      text-decoration: none;
-      background: #c0872f;
-      color: white;
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-weight: 600;
-      transition: background 0.3s;
-    }
-
-    .mdl-links .btn-link:hover { background: #a47225; }
   </style>
 </head>
 
@@ -234,7 +190,6 @@
 
   <main>
     <iframe id="carte" src=""></iframe>
-    <div id="carte-container" style="display:none;"></div>
 
     <div>
       <a id="wallet" class="btn wallet-btn" href="#" target="_blank">💳 Ajouter au Wallet</a>
@@ -243,21 +198,6 @@
     </div>
 
     <div class="status" id="status"></div>
-
-    <div id="missing" style="display:none;">
-      <h3>⚠️ Code de carte manquant</h3>
-      <p>Ouvre le lien reçu par e-mail ou saisis ton code ci-dessous pour l’associer à cet appareil.</p>
-      <input id="input-code" type="text" placeholder="Ex. ADH0XXXXXXX" />
-      <button id="save-code" class="btn wallet-btn">Enregistrer</button>
-    </div>
-
-    <div id="ios-help" style="display:none;">
-      <h3>📱 Installer sur iPhone</h3>
-      <p>1️⃣ Appuie sur <strong>Partager</strong> (⬆️)<br>
-         2️⃣ Choisis <strong>“Ajouter à l’écran d’accueil”</strong></p>
-      <img src="https://developer.apple.com/design/human-interface-guidelines/ios/images/icons/share_2x.png"
-           alt="Partager" style="height:40px;margin-top:10px;">
-    </div>
 
     <!-- === Section Vie de la MDL === -->
     <section class="mdl-info">
@@ -305,11 +245,11 @@
   })();
   </script>
 
-  <!-- Script principal -->
+  <!-- 🔧 Script principal : carte, cache, service worker -->
   <script>
   (function(){
     const $ = s => document.querySelector(s);
-    const iframe=$("#carte"), cardContainer=$("#carte-container"),
+    const iframe=$("#carte"),
           walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
           missing=$("#missing"), iosHelp=$("#ios-help"),
           inputCode=$("#input-code"), saveCode=$("#save-code"),
@@ -317,14 +257,35 @@
 
     const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isStandalone=window.navigator.standalone===true;
-    if(isIOS&&!isStandalone){iosHelp.style.display="block";}
+    if(isIOS&&!isStandalone && iosHelp) iosHelp.style.display="block";
 
     let deferredPrompt=null;
-    window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBtn.style.display="inline-block";});
-    installBtn.addEventListener("click",()=>{if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});});
+    window.addEventListener("beforeinstallprompt",e=>{
+      e.preventDefault(); deferredPrompt=e;
+      installBtn.style.display="inline-block";
+    });
+    installBtn.addEventListener("click",()=>{
+      if(!deferredPrompt)return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
+    });
 
-    const saveCodeToDB=code=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onupgradeneeded=()=>r.result.createObjectStore("config");r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");tx.objectStore("config").put(code,"lastCode");tx.oncomplete=res;tx.onerror=rej;};r.onerror=rej;});
-    const getCodeFromDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");const g=tx.objectStore("config").get("lastCode");g.onsuccess=()=>res(g.result);g.onerror=rej;};r.onerror=rej;});
+    const saveCodeToDB=code=>new Promise((res,rej)=>{
+      const r=indexedDB.open("mdl-db",1);
+      r.onupgradeneeded=()=>r.result.createObjectStore("config");
+      r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");
+        tx.objectStore("config").put(code,"lastCode");
+        tx.oncomplete=res; tx.onerror=rej;};
+      r.onerror=rej;
+    });
+
+    const getCodeFromDB=()=>new Promise((res,rej)=>{
+      const r=indexedDB.open("mdl-db",1);
+      r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");
+        const g=tx.objectStore("config").get("lastCode");
+        g.onsuccess=()=>res(g.result); g.onerror=rej;};
+      r.onerror=rej;
+    });
 
     async function precacheCarte(code){
       if(!('caches' in window)) return;
@@ -340,7 +301,7 @@
 
     async function mountWithCode(code){
       if(!code) code=await getCodeFromDB();
-      if(!code){missing.style.display="block";return;}
+      if(!code){return;}
       await saveCodeToDB(code);
       localStorage.setItem("mdl_last_code",code);
       walletBtn.href="/wallet/"+encodeURIComponent(code);
@@ -393,27 +354,14 @@
         const url=new URL(window.location.href);
         url.searchParams.delete("code");
         history.replaceState({},'',url);
-      }else{
-        code=stored||"";
-      }
+      }else code=stored||"";
 
-      if(code){
-        mountWithCode(code);
-      }else{
-        missing.style.display="block";
-        saveCode.onclick=async()=>{
-          const c=(inputCode.value||"").trim().toUpperCase();
-          if(!/^ADH[A-Z0-9]{8,}$/.test(c)){alert("Code invalide");return;}
-          await saveCodeToDB(c);
-          localStorage.setItem("mdl_last_code",c);
-          location.href="/app?code="+encodeURIComponent(c);
-        };
-      }
+      if(code){ mountWithCode(code); }
 
-      if("serviceWorker" in navigator){
+      if("serviceWorker" in navigator)
         navigator.serviceWorker.register("/sw.js").catch(()=>{});
-      }
     });
   })();
   </script>
 </body>
+</html>
