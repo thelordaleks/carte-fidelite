@@ -187,10 +187,27 @@ iframe#carte html, iframe#carte body {
   body.dark iframe#carte { filter: brightness(0.92); }
   body.dark .btn { background: #c0872f; color: white; }
   body.dark footer { color: #ccc; }
-  /* === TEST VISUEL : Coloration des zones === */
-body { outline: 3px solid red !important; }
-main { outline: 3px solid blue !important; }
-iframe#carte { outline: 3px solid green !important; }
+  /* === Suppression complète du cadre visible de l’iframe carte === */
+iframe#carte {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  margin: 0 auto !important;
+  display: block !important;
+
+  /* ✅ Supprime toute marge ou ombre appliquée par le navigateur */
+  padding: 0 !important;
+  filter: none !important;
+
+  /* ✅ Élimine le "shadow root" interne sous WebKit (Android/Chrome) */
+  -webkit-appearance: none !important;
+  appearance: none !important;
+
+  /* ✅ Si Chrome applique un fond implicite */
+  background-clip: padding-box !important;
+}
 
   </style>
 </head>
