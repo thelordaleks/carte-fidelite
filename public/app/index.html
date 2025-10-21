@@ -181,6 +181,50 @@
     body.dark footer {
       color: #ccc;
     }
+
+    /* === Section Vie de la MDL === */
+    .mdl-info {
+      margin: 30px auto 80px;
+      text-align: center;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      padding: 20px;
+      max-width: 420px;
+    }
+
+    .mdl-info h3 {
+      color: #c0872f;
+      margin-bottom: 15px;
+    }
+
+    .instagram-feed iframe {
+      width: 100%;
+      height: 400px;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 15px;
+    }
+
+    .mdl-links {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .mdl-links .btn-link {
+      text-decoration: none;
+      background: #c0872f;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+
+    .mdl-links .btn-link:hover {
+      background: #a47225;
+    }
   </style>
 </head>
 <body>
@@ -219,6 +263,27 @@
       <img src="https://developer.apple.com/design/human-interface-guidelines/ios/images/icons/share_2x.png"
            alt="Partager" style="height:40px;margin-top:10px;">
     </div>
+
+    <!-- === Section Vie de la MDL === -->
+    <section class="mdl-info">
+      <h3>Vie de la MDL</h3>
+
+      <div class="instagram-feed">
+        <iframe 
+          src="https://www.instagram.com/mdlvaillant/embed"
+          loading="lazy"
+          allowtransparency="true"
+          frameborder="0"
+          scrolling="no">
+        </iframe>
+      </div>
+
+      <div class="mdl-links">
+        <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
+        <a href="https://lycee-edouard-vaillant.fr" target="_blank" class="btn-link">🏫 Site du lycée</a>
+        <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement de la MDL</a>
+      </div>
+    </section>
   </main>
 
   <footer>© MDL Vaillant</footer>
@@ -230,7 +295,6 @@
     const toggle = document.getElementById('theme-toggle');
     const body = document.body;
 
-    // Charger la préférence
     const saved = localStorage.getItem('mdl_theme');
     if (saved === 'dark') {
       body.classList.add('dark');
@@ -251,7 +315,7 @@
   })();
   </script>
 
-  <!-- Script existant -->
+  <!-- Script principal -->
   <script>
   (function(){
     const $ = s => document.querySelector(s);
