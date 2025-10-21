@@ -16,74 +16,23 @@
   <link rel="apple-touch-icon" href="/static/logo-mdl.png">
 
   <style>
-    body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: #f2f4f8;
-      color: #333;
-      margin: 0;
-      padding: 0;
-      text-align: center;
-    }
-    header {
-      background: #0078D7;
-      color: white;
-      padding: 15px 10px;
-      font-size: 20px;
-      font-weight: bold;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-    }
-    main { padding: 20px; }
-    iframe, #carte-container {
-      width: 100%;
-      max-width: 450px;
-      height: 280px;
-      border: none;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-      overflow: hidden;
-      background: #fff;
-      margin: auto;
-    }
-    .btn {
-      display: inline-block;
-      margin: 12px 8px;
-      background: #e4405f;
-      color: white;
-      text-decoration: none;
-      font-weight: bold;
-      padding: 12px 22px;
-      border-radius: 8px;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.2);
-      transition: transform 0.2s ease;
-    }
-    .btn:hover { transform: scale(1.05); }
-    .wallet-btn { background: #0078D7; }
-    .install-btn { background: #34A853; }
-    .refresh-btn { background: #6c757d; }
-    footer { margin-top: 30px; font-size: 13px; color: #666; }
-    .status { margin-top: 10px; font-size: 14px; color: #0078D7; }
-
-    #missing, #ios-help {
-      max-width: 520px;
-      margin: 20px auto;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 12px;
-      padding: 15px;
-    }
-    #missing input {
-      width: calc(100% - 20px);
-      padding: 10px;
-      margin: 8px 0;
-      border-radius: 8px;
-      border: 1px solid #ccc;
-      font-size: 15px;
-    }
+    body {font-family:"Segoe UI",Arial,sans-serif;background:#f2f4f8;color:#333;margin:0;padding:0;text-align:center;}
+    header {background:#0078D7;color:white;padding:15px 10px;font-size:20px;font-weight:bold;box-shadow:0 2px 5px rgba(0,0,0,0.2);}
+    main {padding:20px;}
+    iframe,#carte-container {width:100%;max-width:450px;height:280px;border:none;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,0.15);overflow:hidden;background:#fff;margin:auto;}
+    .btn {display:inline-block;margin:12px 8px;background:#e4405f;color:white;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:8px;box-shadow:0 3px 8px rgba(0,0,0,0.2);transition:transform 0.2s ease;}
+    .btn:hover {transform:scale(1.05);}
+    .wallet-btn {background:#0078D7;}
+    .install-btn {background:#34A853;}
+    .refresh-btn {background:#6c757d;}
+    footer {margin-top:30px;font-size:13px;color:#666;}
+    .status {margin-top:10px;font-size:14px;color:#0078D7;}
+    #missing,#ios-help {max-width:520px;margin:20px auto;background:#fff;border:1px solid #ddd;border-radius:12px;padding:15px;}
+    #missing input {width:calc(100% - 20px);padding:10px;margin:8px 0;border-radius:8px;border:1px solid #ccc;font-size:15px;}
   </style>
 </head>
 <body>
   <header>Carte fidélité MDL</header>
-
   <main>
     <iframe id="carte" src=""></iframe>
     <div id="carte-container" style="display:none;"></div>
@@ -95,9 +44,7 @@
     </div>
 
     <div>
-      <a href="https://www.instagram.com/mdlvaillant" class="btn" target="_blank">
-        📸 Voir l’Instagram de la MDL
-      </a>
+      <a href="https://www.instagram.com/mdlvaillant" class="btn" target="_blank">📸 Voir l’Instagram de la MDL</a>
     </div>
 
     <div class="status" id="status"></div>
@@ -116,7 +63,6 @@
       <img src="https://developer.apple.com/design/human-interface-guidelines/ios/images/icons/share_2x.png" alt="Partager" style="height:40px;margin-top:10px;">
     </div>
   </main>
-
   <footer>© MDL Vaillant</footer>
 
 <script>
@@ -129,121 +75,84 @@
         statusEl=$("#status");
 
   // Console debug
-  const debugBox = document.createElement("pre");
-  debugBox.id = "debug";
-  debugBox.style.cssText = `
-    background:#000;color:#0f0;font-size:11px;
-    text-align:left;max-width:480px;margin:15px auto;
-    padding:8px;border-radius:8px;white-space:pre-wrap;
-    overflow:auto;max-height:180px;
-  `;
+  const debugBox=document.createElement("pre");
+  debugBox.style.cssText="background:#000;color:#0f0;font-size:11px;text-align:left;max-width:480px;margin:15px auto;padding:8px;border-radius:8px;white-space:pre-wrap;overflow:auto;max-height:180px;";
   document.body.appendChild(debugBox);
-  function log(...msg){
-    const line = msg.map(m=>typeof m==="object"?JSON.stringify(m):m).join(" ");
-    console.log(...msg);
-    debugBox.textContent += "\n" + line;
-    debugBox.scrollTop = debugBox.scrollHeight;
-  }
+  const log=(...m)=>{console.log(...m);debugBox.textContent+="\n"+m.map(x=>typeof x=="object"?JSON.stringify(x):x).join(" ");debugBox.scrollTop=debugBox.scrollHeight;}
 
-  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const isStandalone = window.navigator.standalone === true;
-  log("🧭 Détection appareil :", {isIOS, isStandalone});
-
-  if(isIOS && !isStandalone){ iosHelp.style.display="block"; }
+  const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isStandalone=window.navigator.standalone===true;
+  log("🧭 Détection appareil :",{isIOS,isStandalone});
+  if(isIOS&&!isStandalone){iosHelp.style.display="block";}
 
   let deferredPrompt=null;
-  window.addEventListener("beforeinstallprompt",e=>{
-    e.preventDefault(); deferredPrompt=e;
-    installBtn.style.display="inline-block";
-  });
-  installBtn.addEventListener("click",()=>{
-    if(!deferredPrompt)return;
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
-  });
+  window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBtn.style.display="inline-block";});
+  installBtn.addEventListener("click",()=>{if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});});
 
-  function saveCodeToDB(code){
-    return new Promise((resolve,reject)=>{
-      const req=indexedDB.open("mdl-db",1);
-      req.onupgradeneeded=()=>req.result.createObjectStore("config");
-      req.onsuccess=()=>{
-        const tx=req.result.transaction("config","readwrite");
-        tx.objectStore("config").put(code,"lastCode");
-        tx.oncomplete=resolve;
-        tx.onerror=reject;
-      };
-      req.onerror=reject;
-    });
-  }
-  function getCodeFromDB(){
-    return new Promise((resolve,reject)=>{
-      const req=indexedDB.open("mdl-db",1);
-      req.onsuccess=()=>{
-        const tx=req.result.transaction("config","readonly");
-        const get=tx.objectStore("config").get("lastCode");
-        get.onsuccess=()=>resolve(get.result);
-        get.onerror=reject;
-      };
-      req.onerror=reject;
-    });
-  }
+  const saveCodeToDB=code=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onupgradeneeded=()=>r.result.createObjectStore("config");r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");tx.objectStore("config").put(code,"lastCode");tx.oncomplete=res;tx.onerror=rej;};r.onerror=rej;});
+  const getCodeFromDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");const g=tx.objectStore("config").get("lastCode");g.onsuccess=()=>res(g.result);g.onerror=rej;};r.onerror=rej;});
 
   async function mountWithCode(code){
     log("🚀 mountWithCode()", code);
-    if(!code) code = await getCodeFromDB();
-    if(!code){ missing.style.display="block"; log("❌ Aucun code trouvé"); return; }
-
+    if(!code) code=await getCodeFromDB();
+    if(!code){missing.style.display="block";log("❌ Aucun code trouvé");return;}
     await saveCodeToDB(code);
-    localStorage.setItem("mdl_last_code", code);
+    localStorage.setItem("mdl_last_code",code);
     walletBtn.href="/wallet/"+encodeURIComponent(code);
     statusEl.textContent="Chargement de la carte…";
 
     async function refreshCard(){
       log("🔄 refreshCard() → tentative fetch API");
       try {
-        const res = await fetch("/api/get-card/"+encodeURIComponent(code));
-        log("📡 /api/get-card status:", res.status);
-        const data = await res.json();
+        const res=await fetch("/api/get-card/"+encodeURIComponent(code));
+        log("📡 /api/get-card status:",res.status);
+        const data=await res.json();
 
-        if(data && data.ok){
+        if(data&&data.ok){
           log("✅ Données carte OK");
           statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
 
           if(navigator.onLine){
-            if(isIOS && isStandalone){
+            if(isIOS&&isStandalone){
               log("📱 iOS standalone → chargement direct HTML carte");
               try {
-                const cardRes = await fetch("/c/"+encodeURIComponent(code));
-                log("📄 /c/ réponse", cardRes.status);
-                const html = await cardRes.text();
-
-                if(html && html.trim().length > 0){
+                const cardRes=await fetch("/c/"+encodeURIComponent(code));
+                log("📄 /c/ réponse",cardRes.status);
+                const html=await cardRes.text();
+                if(html&&html.trim().length>0){
                   log("🎉 HTML carte chargé");
                   iframe.style.display="none";
                   cardContainer.style.display="block";
-                  cardContainer.innerHTML = html;
+                  cardContainer.innerHTML=html;
                   cardContainer.style.height="auto";
                 } else {
                   log("⚠️ HTML vide → fallback iFrame");
                   iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
                 }
-              } catch(e){
-                log("⚠️ Erreur fetch /c/ → fallback iframe", e);
-                iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-              }
+              } catch(e){log("⚠️ Erreur fetch /c/ → fallback iframe",e);iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();}
             } else {
               log("💻 Android/Desktop → refresh iframe");
               iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
             }
+
+            // 💾 Ajout : sauvegarde forcée de la carte dans le cache pour usage hors-ligne
+            if ('caches' in window && code) {
+              caches.open('mdl-carte-v14').then(async cache => {
+                const r = await fetch("/c/" + encodeURIComponent(code));
+                if (r.ok) {
+                  const normalized = new Request("/c/" + encodeURIComponent(code));
+                  cache.put(normalized, r.clone());
+                  log("💾 Carte sauvegardée dans le cache local");
+                }
+              }).catch(e => log("⚠️ Erreur cache local", e));
+            }
+
           }
         } else {
           log("⚠️ Carte introuvable côté serveur");
           statusEl.textContent="⚠️ Carte introuvable";
         }
-      } catch(e){
-        log("🚨 Erreur globale refreshCard()", e);
-        statusEl.textContent="⚠️ Hors ligne — carte en cache";
-      }
+      } catch(e){log("🚨 Erreur globale refreshCard()", e);statusEl.textContent="⚠️ Hors ligne — carte en cache";}
     }
 
     refreshBtn.onclick=refreshCard;
@@ -251,22 +160,22 @@
     setInterval(refreshCard,60000);
   }
 
-  document.addEventListener("DOMContentLoaded",async ()=>{
+  document.addEventListener("DOMContentLoaded",async()=>{
     log("🌐 DOMContentLoaded");
     let params=new URLSearchParams(window.location.search);
     let code=params.get("code");
-    const stored=localStorage.getItem("mdl_last_code") || await getCodeFromDB();
+    const stored=localStorage.getItem("mdl_last_code")||await getCodeFromDB();
 
     if(code){
-      log("💾 Code détecté dans URL:", code);
+      log("💾 Code détecté dans URL:",code);
       await saveCodeToDB(code);
-      localStorage.setItem("mdl_last_code", code);
+      localStorage.setItem("mdl_last_code",code);
       const url=new URL(window.location.href);
       url.searchParams.delete("code");
       history.replaceState({}, "", url.toString());
     } else {
       code=stored||"";
-      log("📦 Code chargé depuis stockage:", code);
+      log("📦 Code chargé depuis stockage:",code);
     }
 
     if(code){
@@ -274,12 +183,9 @@
     } else {
       missing.style.display="block";
       log("❌ Aucun code → affichage formulaire");
-      saveCode.onclick=async ()=>{
+      saveCode.onclick=async()=>{
         const c=(inputCode.value||"").trim().toUpperCase();
-        if(!/^ADH[A-Z0-9]{8,}$/.test(c)){
-          alert("Code invalide. Exemple : ADH0XXXXXXX");
-          return;
-        }
+        if(!/^ADH[A-Z0-9]{8,}$/.test(c)){alert("Code invalide. Exemple : ADH0XXXXXXX");return;}
         await saveCodeToDB(c);
         localStorage.setItem("mdl_last_code",c);
         location.href="/app?code="+encodeURIComponent(c);
@@ -288,12 +194,11 @@
 
     if("serviceWorker" in navigator){
       navigator.serviceWorker.register("/sw.js")
-        .then(reg=>log("✅ SW actif:", reg.scope))
+        .then(reg=>log("✅ SW actif:",reg.scope))
         .catch(e=>log("❌ Erreur SW",e));
     }
   });
 })();
 </script>
-
 </body>
 </html>
