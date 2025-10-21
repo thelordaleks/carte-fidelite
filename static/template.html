@@ -136,6 +136,28 @@
       -webkit-user-drag: none;
       transition: transform 0.3s ease;
     }
+    /* 🌟 Animation fluide du code-barres */
+.barcode img {
+  width: 80%;
+  max-width: 720px;
+  height: auto;
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,0.6));
+  animation: barcodeGlow 4s ease-in-out infinite;
+  user-select: none;
+  -webkit-user-drag: none;
+  transition: transform 0.3s ease;
+}
+
+@keyframes barcodeGlow {
+  0%, 100% {
+    filter: drop-shadow(0 1px 0 rgba(255,255,255,0.6)) brightness(1);
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 2px 6px rgba(192,135,47,0.6)) brightness(1.2);
+    transform: scale(1.02);
+  }
+}
 
     @media (max-width: 520px) {
       :root { --max-fs: 10px; --min-fs: 8px; --nom-width: 60%; --prenom-width: 60%; }
