@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <title>Carte de fidélité</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="transparent">
+  <meta name="theme-color" content="#f5f7fb">
 
   <style>
     :root {
@@ -20,36 +20,49 @@
 
     html, body {
       margin: 0;
-      padding: 0;
       height: 100%;
+      background: #f5f7fb;
       overflow: hidden;
-      background: transparent !important;
     }
 
     body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      display: grid;
+      place-items: center;
+      padding: 12px;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: #1a1f2c;
       -webkit-text-size-adjust: none;
       text-size-adjust: none;
-      background-color: transparent !important;
     }
 
-    /* ✅ Conteneur carte sans aucun fond ni ombre */
     .card {
       position: relative;
       aspect-ratio: var(--w) / var(--h);
       width: min(95vw, 860px);
       max-height: 92vh;
-      border-radius: 0;
+      border-radius: 16px;
       overflow: hidden;
-      background: transparent !important;
-      box-shadow: none !important;
-      border: none !important;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
       isolation: isolate;
-      transform: translateZ(0);
+      transition: all 0.4s ease-in-out;
+      background: #fff;
+    }
+
+    /* ✅ Mode zoom plein écran avec transition fluide */
+    .card.zoomed {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-height: none !important;
+      z-index: 9999 !important;
+      background: #000 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      border-radius: 0 !important;
+      transform: scale(1) !important;
+      transition: all 0.4s ease-in-out !important;
     }
 
     /* ✅ Image de fond */
@@ -59,11 +72,14 @@
       width: 100%;
       height: 100%;
       object-fit: contain;
-      object-position: center;
-      background: transparent !important;
-      border: none;
-      outline: none;
-      display: block;
+      object-position: center center;
+      z-index: 0;
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
+      transform: scale(1);
+      will-change: transform;
+      backface-visibility: hidden;
     }
 
     .field {
@@ -82,6 +98,15 @@
       min-width: 0;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
       z-index: 2;
+      transition: opacity 0.3s ease;
+    }
+
+    .field > .truncate {
+      min-width: 0;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .nom { left: var(--nom-left); top: var(--nom-top); width: var(--nom-width); height: var(--nom-height); }
@@ -106,25 +131,50 @@
       width: 80%;
       max-width: 720px;
       height: auto;
+      filter: drop-shadow(0 1px 0 rgba(255,255,255,.6));
       user-select: none;
       -webkit-user-drag: none;
-    }
-
-    /* ✅ Supprimer tout fond résiduel des wrappers */
-    .stage, .outer, .wrapper, .frame, .container, .page, .viewport {
-      background: transparent !important;
-      box-shadow: none !important;
-      border: none !important;
-      outline: none !important;
+      transition: transform 0.3s ease;
     }
 
     @media (max-width: 520px) {
       :root { --max-fs: 10px; --min-fs: 8px; --nom-width: 60%; --prenom-width: 60%; }
-      .card { width: 100%; }
+      .card { width: 100%; border-radius: 10px; }
     }
+    /* ✅ Mode plein écran : recentrer les champs texte */
+/* ✅ Déplacement du Nom/Prénom uniquement en plein écran */
+.card.zoomed .nom {
+  left: 60% !important; /* ← ajuste la valeur selon ton besoin */
+  transform: translate(-50%, -50%) !important;
+}
+
+.card.zoomed .prenom {
+  left: 60% !important; /* ← même idée, décalé vers la droite */
+  transform: translate(-50%, -50%) !important;
+}
+
+
+/* On peut aussi agrandir légèrement la taille du texte */
+.card.zoomed .field {
+  font-size: clamp(18px, 3vw, 28px) !important;
+}
+/* === MDL: forcer la carte sans cadre ni fond === */
+html, body { 
+  background: transparent !important;
+}
+body { 
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+.stage, .frame, .outer, .container, .wrapper, .bg, .card-shadow {
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border: 0 !important;
+}
+
   </style>
 </head>
-
 <body>
   <div class="card" id="carte">
     <img class="bg" src="/static/carte-mdl.png" alt="Fond carte">
@@ -149,10 +199,34 @@
         el.style.setProperty('--fs', size+'px');
       }
     }
+
     function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
 
     window.addEventListener('load', () => {
       fitAll();
+      const card = document.querySelector('.card');
+      const barcode = document.querySelector('.barcode');
+
+      barcode.addEventListener('click', async () => {
+        if (card.classList.contains('zoomed')) {
+          // 🔹 Retour normal
+          card.classList.remove('zoomed');
+          try { await screen.orientation.unlock(); } catch(e) {}
+          document.exitFullscreen?.();
+        } else {
+          // 🔹 Plein écran fluide
+          card.classList.add('zoomed');
+          if (card.requestFullscreen) {
+            await card.requestFullscreen().catch(()=>{});
+          } else if (card.webkitRequestFullscreen) {
+            card.webkitRequestFullscreen();
+          }
+          try { await screen.orientation.lock('landscape'); } catch(e) {}
+          setTimeout(fitAll, 300);
+        }
+      });
+
+      window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
     });
   </script>
 </body>
