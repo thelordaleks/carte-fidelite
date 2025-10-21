@@ -18,39 +18,38 @@
       --max-fs: 24px; --min-fs: 10px;
     }
 
+    /* === ✅ Suppression complète du cadre/fond === */
     html, body {
-  margin: 0;
-  height: 100%;
-  background: transparent !important; /* ✅ supprime le fond blanc */
-  overflow: hidden;
-}
+      margin: 0 !important;
+      padding: 0 !important;
+      height: 100%;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      outline: none !important;
+      overflow: hidden;
+    }
 
-
-    body {
-      display: grid;
-      place-items: center;
-      padding: 12px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: #1a1f2c;
-      -webkit-text-size-adjust: none;
-      text-size-adjust: none;
+    body > * {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
     }
 
     .card {
-  position: relative;
-  aspect-ratio: var(--w) / var(--h);
-  width: min(95vw, 860px);
-  max-height: 92vh;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: none !important;       /* ✅ supprime l’ombre */
-  isolation: isolate;
-  transition: all 0.4s ease-in-out;
-  background: transparent !important; /* ✅ supprime le fond blanc */
-}
+      position: relative;
+      aspect-ratio: var(--w) / var(--h);
+      width: min(95vw, 860px);
+      max-height: 92vh;
+      border-radius: 0 !important;
+      overflow: hidden;
+      box-shadow: none !important;
+      background: transparent !important;
+      isolation: isolate;
+      transition: all 0.4s ease-in-out;
+    }
 
-
-    /* ✅ Mode zoom plein écran avec transition fluide */
+    /* ✅ Mode zoom plein écran fluide */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
@@ -82,6 +81,7 @@
       transform: scale(1);
       will-change: transform;
       backface-visibility: hidden;
+      background: transparent !important;
     }
 
     .field {
@@ -141,72 +141,30 @@
 
     @media (max-width: 520px) {
       :root { --max-fs: 10px; --min-fs: 8px; --nom-width: 60%; --prenom-width: 60%; }
-      .card { width: 100%; border-radius: 10px; }
+      .card { width: 100%; border-radius: 0 !important; }
     }
-    /* ✅ Mode plein écran : recentrer les champs texte */
-/* ✅ Déplacement du Nom/Prénom uniquement en plein écran */
-.card.zoomed .nom {
-  left: 60% !important; /* ← ajuste la valeur selon ton besoin */
-  transform: translate(-50%, -50%) !important;
-}
 
-.card.zoomed .prenom {
-  left: 60% !important; /* ← même idée, décalé vers la droite */
-  transform: translate(-50%, -50%) !important;
-}
+    /* ✅ Zoom plein écran */
+    .card.zoomed .nom,
+    .card.zoomed .prenom {
+      left: 60% !important;
+      transform: translate(-50%, -50%) !important;
+    }
 
+    .card.zoomed .field {
+      font-size: clamp(18px, 3vw, 28px) !important;
+    }
 
-/* On peut aussi agrandir légèrement la taille du texte */
-.card.zoomed .field {
-  font-size: clamp(18px, 3vw, 28px) !important;
-}
-/* === MDL: forcer la carte sans cadre ni fond === */
-html, body { 
-  background: transparent !important;
-}
-body { 
-  padding: 0 !important;
-  box-shadow: none !important;
-}
-.stage, .frame, .outer, .container, .wrapper, .bg, .card-shadow {
-  background: transparent !important;
-  box-shadow: none !important;
-  outline: none !important;
-  border: 0 !important;
-}
-/* === Correction fond fantôme autour de la carte === */
-html, body {
-  background: transparent !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-body > * {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.card {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-  border-radius: 0 !important;
-}
-
-img.bg {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-}
-html, body {
-  background: red !important;
-}
-
+    /* ✅ Suppression totale de tout cadre fantôme */
+    .stage, .frame, .outer, .container, .wrapper, .bg, .card-shadow {
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: none !important;
+      border: 0 !important;
+    }
   </style>
 </head>
+
 <body>
   <div class="card" id="carte">
     <img class="bg" src="/static/carte-mdl.png" alt="Fond carte">
@@ -218,21 +176,21 @@ html, body {
   </div>
 
   <script>
-    function fitOne(el){
+    function fitOne(el) {
       const span = el.querySelector('.truncate');
-      if(!span) return;
+      if (!span) return;
       const cs = getComputedStyle(document.documentElement);
       let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
       const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
       const boxW = el.clientWidth;
       el.style.setProperty('--fs', size+'px');
-      while(span.scrollWidth > boxW && size > min){
+      while (span.scrollWidth > boxW && size > min) {
         size -= 0.5;
         el.style.setProperty('--fs', size+'px');
       }
     }
 
-    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
+    function fitAll() { document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
 
     window.addEventListener('load', () => {
       fitAll();
@@ -241,12 +199,10 @@ html, body {
 
       barcode.addEventListener('click', async () => {
         if (card.classList.contains('zoomed')) {
-          // 🔹 Retour normal
           card.classList.remove('zoomed');
           try { await screen.orientation.unlock(); } catch(e) {}
           document.exitFullscreen?.();
         } else {
-          // 🔹 Plein écran fluide
           card.classList.add('zoomed');
           if (card.requestFullscreen) {
             await card.requestFullscreen().catch(()=>{});
