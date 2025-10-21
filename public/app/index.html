@@ -23,6 +23,7 @@
     margin: 0;
     padding: 0;
     text-align: center;
+    transition: background 0.4s ease, color 0.4s ease;
   }
 
   header {
@@ -38,10 +39,10 @@
     position: relative;
   }
 
-  /* 🔄 et 🌙 */
-  #refresh-icon, #theme-toggle {
+  /* 🌙 Boutons en haut */
+  #theme-toggle, #refresh-icon {
     position: absolute;
-    top: 8px;
+    top: 10px;
     background: none;
     border: none;
     font-size: 22px;
@@ -49,22 +50,26 @@
     color: white;
     transition: transform 0.2s ease;
   }
-  #refresh-icon:hover, #theme-toggle:hover { transform: scale(1.15); }
-  #refresh-icon { left: 15px; }
+  #theme-toggle:hover, #refresh-icon:hover { transform: scale(1.15); }
   #theme-toggle { right: 15px; }
+  #refresh-icon { left: 15px; }
 
   main {
-    padding: 10px 20px 30px;
+    padding: 10px 20px 80px;
   }
 
+  /* === Carte === */
   iframe#carte {
     width: 100%;
     max-width: 440px;
     height: 270px;
     border: none;
-    background: transparent;
+    outline: none;
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0;
+    margin: -10px auto -8px; /* supprime l’espace blanc haut/bas */
     display: block;
-    margin: 0 auto -10px;
   }
 
   .btn {
@@ -77,33 +82,64 @@
     padding: 12px 22px;
     border-radius: 8px;
     box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     border: none;
     font-size: 15px;
     cursor: pointer;
   }
+  .btn:hover {
+    transform: scale(1.04);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  }
   .wallet-btn { background: #96784b; }
+  .install-btn { background: #34A853; }
 
+  /* ✅ Statut bas */
   .status {
-    margin: 25px 0 10px 0; /* rapproché de la carte */
+    position: fixed;
+    left: 0;
+    bottom: 64px;
+    width: 100%;
+    text-align: center;
     font-size: 14px;
     color: #c0872f;
   }
 
   footer {
-    margin-top: 10px;
-    padding: 10px;
+    position: fixed;
+    bottom: 10px;
+    left: 0;
+    width: 100%;
+    text-align: center;
     font-size: 13px;
     color: #666;
   }
 
-  /* Vie de la MDL */
+  #net-status {
+    position: fixed;
+    bottom: 8px;
+    right: 10px;
+    background: #c0872f;
+    color: white;
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    opacity: 0.85;
+    transition: background 0.3s ease;
+    z-index: 9999;
+  }
+  #net-status.offline { background: #b32626; }
+
+  /* ✅ Vie de la MDL remontée */
   .mdl-info {
-    margin: 20px auto 40px;
+    margin: 10px auto 60px;
     text-align: center;
     border-radius: 16px;
     padding: 10px;
     max-width: 420px;
     background: transparent;
+    transform: translateY(-20px);
   }
 
   .mdl-info h3 { color: #c0872f; margin-bottom: 15px; }
@@ -114,6 +150,7 @@
     border-radius: 14px;
     overflow: hidden;
     margin-bottom: 15px;
+    background: transparent;
   }
 
   .mdl-links {
@@ -128,7 +165,9 @@
     padding: 10px 15px;
     border-radius: 8px;
     font-weight: 600;
+    transition: background 0.3s;
   }
+  .mdl-links .btn-link:hover { background: #a47225; }
 
   /* 🌙 Mode sombre */
   body.dark {
@@ -136,13 +175,15 @@
     color: #f9f5ef;
   }
   body.dark header { background: #1e1e1e; color: #c0872f; }
+  body.dark iframe#carte { filter: brightness(0.92); }
   body.dark .btn { background: #c0872f; color: white; }
+  body.dark footer { color: #ccc; }
   </style>
 </head>
 
 <body>
   <header>
-    <button id="refresh-icon" title="Rafraîchir la carte">⟳</button>
+    <button id="refresh-icon" title="Rafraîchir la carte">🔄</button>
     Carte fidélité MDL
     <button id="theme-toggle" title="Changer le thème">🌙</button>
   </header>
@@ -157,57 +198,93 @@
 
     <div class="status" id="status"></div>
 
+    <!-- === Section Vie de la MDL === -->
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
 
       <div class="instagram-feed">
-        <iframe src="https://www.instagram.com/mdlvaillant/embed" loading="lazy"></iframe>
+        <iframe 
+          src="https://www.instagram.com/mdlvaillant/embed"
+          loading="lazy"
+          allowtransparency="true"
+          frameborder="0"
+          scrolling="no">
+        </iframe>
       </div>
 
       <div class="mdl-links">
         <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
         <a href="https://edouard-vallaint-vierzon.ovh/" target="_blank" class="btn-link">🏫 Site du lycée</a>
-        <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement MDL</a>
+        <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement de la MDL</a>
       </div>
     </section>
   </main>
 
   <footer>© MDL Vaillant</footer>
+  <div id="net-status">🟢 En ligne</div>
 
   <script>
-  // 🌗 Thème clair/sombre
-  const toggle = document.getElementById('theme-toggle');
-  const body = document.body;
-  const saved = localStorage.getItem('mdl_theme');
-  if (saved === 'dark') { body.classList.add('dark'); toggle.textContent = '☀️'; }
-  toggle.addEventListener('click', () => {
-    body.classList.toggle('dark');
-    toggle.textContent = body.classList.contains('dark') ? '☀️' : '🌙';
-    localStorage.setItem('mdl_theme', body.classList.contains('dark') ? 'dark' : 'light');
-  });
-
-  // 🔄 Rafraîchir la carte
-  const refreshIcon = document.getElementById("refresh-icon");
-  const iframe = document.getElementById("carte");
-  const statusEl = document.getElementById("status");
-
-  async function refreshCard() {
-    const code = localStorage.getItem("mdl_last_code");
-    if (!code) return;
-    try {
-      const res = await fetch("/api/get-card/" + encodeURIComponent(code));
-      const data = await res.json();
-      if (data && data.ok) {
-        statusEl.textContent = "✅ Dernière mise à jour : " + new Date().toLocaleTimeString();
-        iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
+  // 🌗 Thème clair / sombre
+  (function() {
+    const toggle = document.getElementById('theme-toggle');
+    const body = document.body;
+    const saved = localStorage.getItem('mdl_theme');
+    if (saved === 'dark') { body.classList.add('dark'); toggle.textContent = '☀️'; }
+    toggle.addEventListener('click', () => {
+      if (body.classList.contains('dark')) {
+        body.classList.remove('dark');
+        toggle.textContent = '🌙';
+        localStorage.setItem('mdl_theme', 'light');
+      } else {
+        body.classList.add('dark');
+        toggle.textContent = '☀️';
+        localStorage.setItem('mdl_theme', 'dark');
       }
-    } catch {
-      statusEl.textContent = "⚠️ Hors ligne — carte en cache";
-    }
-  }
+    });
+  })();
 
-  refreshIcon.onclick = refreshCard;
-  refreshCard();
+  // 🔄 Gestion de la carte + bouton refresh
+  (function(){
+    const $ = s => document.querySelector(s);
+    const iframe=$("#carte"), refreshIcon=$("#refresh-icon"),
+          walletBtn=$("#wallet"), installBtn=$("#install"),
+          statusEl=$("#status"), netStatus=$("#net-status");
+
+    let code = localStorage.getItem("mdl_last_code");
+
+    async function refreshCard(){
+      if(!code) return;
+      try{
+        const res=await fetch("/api/get-card/"+encodeURIComponent(code));
+        const data=await res.json();
+        if(data&&data.ok){
+          statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
+          iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+        } else statusEl.textContent="⚠️ Carte introuvable";
+      }catch{
+        statusEl.textContent="⚠️ Hors ligne — carte en cache";
+        iframe.src="/c/"+encodeURIComponent(code);
+      }
+    }
+
+    refreshIcon.onclick=refreshCard;
+    setInterval(refreshCard,60000);
+    refreshCard();
+
+    // Réseau
+    function updateNetworkStatus(){
+      if(navigator.onLine){
+        netStatus.textContent="🟢 En ligne";
+        netStatus.classList.remove("offline");
+      } else {
+        netStatus.textContent="🔴 Hors ligne";
+        netStatus.classList.add("offline");
+      }
+    }
+    window.addEventListener("online",updateNetworkStatus);
+    window.addEventListener("offline",updateNetworkStatus);
+    updateNetworkStatus();
+  })();
   </script>
 </body>
 </html>
