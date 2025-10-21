@@ -142,14 +142,17 @@
       .card { width: 100%; border-radius: 10px; }
     }
     /* ✅ Mode plein écran : recentrer les champs texte */
-.card.zoomed .nom,
-.card.zoomed .prenom {
-  left: 50% !important;
-  transform: translate(-30%, -30%) !important;
-  width: 80% !important;
-  text-align: center !important;
-  justify-content: center !important;
+/* ✅ Déplacement du Nom/Prénom uniquement en plein écran */
+.card.zoomed .nom {
+  left: 60% !important; /* ← ajuste la valeur selon ton besoin */
+  transform: translate(-50%, -50%) !important;
 }
+
+.card.zoomed .prenom {
+  left: 60% !important; /* ← même idée, décalé vers la droite */
+  transform: translate(-50%, -50%) !important;
+}
+
 
 /* On peut aussi agrandir légèrement la taille du texte */
 .card.zoomed .field {
