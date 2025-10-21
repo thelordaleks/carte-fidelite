@@ -4,19 +4,20 @@
   width: min(95vw, 860px);
   max-height: 92vh;
 
-  /* ✅ Correction du zoom hors ligne */
-  background-color: #fff;
+  /* ✅ Suppression du cadre blanc */
+  background-color: transparent !important;
   background-image: url('/static/carte-mdl.png');
   background-repeat: no-repeat;
   background-position: center center;
-  background-size: contain; /* <- avant c’était cover (qui étirait hors ligne) */
+  background-size: contain;
 
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  border-radius: 0 !important;
+  box-shadow: none !important;
   overflow: hidden;
   touch-action: none;
   transform: translateZ(0);
 }
+
 
 /* Variables de position (en %) – ajustables à chaud */
 :root {
