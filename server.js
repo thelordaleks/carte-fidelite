@@ -254,12 +254,49 @@ app.get("/sw.js", (req, res) => {
   }
 });
 
-// ✅ Route temporaire /wallet/:code — redirige vers la carte
-app.get("/wallet/:code", (req, res) => {
+import jwt from "jsonwebtoken"; // npm install jsonwebtoken
+
+app.get("/wallet/:code", async (req, res) => {
   const code = req.params.code;
-  const base = absoluteBaseUrl(req);
-  return res.redirect(`${base}/c/${encodeURIComponent(code)}`);
+  const dbc = await getDb();
+  const r = await dbc.execute({ sql: "SELECT * FROM cards WHERE code=?", args: [code] });
+  if (!r.rows.length) return res.status(404).send("Carte inconnue");
+  const card = r.rows[0];
+
+  // ⚙️ Structure minimale d’un pass Google Wallet
+  const payload = {
+    iss: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL, // ton service Google
+    aud: "google",
+    origins: [absoluteBaseUrl(req)],
+    typ: "savetowallet",
+    payload: {
+      loyaltyObjects: [
+        {
+          id: `mdl.${card.code}`,
+          accountId: card.code,
+          accountName: `${card.prenom} ${card.nom}`,
+          loyaltyPoints: {
+            balance: { string: `${card.points} pts` },
+          },
+          programName: "MDL Vaillant",
+          issuerName: "Maison Des Lycéens",
+          barcode: { type: "CODE_128", value: card.code },
+          textModulesData: [
+            { header: "Réduction", body: `${card.reduction}` },
+          ],
+        },
+      ],
+    },
+  };
+
+  const token = jwt.sign(payload, process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"), {
+    algorithm: "RS256",
+  });
+
+  const saveUrl = `https://pay.google.com/gp/v/save/${token}`;
+  return res.redirect(saveUrl);
 });
+
 
 initDb().then(() => {
   app.listen(PORT, () => console.log("✅ Serveur MDL actif sur le port", PORT));
