@@ -3,14 +3,54 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Carte fidélité</title>
+  <title>Carte fidélité MDL</title>
+
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    .card { border: 1px solid #ddd; padding: 20px; width: 360px; }
-    .barcode { margin-top: 12px; max-width: 100%; }
-    .meta { color: #555; margin-top: 6px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      color: #333;
+      text-align: center;
+    }
+
+    .card {
+      border: none;
+      background: transparent;
+      padding: 15px 10px;
+      width: 360px;
+      max-width: 95%;
+      margin: 0 auto;
+      box-shadow: none;
+      border-radius: 0;
+    }
+
+    h1 {
+      font-size: 22px;
+      color: #c0872f;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin: 6px 0;
+      font-size: 15px;
+    }
+
+    .barcode {
+      margin-top: 12px;
+      max-width: 100%;
+      border: none;
+    }
+
+    .meta {
+      color: #666;
+      margin-top: 8px;
+      font-size: 13px;
+    }
   </style>
 </head>
+
 <body>
   <div class="card" role="main" aria-live="polite">
     <h1>Carte fidélité</h1>
@@ -19,7 +59,7 @@
     <p><strong>Nom :</strong> <%= typeof nom !== 'undefined' ? nom : '' %></p>
     <p class="meta"><strong>Code :</strong> <%= typeof code !== 'undefined' ? code : '' %></p>
 
-    <!-- Exemple d'image barre (si tu as un endpoint /barcode/:code) -->
+    <!-- Code-barres -->
     <div>
       <img
         class="barcode"
@@ -31,7 +71,5 @@
 
     <p class="meta">Généré le <%= new Date(timestamp).toLocaleString('fr-FR') %></p>
   </div>
-
-  <!-- Eviter JS inline complexe pour ne pas casser le render côté serveur -->
 </body>
 </html>
