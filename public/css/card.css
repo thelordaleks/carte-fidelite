@@ -18,30 +18,6 @@
   transform: translateZ(0);
 }
 
-/* 🌈 Effet holographique doré plus visible */
-.card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    120deg,
-    rgba(192,135,47,0) 20%,
-    rgba(192,135,47,0.55) 50%,
-    rgba(192,135,47,0) 80%
-  );
-  opacity: 0.6; /* ✅ intensité augmentée */
-  pointer-events: none;
-  mix-blend-mode: screen; /* ✅ mieux visible sur fond clair */
-  animation: holoLight 5s linear infinite;
-  z-index: 10; /* au-dessus du fond */
-}
-
-@keyframes holoLight {
-  0%   { transform: translateX(-100%) rotate(0deg); }
-  50%  { transform: translateX(100%) rotate(1deg); }
-  100% { transform: translateX(-100%) rotate(0deg); }
-}
-
 /* Variables de position (en %) – ajustables à chaud */
 :root {
   --x-pad: 12%;     /* marge latérale commune */
