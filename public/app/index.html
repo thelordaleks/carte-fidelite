@@ -50,9 +50,7 @@
       transition: transform 0.2s ease;
     }
 
-    #theme-toggle:hover {
-      transform: scale(1.15);
-    }
+    #theme-toggle:hover { transform: scale(1.15); }
 
     main { padding: 20px; }
 
@@ -62,9 +60,8 @@
       height: 280px;
       border: none;
       border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
       overflow: hidden;
-      background: #fff;
+      background: transparent;
       margin: auto;
     }
 
@@ -117,11 +114,8 @@
     #missing, #ios-help {
       max-width: 520px;
       margin: 20px auto;
-      background: #fff;
-      border: 1px solid #ddd;
       border-radius: 12px;
       padding: 15px;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.05);
     }
 
     #missing input {
@@ -151,44 +145,18 @@
     #net-status.offline { background: #b32626; }
 
     /* 🌙 Mode sombre */
-    body.dark {
-      background: #121212;
-      color: #f9f5ef;
-    }
-
-    body.dark header {
-      background: #1e1e1e;
-      color: #c0872f;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
-    }
-
-    body.dark iframe, body.dark #carte-container, body.dark #missing, body.dark #ios-help {
-      background: #1e1e1e;
-      color: #f9f5ef;
-      border-color: #333;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.5);
-    }
-
-    body.dark .btn {
-      background: #c0872f;
-      color: white;
-    }
-
-    body.dark .status {
-      color: #c0872f;
-    }
-
-    body.dark footer {
-      color: #ccc;
-    }
+    body.dark { background: #121212; color: #f9f5ef; }
+    body.dark header { background: #1e1e1e; color: #c0872f; box-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+    body.dark iframe, body.dark #carte-container { background: transparent; }
+    body.dark .btn { background: #c0872f; color: white; }
+    body.dark .status { color: #c0872f; }
+    body.dark footer { color: #ccc; }
 
     /* === Section Vie de la MDL === */
     .mdl-info {
       margin: 30px auto 80px;
       text-align: center;
-      background: #fff;
       border-radius: 16px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
       padding: 20px;
       max-width: 420px;
     }
@@ -204,6 +172,7 @@
       border-radius: 12px;
       overflow: hidden;
       margin-bottom: 15px;
+      background: transparent;
     }
 
     .mdl-links {
@@ -222,11 +191,10 @@
       transition: background 0.3s;
     }
 
-    .mdl-links .btn-link:hover {
-      background: #a47225;
-    }
+    .mdl-links .btn-link:hover { background: #a47225; }
   </style>
 </head>
+
 <body>
   <header>
     Carte fidélité MDL
@@ -241,10 +209,6 @@
       <a id="wallet" class="btn wallet-btn" href="#" target="_blank">💳 Ajouter au Wallet</a>
       <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
       <button id="refresh" class="btn refresh-btn">🔄 Rafraîchir</button>
-    </div>
-
-    <div>
-      <a href="https://www.instagram.com/mdlvaillant" class="btn" target="_blank">📸 Instagram MDL</a>
     </div>
 
     <div class="status" id="status"></div>
