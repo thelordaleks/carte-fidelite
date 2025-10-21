@@ -39,23 +39,27 @@
     position: relative;
   }
 
-  /* 🌙 Boutons en haut */
+  /* 🌙 et 🔄 icônes */
   #theme-toggle, #refresh-icon {
     position: absolute;
     top: 10px;
     background: none;
     border: none;
-    font-size: 22px;
     cursor: pointer;
-    color: white;
     transition: transform 0.2s ease;
   }
   #theme-toggle:hover, #refresh-icon:hover { transform: scale(1.15); }
   #theme-toggle { right: 15px; }
   #refresh-icon { left: 15px; }
 
+  #refresh-icon svg {
+    width: 22px;
+    height: 22px;
+    fill: white;
+  }
+
   main {
-    padding: 10px 20px 80px;
+    padding: 10px 20px 60px;
   }
 
   /* === Carte === */
@@ -68,7 +72,7 @@
     background: transparent !important;
     box-shadow: none !important;
     border-radius: 0;
-    margin: -10px auto -8px; /* supprime l’espace blanc haut/bas */
+    margin: -10px auto -8px;
     display: block;
   }
 
@@ -94,23 +98,16 @@
   .wallet-btn { background: #96784b; }
   .install-btn { background: #34A853; }
 
-  /* ✅ Statut bas */
+  /* ✅ Statut tout en bas de la page */
   .status {
-    position: fixed;
-    left: 0;
-    bottom: 64px;
-    width: 100%;
-    text-align: center;
+    margin: 20px 0 10px 0;
     font-size: 14px;
     color: #c0872f;
   }
 
   footer {
-    position: fixed;
-    bottom: 10px;
-    left: 0;
-    width: 100%;
-    text-align: center;
+    margin-top: 10px;
+    padding: 10px;
     font-size: 13px;
     color: #666;
   }
@@ -131,7 +128,7 @@
   }
   #net-status.offline { background: #b32626; }
 
-  /* ✅ Vie de la MDL remontée */
+  /* ✅ Vie de la MDL */
   .mdl-info {
     margin: 10px auto 60px;
     text-align: center;
@@ -139,7 +136,7 @@
     padding: 10px;
     max-width: 420px;
     background: transparent;
-    transform: translateY(-20px);
+    transform: translateY(-10px);
   }
 
   .mdl-info h3 { color: #c0872f; margin-bottom: 15px; }
@@ -147,10 +144,10 @@
   .instagram-feed iframe {
     width: 100%;
     height: 400px;
+    border: none;
     border-radius: 14px;
-    overflow: hidden;
-    margin-bottom: 15px;
     background: transparent;
+    overflow: hidden;
   }
 
   .mdl-links {
@@ -183,7 +180,9 @@
 
 <body>
   <header>
-    <button id="refresh-icon" title="Rafraîchir la carte">🔄</button>
+    <button id="refresh-icon" title="Rafraîchir la carte">
+      <svg viewBox="0 0 24 24"><path d="M12 6V9L16 5L12 1V4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.64 20 18.64 17.67 19.66 14.33L17.57 13.67C16.89 15.96 14.64 17.5 12 17.5C8.96 17.5 6.5 15.04 6.5 12C6.5 8.96 8.96 6.5 12 6.5Z"/></svg>
+    </button>
     Carte fidélité MDL
     <button id="theme-toggle" title="Changer le thème">🌙</button>
   </header>
