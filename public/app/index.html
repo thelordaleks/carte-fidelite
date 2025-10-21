@@ -39,9 +39,10 @@
     position: relative;
   }
 
-  #theme-toggle {
+  /* 🌙 Boutons en haut */
+  #theme-toggle, #refresh-icon {
     position: absolute;
-    right: 15px;
+    top: 10px;
     background: none;
     border: none;
     font-size: 22px;
@@ -49,13 +50,15 @@
     color: white;
     transition: transform 0.2s ease;
   }
-  #theme-toggle:hover { transform: scale(1.15); }
+  #theme-toggle:hover, #refresh-icon:hover { transform: scale(1.15); }
+  #theme-toggle { right: 15px; }
+  #refresh-icon { left: 15px; }
 
   main {
     padding: 10px 20px 80px;
   }
 
-  /* === Carte sans cadre blanc === */
+  /* === Carte === */
   iframe#carte {
     width: 100%;
     max-width: 440px;
@@ -65,9 +68,8 @@
     background: transparent !important;
     box-shadow: none !important;
     border-radius: 0;
-    transform: scale(1.02);
-    transform-origin: center;
-    overflow: hidden;
+    margin: -10px auto -8px; /* supprime l’espace blanc haut/bas */
+    display: block;
   }
 
   .btn {
@@ -91,9 +93,8 @@
   }
   .wallet-btn { background: #96784b; }
   .install-btn { background: #34A853; }
-  .refresh-btn { background: #6c757d; }
 
-  /* ✅ Statut tout en bas */
+  /* ✅ Statut bas */
   .status {
     position: fixed;
     left: 0;
@@ -102,8 +103,6 @@
     text-align: center;
     font-size: 14px;
     color: #c0872f;
-    pointer-events: none;
-    z-index: 10;
   }
 
   footer {
@@ -134,13 +133,13 @@
 
   /* ✅ Vie de la MDL remontée */
   .mdl-info {
-    margin: 15px auto 60px;
+    margin: 10px auto 60px;
     text-align: center;
     border-radius: 16px;
     padding: 10px;
     max-width: 420px;
     background: transparent;
-    transform: translateY(-25px);
+    transform: translateY(-20px);
   }
 
   .mdl-info h3 { color: #c0872f; margin-bottom: 15px; }
@@ -184,6 +183,7 @@
 
 <body>
   <header>
+    <button id="refresh-icon" title="Rafraîchir la carte">🔄</button>
     Carte fidélité MDL
     <button id="theme-toggle" title="Changer le thème">🌙</button>
   </header>
@@ -194,7 +194,6 @@
     <div>
       <a id="wallet" class="btn wallet-btn" href="#" target="_blank">💳 Ajouter au Wallet</a>
       <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
-      <button id="refresh" class="btn refresh-btn">🔄 Rafraîchir</button>
     </div>
 
     <div class="status" id="status"></div>
@@ -225,7 +224,7 @@
   <div id="net-status">🟢 En ligne</div>
 
   <script>
-  // 🌗 Gestion du thème clair / sombre
+  // 🌗 Thème clair / sombre
   (function() {
     const toggle = document.getElementById('theme-toggle');
     const body = document.body;
@@ -243,94 +242,36 @@
       }
     });
   })();
-  </script>
 
-  <!-- 🔧 Script principal : carte, cache, service worker -->
-  <script>
+  // 🔄 Gestion de la carte + bouton refresh
   (function(){
     const $ = s => document.querySelector(s);
-    const iframe=$("#carte"),
-          walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
-          missing=$("#missing"), iosHelp=$("#ios-help"),
-          inputCode=$("#input-code"), saveCode=$("#save-code"),
+    const iframe=$("#carte"), refreshIcon=$("#refresh-icon"),
+          walletBtn=$("#wallet"), installBtn=$("#install"),
           statusEl=$("#status"), netStatus=$("#net-status");
 
-    const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isStandalone=window.navigator.standalone===true;
-    if(isIOS&&!isStandalone && iosHelp) iosHelp.style.display="block";
+    let code = localStorage.getItem("mdl_last_code");
 
-    let deferredPrompt=null;
-    window.addEventListener("beforeinstallprompt",e=>{
-      e.preventDefault(); deferredPrompt=e;
-      installBtn.style.display="inline-block";
-    });
-    installBtn.addEventListener("click",()=>{
-      if(!deferredPrompt)return;
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});
-    });
-
-    const saveCodeToDB=code=>new Promise((res,rej)=>{
-      const r=indexedDB.open("mdl-db",1);
-      r.onupgradeneeded=()=>r.result.createObjectStore("config");
-      r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");
-        tx.objectStore("config").put(code,"lastCode");
-        tx.oncomplete=res; tx.onerror=rej;};
-      r.onerror=rej;
-    });
-
-    const getCodeFromDB=()=>new Promise((res,rej)=>{
-      const r=indexedDB.open("mdl-db",1);
-      r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");
-        const g=tx.objectStore("config").get("lastCode");
-        g.onsuccess=()=>res(g.result); g.onerror=rej;};
-      r.onerror=rej;
-    });
-
-    async function precacheCarte(code){
-      if(!('caches' in window)) return;
+    async function refreshCard(){
+      if(!code) return;
       try{
-        const keys = await caches.keys();
-        const cacheName = keys.find(k=>k.startsWith('mdl-carte-')) || 'mdl-carte-v18';
-        const cache = await caches.open(cacheName);
-        const url = '/c/'+encodeURIComponent(code);
-        const res = await fetch(url,{cache:'reload'});
-        if(res.ok) await cache.put(url,res.clone());
-      }catch{}
-    }
-
-    async function mountWithCode(code){
-      if(!code) code=await getCodeFromDB();
-      if(!code){return;}
-      await saveCodeToDB(code);
-      localStorage.setItem("mdl_last_code",code);
-      walletBtn.href="/wallet/"+encodeURIComponent(code);
-      statusEl.textContent="Chargement de la carte…";
-
-      async function refreshCard(){
-        try{
-          const res=await fetch("/api/get-card/"+encodeURIComponent(code));
-          const data=await res.json();
-          if(data&&data.ok){
-            statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-            if(navigator.onLine){
-              iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-              await precacheCarte(code);
-            }
-          }else{
-            statusEl.textContent="⚠️ Carte introuvable";
-          }
-        }catch{
-          statusEl.textContent="⚠️ Hors ligne — carte en cache";
-          iframe.src="/c/"+encodeURIComponent(code);
-        }
+        const res=await fetch("/api/get-card/"+encodeURIComponent(code));
+        const data=await res.json();
+        if(data&&data.ok){
+          statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
+          iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+        } else statusEl.textContent="⚠️ Carte introuvable";
+      }catch{
+        statusEl.textContent="⚠️ Hors ligne — carte en cache";
+        iframe.src="/c/"+encodeURIComponent(code);
       }
-
-      refreshBtn.onclick=refreshCard;
-      await refreshCard();
-      setInterval(refreshCard,60000);
     }
 
+    refreshIcon.onclick=refreshCard;
+    setInterval(refreshCard,60000);
+    refreshCard();
+
+    // Réseau
     function updateNetworkStatus(){
       if(navigator.onLine){
         netStatus.textContent="🟢 En ligne";
@@ -343,24 +284,6 @@
     window.addEventListener("online",updateNetworkStatus);
     window.addEventListener("offline",updateNetworkStatus);
     updateNetworkStatus();
-
-    document.addEventListener("DOMContentLoaded",async()=>{
-      const params=new URLSearchParams(window.location.search);
-      let code=params.get("code");
-      const stored=localStorage.getItem("mdl_last_code")||await getCodeFromDB();
-      if(code){
-        await saveCodeToDB(code);
-        localStorage.setItem("mdl_last_code",code);
-        const url=new URL(window.location.href);
-        url.searchParams.delete("code");
-        history.replaceState({},'',url);
-      }else code=stored||"";
-
-      if(code){ mountWithCode(code); }
-
-      if("serviceWorker" in navigator)
-        navigator.serviceWorker.register("/sw.js").catch(()=>{});
-    });
   })();
   </script>
 </body>
