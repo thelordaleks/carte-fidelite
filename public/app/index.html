@@ -187,25 +187,34 @@ iframe#carte html, iframe#carte body {
   body.dark iframe#carte { filter: brightness(0.92); }
   body.dark .btn { background: #c0872f; color: white; }
   body.dark footer { color: #ccc; }
-  /* === Suppression de la bordure/fond autour de la carte fidélité === */
-iframe#carte {
+  /* === Supprimer la bordure visuelle autour de la carte === */
+main {
+  background: transparent !important;
+}
+
+main iframe#carte {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
   border-radius: 0 !important;
+  margin: 0 auto !important;
   display: block;
 }
 
-/* Supprime le fond du conteneur parent si présent */
-.carte-container,
-.card-wrapper,
-section.card-wrapper,
-div#frame,
-div.card-frame {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+/* ✅ Supprime le fond blanc derrière la carte */
+body {
+  background: #f9f5ef;
+  background-attachment: fixed;
+}
+
+body.dark {
+  background: #0f0f0f !important;
+}
+
+/* Si tu veux garder le dégradé ailleurs, applique-le à header + footer uniquement */
+header, footer {
+  background: linear-gradient(to bottom, #f5e8cf 0%, #f9f5ef 40%, #ffffff 100%);
 }
 
   </style>
