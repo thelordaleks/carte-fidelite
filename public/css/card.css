@@ -18,44 +18,7 @@
   transform: translateZ(0);
 }
 
-
-/* Variables de position (en %) – ajustables à chaud */
-:root{
-  --x-pad: 12%;     /* marge latérale commune */
-  --y-badge: 39%;   /* bandeau avec Nom/Prénom (descendu) */
-  --y-nom:   70%;   /* valeur du Nom dans le champ beige */
-  --y-pren:  70%; /* valeur du Prénom dans le champ beige */
-  --y-bar:   90.5%; /* code‑barres (remonté) */
-}
-
-.badge{
-  position: absolute; left: var(--x-pad); right: var(--x-pad);
-  top: var(--y-badge);
-  background:#fff; border-radius: 12px;
-  padding: clamp(6px, 1.1vw, 10px) clamp(10px, 1.6vw, 14px);
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
-}
-.badge .fullname{ font-size: clamp(16px, 2.4vw, 22px); font-weight: 800; }
-.badge .code { display:none; } /* on retire “Code: …” sous le bandeau */
-
-.field{
-  position: absolute; left: calc(var(--x-pad) + 22%); right: var(--x-pad);
-  height: clamp(18px, 2.2vw, 22px);
-  background: #f8d39f; opacity:.8; border-radius: 10px; /* visuel beige */
-  display:flex; align-items:center; padding: 0 10px;
-  font-size: clamp(12px, 1.8vw, 16px); font-weight:600;
-}
-.field--nom   { top: var(--y-nom);   }
-.field--pren  { top: var(--y-pren);  }
-
-.barcode{
-  position:absolute; left: var(--x-pad); right: var(--x-pad);
-  top: var(--y-bar);
-  height: clamp(50px, 10vw, 90px); /* taille des barres */
-  display:flex; align-items:flex-end; justify-content:center;
-}
-.barcode img{ width:100%; height:100%; object-fit:contain; }
-/* 🌈 Holographique doux sur la carte */
+/* 🌈 Effet holographique doux sur la carte */
 .card::after {
   content: "";
   position: absolute;
@@ -63,7 +26,7 @@
   background: linear-gradient(
     130deg,
     rgba(255,255,255,0) 20%,
-    rgba(192,135,47,0.2) 40%,
+    rgba(192,135,47,0.25) 40%,
     rgba(255,255,255,0) 60%
   );
   opacity: 0.3;
@@ -77,4 +40,69 @@
   0% { transform: translateX(-100%) translateY(0); }
   50% { transform: translateX(100%) translateY(0); }
   100% { transform: translateX(-100%) translateY(0); }
+}
+
+/* Variables de position (en %) – ajustables à chaud */
+:root {
+  --x-pad: 12%;     /* marge latérale commune */
+  --y-badge: 39%;   /* bandeau avec Nom/Prénom (descendu) */
+  --y-nom:   70%;   /* valeur du Nom dans le champ beige */
+  --y-pren:  70%;   /* valeur du Prénom dans le champ beige */
+  --y-bar:   90.5%; /* code-barres (remonté) */
+}
+
+.badge {
+  position: absolute;
+  left: var(--x-pad);
+  right: var(--x-pad);
+  top: var(--y-badge);
+  background: #fff;
+  border-radius: 12px;
+  padding: clamp(6px, 1.1vw, 10px) clamp(10px, 1.6vw, 14px);
+  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+}
+
+.badge .fullname {
+  font-size: clamp(16px, 2.4vw, 22px);
+  font-weight: 800;
+}
+
+.badge .code {
+  display: none;
+  /* on retire “Code: …” sous le bandeau */
+}
+
+.field {
+  position: absolute;
+  left: calc(var(--x-pad) + 22%);
+  right: var(--x-pad);
+  height: clamp(18px, 2.2vw, 22px);
+  background: #f8d39f;
+  opacity: .8;
+  border-radius: 10px; /* visuel beige */
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: clamp(12px, 1.8vw, 16px);
+  font-weight: 600;
+}
+
+.field--nom  { top: var(--y-nom); }
+.field--pren { top: var(--y-pren); }
+
+.barcode {
+  position: absolute;
+  left: var(--x-pad);
+  right: var(--x-pad);
+  top: var(--y-bar);
+  height: clamp(50px, 10vw, 90px); /* taille des barres */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.barcode img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
