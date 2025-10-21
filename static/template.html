@@ -141,6 +141,21 @@
       :root { --max-fs: 10px; --min-fs: 8px; --nom-width: 60%; --prenom-width: 60%; }
       .card { width: 100%; border-radius: 10px; }
     }
+    /* ✅ Mode plein écran : recentrer les champs texte */
+.card.zoomed .nom,
+.card.zoomed .prenom {
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 80% !important;
+  text-align: center !important;
+  justify-content: center !important;
+}
+
+/* On peut aussi agrandir légèrement la taille du texte */
+.card.zoomed .field {
+  font-size: clamp(18px, 3vw, 28px) !important;
+}
+
   </style>
 </head>
 <body>
