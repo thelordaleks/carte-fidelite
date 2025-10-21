@@ -1,5 +1,5 @@
-// ✅ Service Worker – version v17 (offline corrigé)
-const CACHE_NAME = 'mdl-carte-v17';
+// ✅ Service Worker – v18 (offline carte robuste)
+const CACHE_NAME = 'mdl-carte-v18';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/manifest.json',
@@ -11,28 +11,26 @@ const STATIC_ASSETS = [
   '/static/icons/instagram.png'
 ];
 
-// 🧩 Normalise juste l’URL (sans recréer la Request)
-function normalizedUrl(req) {
+// 🧩 Clés normalisées
+function normalizedUrl(url) {
   try {
-    const url = new URL(req.url);
-    if (url.pathname.startsWith('/c/') || url.pathname.startsWith('/barcode/')) {
-      url.search = ''; // ignore les ?t=...
+    const u = new URL(url);
+    if (u.pathname.startsWith('/c/') || u.pathname.startsWith('/barcode/')) {
+      u.search = '';
     }
-    return url.toString();
-  } catch {
-    return req.url;
-  }
+    return u.toString();
+  } catch { return url; }
 }
 
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+      .then(c => c.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map(k => k !== CACHE_NAME && caches.delete(k)));
@@ -40,15 +38,15 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// 💡 gestion du cache intelligent
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-  const cacheKey = normalizedUrl(req);
+  const keyNorm = normalizedUrl(req.url);
+  const keyOrig = req.url;
 
-  // Ne jamais intercepter /api/
+  // Laisse passer l'API au réseau
   if (url.pathname.startsWith('/api/')) return;
 
   // 🃏 Carte HTML
@@ -56,17 +54,25 @@ self.addEventListener('fetch', event => {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       try {
+        // en ligne → on met à jour le cache sous deux clés (avec et sans query)
         const res = await fetch(req);
-        await cache.put(cacheKey, res.clone());
-        console.log('[SW] ✅ Carte mise à jour en cache :', cacheKey);
+        await cache.put(keyNorm, res.clone());
+        await cache.put(keyOrig, res.clone());
+        // console.log('[SW] ✅ Carte MAJ cache:', keyNorm, 'et', keyOrig);
         return res;
       } catch {
-        const cached = await cache.match(cacheKey);
+        // hors ligne → on tente d'abord la clé normalisée, puis la clé originale
+        let cached = await cache.match(keyNorm);
         if (cached) {
-          console.log('[SW] 💾 Carte chargée depuis cache :', cacheKey);
+          // console.log('[SW] 💾 Carte depuis cache (norm):', keyNorm);
           return cached;
         }
-        console.warn('[SW] ⚠️ Aucune carte en cache, fallback image');
+        cached = await cache.match(keyOrig);
+        if (cached) {
+          // console.log('[SW] 💾 Carte depuis cache (orig):', keyOrig);
+          return cached;
+        }
+        // dernier recours : une image (l'iframe affichera au moins quelque chose)
         return caches.match('/static/carte-mdl.png');
       }
     })());
@@ -79,10 +85,13 @@ self.addEventListener('fetch', event => {
       const cache = await caches.open(CACHE_NAME);
       try {
         const res = await fetch(req);
-        await cache.put(cacheKey, res.clone());
+        await cache.put(keyNorm, res.clone());
+        await cache.put(keyOrig, res.clone());
         return res;
       } catch {
-        const cached = await cache.match(cacheKey);
+        let cached = await cache.match(keyNorm);
+        if (cached) return cached;
+        cached = await cache.match(keyOrig);
         if (cached) return cached;
         return new Response('offline', { status: 503 });
       }
@@ -90,21 +99,24 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 🧱 Assets statiques
+  // 🧱 Statiques → cache-first
   if (STATIC_ASSETS.includes(url.pathname)) {
-    event.respondWith(caches.match(req).then(cached => cached || fetch(req)));
+    event.respondWith(caches.match(req).then(c => c || fetch(req)));
     return;
   }
 
-  // 🌐 fallback général
+  // 🌐 Général → network, fallback cache
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     try {
       const res = await fetch(req);
-      await cache.put(cacheKey, res.clone());
+      await cache.put(keyNorm, res.clone());
+      await cache.put(keyOrig, res.clone());
       return res;
     } catch {
-      const cached = await cache.match(cacheKey);
+      let cached = await cache.match(keyNorm);
+      if (cached) return cached;
+      cached = await cache.match(keyOrig);
       if (cached) return cached;
       return new Response('offline', { status: 503 });
     }

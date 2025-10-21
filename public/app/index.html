@@ -74,7 +74,7 @@
         inputCode=$("#input-code"), saveCode=$("#save-code"),
         statusEl=$("#status");
 
-  // Console debug
+  // Debug console
   const debugBox=document.createElement("pre");
   debugBox.style.cssText="background:#000;color:#0f0;font-size:11px;text-align:left;max-width:480px;margin:15px auto;padding:8px;border-radius:8px;white-space:pre-wrap;overflow:auto;max-height:180px;";
   document.body.appendChild(debugBox);
@@ -85,12 +85,30 @@
   log("🧭 Détection appareil :",{isIOS,isStandalone});
   if(isIOS&&!isStandalone){iosHelp.style.display="block";}
 
+  // Installation PWA
   let deferredPrompt=null;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBtn.style.display="inline-block";});
   installBtn.addEventListener("click",()=>{if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});});
 
+  // IndexedDB pour le code
   const saveCodeToDB=code=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onupgradeneeded=()=>r.result.createObjectStore("config");r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");tx.objectStore("config").put(code,"lastCode");tx.oncomplete=res;tx.onerror=rej;};r.onerror=rej;});
   const getCodeFromDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");const g=tx.objectStore("config").get("lastCode");g.onsuccess=()=>res(g.result);g.onerror=rej;};r.onerror=rej;});
+
+  // 🔁 Pré-cache carte sans query pour offline
+  async function precacheCarte(code){
+    if(!('caches' in window)) return;
+    try{
+      const keys = await caches.keys();
+      const cacheName = keys.find(k=>k.startsWith('mdl-carte-')) || 'mdl-carte-v18';
+      const cache = await caches.open(cacheName);
+      const url = '/c/'+encodeURIComponent(code);
+      const res = await fetch(url,{cache:'reload'});
+      if(res.ok){
+        await cache.put(url,res.clone());
+        log("💾 Carte précachée :",url);
+      }
+    }catch(e){log("⚠️ Erreur pré-cache",e);}
+  }
 
   async function mountWithCode(code){
     log("🚀 mountWithCode()", code);
@@ -103,56 +121,26 @@
 
     async function refreshCard(){
       log("🔄 refreshCard() → tentative fetch API");
-      try {
+      try{
         const res=await fetch("/api/get-card/"+encodeURIComponent(code));
         log("📡 /api/get-card status:",res.status);
         const data=await res.json();
-
         if(data&&data.ok){
           log("✅ Données carte OK");
           statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
-
           if(navigator.onLine){
-            if(isIOS&&isStandalone){
-              log("📱 iOS standalone → chargement direct HTML carte");
-              try {
-                const cardRes=await fetch("/c/"+encodeURIComponent(code));
-                log("📄 /c/ réponse",cardRes.status);
-                const html=await cardRes.text();
-                if(html&&html.trim().length>0){
-                  log("🎉 HTML carte chargé");
-                  iframe.style.display="none";
-                  cardContainer.style.display="block";
-                  cardContainer.innerHTML=html;
-                  cardContainer.style.height="auto";
-                } else {
-                  log("⚠️ HTML vide → fallback iFrame");
-                  iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-                }
-              } catch(e){log("⚠️ Erreur fetch /c/ → fallback iframe",e);iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();}
-            } else {
-              log("💻 Android/Desktop → refresh iframe");
-              iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
-            }
-
-            // 💾 Ajout : sauvegarde forcée de la carte dans le cache pour usage hors-ligne
-            if ('caches' in window && code) {
-              caches.open('mdl-carte-v14').then(async cache => {
-                const r = await fetch("/c/" + encodeURIComponent(code));
-                if (r.ok) {
-                  const normalized = new Request("/c/" + encodeURIComponent(code));
-                  cache.put(normalized, r.clone());
-                  log("💾 Carte sauvegardée dans le cache local");
-                }
-              }).catch(e => log("⚠️ Erreur cache local", e));
-            }
-
+            iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+            await precacheCarte(code);
           }
         } else {
           log("⚠️ Carte introuvable côté serveur");
           statusEl.textContent="⚠️ Carte introuvable";
         }
-      } catch(e){log("🚨 Erreur globale refreshCard()", e);statusEl.textContent="⚠️ Hors ligne — carte en cache";}
+      }catch(e){
+        log("🚨 Erreur refreshCard()",e);
+        statusEl.textContent="⚠️ Hors ligne — carte en cache";
+        iframe.src="/c/"+encodeURIComponent(code); // force version cache
+      }
     }
 
     refreshBtn.onclick=refreshCard;
@@ -162,30 +150,28 @@
 
   document.addEventListener("DOMContentLoaded",async()=>{
     log("🌐 DOMContentLoaded");
-    let params=new URLSearchParams(window.location.search);
+    const params=new URLSearchParams(window.location.search);
     let code=params.get("code");
     const stored=localStorage.getItem("mdl_last_code")||await getCodeFromDB();
-
     if(code){
-      log("💾 Code détecté dans URL:",code);
+      log("💾 Code dans URL:",code);
       await saveCodeToDB(code);
       localStorage.setItem("mdl_last_code",code);
       const url=new URL(window.location.href);
       url.searchParams.delete("code");
-      history.replaceState({}, "", url.toString());
-    } else {
+      history.replaceState({},'',url);
+    }else{
       code=stored||"";
-      log("📦 Code chargé depuis stockage:",code);
+      log("📦 Code depuis stockage:",code);
     }
 
     if(code){
       mountWithCode(code);
-    } else {
+    }else{
       missing.style.display="block";
-      log("❌ Aucun code → affichage formulaire");
       saveCode.onclick=async()=>{
         const c=(inputCode.value||"").trim().toUpperCase();
-        if(!/^ADH[A-Z0-9]{8,}$/.test(c)){alert("Code invalide. Exemple : ADH0XXXXXXX");return;}
+        if(!/^ADH[A-Z0-9]{8,}$/.test(c)){alert("Code invalide");return;}
         await saveCodeToDB(c);
         localStorage.setItem("mdl_last_code",c);
         location.href="/app?code="+encodeURIComponent(c);
