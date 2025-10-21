@@ -3,60 +3,49 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Carte fidélité MDL</title>
-
+  <title>Carte fidélité</title>
   <style>
+    /* fond totalement transparent dans l’iframe */
     html, body {
       margin: 0;
       padding: 0;
       background: transparent !important;
-      overflow: hidden;
-      text-align: center;
-      font-family: Arial, sans-serif;
       color: #333;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
 
+    /* conteneur de la carte : AUCUNE bordure/ombre/padding */
     .card {
-      background: transparent !important;
       border: none !important;
-      box-shadow: none !important;
+      padding: 0 !important;
       width: 100%;
-      max-width: 440px;
+      max-width: none;
+      background: transparent !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
       margin: 0 auto;
-      padding: 0;
     }
 
-    h1 {
-      font-size: 22px;
-      color: #c0872f;
-      margin: 5px 0 8px 0;
-      font-weight: bold;
-    }
-
-    p {
-      margin: 4px 0;
-      font-size: 15px;
-    }
+    h1 { display: none; } /* on garde le balisage léger mais on n’affiche pas le titre */
 
     .barcode {
-      margin-top: 10px;
+      margin-top: 12px;
       max-width: 100%;
       height: auto;
+      border: 0;
       display: block;
-      margin-left: auto;
-      margin-right: auto;
-      border: none;
-      background: transparent !important;
     }
 
     .meta {
       color: #666;
-      margin-top: 8px;
+      margin-top: 6px;
       font-size: 13px;
     }
   </style>
 </head>
-
 <body>
   <div class="card" role="main" aria-live="polite">
     <h1>Carte fidélité</h1>
@@ -65,7 +54,6 @@
     <p><strong>Nom :</strong> <%= typeof nom !== 'undefined' ? nom : '' %></p>
     <p class="meta"><strong>Code :</strong> <%= typeof code !== 'undefined' ? code : '' %></p>
 
-    <!-- Code-barres -->
     <div>
       <img
         class="barcode"
