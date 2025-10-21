@@ -187,6 +187,27 @@ iframe#carte html, iframe#carte body {
   body.dark iframe#carte { filter: brightness(0.92); }
   body.dark .btn { background: #c0872f; color: white; }
   body.dark footer { color: #ccc; }
+  /* === Suppression de la bordure/fond autour de la carte fidélité === */
+iframe#carte {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
+  display: block;
+}
+
+/* Supprime le fond du conteneur parent si présent */
+.carte-container,
+.card-wrapper,
+section.card-wrapper,
+div#frame,
+div.card-frame {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
   </style>
 </head>
 
