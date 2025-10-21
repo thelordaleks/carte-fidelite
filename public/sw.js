@@ -1,9 +1,9 @@
-// ✅ Service Worker – Android robuste (v14)
+// ✅ Service Worker – Android robuste (v15)
 // - Cache statique + dynamique
 // - Normalisation des clés pour /c/:code et /barcode/:txt (ignore ?t=...)
 // - Network-first pour la carte, fallback cache en offline
 
-const CACHE_NAME = 'mdl-carte-v14';
+const CACHE_NAME = 'mdl-carte-v15';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/manifest.json',
@@ -20,9 +20,14 @@ function normalizeRequest(req) {
   try {
     const url = new URL(req.url);
     if (url.pathname.startsWith('/c/') || url.pathname.startsWith('/barcode/')) {
-      // ⚠️ on supprime la query (?t=...) pour que le cache matche offline
-      url.search = '';
-      return new Request(url.toString(), { method: req.method, headers: req.headers, mode: req.mode, credentials: req.credentials, redirect: req.redirect });
+      url.search = ''; // ⚠️ on supprime la query (?t=...)
+      return new Request(url.toString(), {
+        method: req.method,
+        headers: req.headers,
+        mode: req.mode,
+        credentials: req.credentials,
+        redirect: req.redirect
+      });
     }
   } catch (e) {}
   return req;
@@ -39,19 +44,17 @@ self.addEventListener('install', event => {
 
 // 🧼 Activation : nettoyage anciens caches + navigationPreload
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(keys.map(k => k !== CACHE_NAME && caches.delete(k)));
-      if ('navigationPreload' in self.registration) {
-        try { await self.registration.navigationPreload.enable(); } catch {}
-      }
-    })()
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => k !== CACHE_NAME && caches.delete(k)));
+    if ('navigationPreload' in self.registration) {
+      try { await self.registration.navigationPreload.enable(); } catch {}
+    }
+  })());
   self.clients.claim();
 });
 
-// 📩 Gestion message 'skipWaiting' (utile si on pousse une maj)
+// 📩 Gestion message 'skipWaiting'
 self.addEventListener('message', evt => {
   if (evt.data && evt.data.action === 'skipWaiting') {
     self.skipWaiting();
@@ -64,28 +67,24 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
+  const normalized = normalizeRequest(req);
 
-  // ⛔️ API : jamais de cache (toujours réseau)
-  if (url.pathname.startsWith('/api/')) {
-    return; // laisser passer au réseau sans intercepter
-  }
+  // ⛔️ API : jamais de cache
+  if (url.pathname.startsWith('/api/')) return;
 
   // 🃏 Carte HTML : /c/:code → network-first, fallback cache normalisé
   if (url.pathname.startsWith('/c/')) {
     event.respondWith((async () => {
-      const normalized = normalizeRequest(req);
       try {
         const res = await fetch(req);
-        // on stocke sous la clé normalisée (sans ?t=...)
-        const clone = res.clone();
         const cache = await caches.open(CACHE_NAME);
-        await cache.put(normalized, clone);
+        await cache.put(normalized, res.clone()); // toujours clé sans ?t=
         return res;
       } catch {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(normalized);
         if (cached) return cached;
-        // dernier recours : visuel statique (l'image) si jamais la carte n'a jamais été vue
+        // fallback : visuel statique
         return caches.match('/static/carte-mdl.png');
       }
     })());
@@ -95,18 +94,15 @@ self.addEventListener('fetch', event => {
   // 🧾 Code-barres : /barcode/:txt → network-first, fallback cache normalisé
   if (url.pathname.startsWith('/barcode/')) {
     event.respondWith((async () => {
-      const normalized = normalizeRequest(req);
       try {
         const res = await fetch(req);
-        const clone = res.clone();
         const cache = await caches.open(CACHE_NAME);
-        await cache.put(normalized, clone);
+        await cache.put(normalized, res.clone());
         return res;
       } catch {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(normalized);
         if (cached) return cached;
-        // pas de fallback image générique — on laisse échouer proprement
         return new Response('offline', { status: 503, statusText: 'offline' });
       }
     })());
@@ -117,10 +113,10 @@ self.addEventListener('fetch', event => {
   if (STATIC_ASSETS.some(p => url.pathname === p)) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(req);
+      const cached = await cache.match(normalized);
       if (cached) return cached;
       const res = await fetch(req);
-      cache.put(req, res.clone());
+      cache.put(normalized, res.clone());
       return res;
     })());
     return;
@@ -131,13 +127,12 @@ self.addEventListener('fetch', event => {
     event.respondWith((async () => {
       try {
         const res = await fetch(req);
-        const clone = res.clone();
         const cache = await caches.open(CACHE_NAME);
-        await cache.put(req, clone);
+        await cache.put(normalized, res.clone());
         return res;
       } catch {
         const cache = await caches.open(CACHE_NAME);
-        const cached = await cache.match(req);
+        const cached = await cache.match(normalized);
         if (cached) return cached;
         return caches.match('/app/index.html');
       }
@@ -149,13 +144,12 @@ self.addEventListener('fetch', event => {
   event.respondWith((async () => {
     try {
       const res = await fetch(req);
-      const clone = res.clone();
       const cache = await caches.open(CACHE_NAME);
-      await cache.put(req, clone);
+      await cache.put(normalized, res.clone());
       return res;
     } catch {
       const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(req);
+      const cached = await cache.match(normalized);
       if (cached) return cached;
       return new Response('offline', { status: 503, statusText: 'offline' });
     }
