@@ -21,7 +21,7 @@
     html, body {
       margin: 0;
       height: 100%;
-      background: #f5f7fb;
+      background: transparent !important;
       overflow: hidden;
     }
 
@@ -42,13 +42,16 @@
       max-height: 92vh;
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+
+      /* ✅ suppression du fond et de l’ombre */
+      background: transparent !important;
+      box-shadow: none !important;
+
       isolation: isolate;
       transition: all 0.4s ease-in-out;
-      background: #fff;
     }
 
-    /* ✅ Mode zoom plein écran avec transition fluide */
+    /* ✅ Mode zoom plein écran fluide */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
@@ -71,13 +74,12 @@
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: contain;
+      object-fit: cover; /* 🔄 pour enlever les marges internes */
       object-position: center center;
       z-index: 0;
       user-select: none;
       -webkit-user-drag: none;
       pointer-events: none;
-      transform: scale(1);
       will-change: transform;
       backface-visibility: hidden;
     }
@@ -141,40 +143,28 @@
       :root { --max-fs: 10px; --min-fs: 8px; --nom-width: 60%; --prenom-width: 60%; }
       .card { width: 100%; border-radius: 10px; }
     }
-    /* ✅ Mode plein écran : recentrer les champs texte */
-/* ✅ Déplacement du Nom/Prénom uniquement en plein écran */
-.card.zoomed .nom {
-  left: 60% !important; /* ← ajuste la valeur selon ton besoin */
-  transform: translate(-50%, -50%) !important;
-}
 
-.card.zoomed .prenom {
-  left: 60% !important; /* ← même idée, décalé vers la droite */
-  transform: translate(-50%, -50%) !important;
-}
+    /* ✅ Zoom : recentrage et taille texte */
+    .card.zoomed .nom,
+    .card.zoomed .prenom {
+      left: 60% !important;
+      transform: translate(-50%, -50%) !important;
+    }
 
+    .card.zoomed .field {
+      font-size: clamp(18px, 3vw, 28px) !important;
+    }
 
-/* On peut aussi agrandir légèrement la taille du texte */
-.card.zoomed .field {
-  font-size: clamp(18px, 3vw, 28px) !important;
-}
-/* === MDL: forcer la carte sans cadre ni fond === */
-html, body { 
-  background: transparent !important;
-}
-body { 
-  padding: 0 !important;
-  box-shadow: none !important;
-}
-.stage, .frame, .outer, .container, .wrapper, .bg, .card-shadow {
-  background: transparent !important;
-  box-shadow: none !important;
-  outline: none !important;
-  border: 0 !important;
-}
-
+    /* ✅ Forcer tout transparent */
+    .stage, .frame, .outer, .container, .wrapper, .bg, .card-shadow {
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: none !important;
+      border: none !important;
+    }
   </style>
 </head>
+
 <body>
   <div class="card" id="carte">
     <img class="bg" src="/static/carte-mdl.png" alt="Fond carte">
@@ -209,12 +199,10 @@ body {
 
       barcode.addEventListener('click', async () => {
         if (card.classList.contains('zoomed')) {
-          // 🔹 Retour normal
           card.classList.remove('zoomed');
           try { await screen.orientation.unlock(); } catch(e) {}
           document.exitFullscreen?.();
         } else {
-          // 🔹 Plein écran fluide
           card.classList.add('zoomed');
           if (card.requestFullscreen) {
             await card.requestFullscreen().catch(()=>{});
