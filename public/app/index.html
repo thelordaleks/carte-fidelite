@@ -18,7 +18,7 @@
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
-      background: #f9f5ef;
+      background: linear-gradient(to bottom, #f9f5ef 0%, #ffffff 100%);
       color: #333;
       margin: 0;
       padding: 0;
@@ -116,6 +116,7 @@
       margin: 20px auto;
       border-radius: 12px;
       padding: 15px;
+      background: transparent;
     }
 
     #missing input {
@@ -145,8 +146,11 @@
     #net-status.offline { background: #b32626; }
 
     /* 🌙 Mode sombre */
-    body.dark { background: #121212; color: #f9f5ef; }
-    body.dark header { background: #1e1e1e; color: #c0872f; box-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+    body.dark {
+      background: linear-gradient(to bottom, #121212 0%, #1e1e1e 100%);
+      color: #f9f5ef;
+    }
+    body.dark header { background: #1e1e1e; color: #c0872f; }
     body.dark iframe, body.dark #carte-container { background: transparent; }
     body.dark .btn { background: #c0872f; color: white; }
     body.dark .status { color: #c0872f; }
@@ -159,6 +163,7 @@
       border-radius: 16px;
       padding: 20px;
       max-width: 420px;
+      background: transparent;
     }
 
     .mdl-info h3 {
@@ -258,13 +263,8 @@
   (function() {
     const toggle = document.getElementById('theme-toggle');
     const body = document.body;
-
     const saved = localStorage.getItem('mdl_theme');
-    if (saved === 'dark') {
-      body.classList.add('dark');
-      toggle.textContent = '☀️';
-    }
-
+    if (saved === 'dark') { body.classList.add('dark'); toggle.textContent = '☀️'; }
     toggle.addEventListener('click', () => {
       if (body.classList.contains('dark')) {
         body.classList.remove('dark');
