@@ -256,7 +256,6 @@ app.get("/sw.js", (req, res) => {
 
 const jwt = require("jsonwebtoken");
 
-
 app.get("/wallet/:code", async (req, res) => {
   const code = req.params.code;
   const dbc = await getDb();
@@ -264,9 +263,14 @@ app.get("/wallet/:code", async (req, res) => {
   if (!r.rows.length) return res.status(404).send("Carte inconnue");
   const card = r.rows[0];
 
-  // ⚙️ Structure minimale d’un pass Google Wallet
+  // 🛑 Si pas de clés Google configurées → fallback
+  if (!process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+    console.warn("⚠️ Variables Google Wallet non configurées — redirection simple");
+    return res.redirect(`/c/${encodeURIComponent(code)}`);
+  }
+
   const payload = {
-    iss: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL, // ton service Google
+    iss: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     aud: "google",
     origins: [absoluteBaseUrl(req)],
     typ: "savetowallet",
@@ -290,13 +294,20 @@ app.get("/wallet/:code", async (req, res) => {
     },
   };
 
-  const token = jwt.sign(payload, process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"), {
-    algorithm: "RS256",
-  });
-
-  const saveUrl = `https://pay.google.com/gp/v/save/${token}`;
-  return res.redirect(saveUrl);
+  try {
+    const token = jwt.sign(
+      payload,
+      process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      { algorithm: "RS256" }
+    );
+    const saveUrl = `https://pay.google.com/gp/v/save/${token}`;
+    return res.redirect(saveUrl);
+  } catch (err) {
+    console.error("Erreur génération JWT Wallet:", err);
+    return res.redirect(`/c/${encodeURIComponent(code)}`);
+  }
 });
+
 
 
 initDb().then(() => {
