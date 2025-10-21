@@ -264,11 +264,19 @@ app.get("/wallet/:code", async (req, res) => {
   const card = r.rows[0];
 
   // 🛑 Si pas de clés Google configurées → fallback
-  if (!process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL) {
+  if (
+    !process.env.GOOGLE_PRIVATE_KEY ||
+    !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+    !process.env.GOOGLE_ISSUER_ID
+  ) {
     console.warn("⚠️ Variables Google Wallet non configurées — redirection simple");
     return res.redirect(`/c/${encodeURIComponent(code)}`);
   }
 
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n");
+  const issuerId = process.env.GOOGLE_ISSUER_ID;
+
+  // ✅ Objet conforme au format Google Wallet
   const payload = {
     iss: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     aud: "google",
@@ -277,7 +285,8 @@ app.get("/wallet/:code", async (req, res) => {
     payload: {
       loyaltyObjects: [
         {
-          id: `mdl.${card.code}`,
+          id: `${issuerId}.${card.code}`,
+          classId: `${issuerId}.mdlcard`,
           accountId: card.code,
           accountName: `${card.prenom} ${card.nom}`,
           loyaltyPoints: {
@@ -295,20 +304,15 @@ app.get("/wallet/:code", async (req, res) => {
   };
 
   try {
-    const token = jwt.sign(
-      payload,
-      process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-      { algorithm: "RS256" }
-    );
+    const token = jwt.sign(payload, privateKey, { algorithm: "RS256" });
     const saveUrl = `https://pay.google.com/gp/v/save/${token}`;
+    console.log("🔗 Redirect Wallet URL:", saveUrl);
     return res.redirect(saveUrl);
   } catch (err) {
-    console.error("Erreur génération JWT Wallet:", err);
+    console.error("❌ Erreur génération JWT Wallet:", err);
     return res.redirect(`/c/${encodeURIComponent(code)}`);
   }
 });
-
-
 
 initDb().then(() => {
   app.listen(PORT, () => console.log("✅ Serveur MDL actif sur le port", PORT));
