@@ -1,5 +1,8 @@
-// ✅ Service Worker – version v17 (offline corrigé)
-const CACHE_NAME = 'mdl-carte-v17';
+// ✅ Service Worker – version v16 stable
+// - Correction clé de cache (garde Request d’origine)
+// - Carte 100 % visible hors ligne sur Android
+
+const CACHE_NAME = 'mdl-carte-v16';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/manifest.json',
@@ -11,12 +14,12 @@ const STATIC_ASSETS = [
   '/static/icons/instagram.png'
 ];
 
-// 🧩 Normalise juste l’URL (sans recréer la Request)
+// 🧩 Normalisation : renvoie juste la clé URL sans recréer la Request
 function normalizedUrl(req) {
   try {
     const url = new URL(req.url);
     if (url.pathname.startsWith('/c/') || url.pathname.startsWith('/barcode/')) {
-      url.search = ''; // ignore les ?t=...
+      url.search = ''; // on ignore ?t=...
     }
     return url.toString();
   } catch {
@@ -36,20 +39,22 @@ self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map(k => k !== CACHE_NAME && caches.delete(k)));
+    if ('navigationPreload' in self.registration) {
+      try { await self.registration.navigationPreload.enable(); } catch {}
+    }
   })());
   self.clients.claim();
 });
 
-// 💡 gestion du cache intelligent
 self.addEventListener('fetch', event => {
   const req = event.request;
   if (req.method !== 'GET') return;
-
   const url = new URL(req.url);
-  const cacheKey = normalizedUrl(req);
 
-  // Ne jamais intercepter /api/
+  // Ne rien intercepter pour l’API
   if (url.pathname.startsWith('/api/')) return;
+
+  const cacheKey = normalizedUrl(req);
 
   // 🃏 Carte HTML
   if (url.pathname.startsWith('/c/')) {
@@ -58,15 +63,10 @@ self.addEventListener('fetch', event => {
       try {
         const res = await fetch(req);
         await cache.put(cacheKey, res.clone());
-        console.log('[SW] ✅ Carte mise à jour en cache :', cacheKey);
         return res;
       } catch {
         const cached = await cache.match(cacheKey);
-        if (cached) {
-          console.log('[SW] 💾 Carte chargée depuis cache :', cacheKey);
-          return cached;
-        }
-        console.warn('[SW] ⚠️ Aucune carte en cache, fallback image');
+        if (cached) return cached;
         return caches.match('/static/carte-mdl.png');
       }
     })());
@@ -92,7 +92,31 @@ self.addEventListener('fetch', event => {
 
   // 🧱 Assets statiques
   if (STATIC_ASSETS.includes(url.pathname)) {
-    event.respondWith(caches.match(req).then(cached => cached || fetch(req)));
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(cacheKey);
+      if (cached) return cached;
+      const res = await fetch(req);
+      cache.put(cacheKey, res.clone());
+      return res;
+    })());
+    return;
+  }
+
+  // 📄 /app pages
+  if (url.pathname.startsWith('/app')) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const res = await fetch(req);
+        await cache.put(cacheKey, res.clone());
+        return res;
+      } catch {
+        const cached = await cache.match(cacheKey);
+        if (cached) return cached;
+        return caches.match('/app/index.html');
+      }
+    })());
     return;
   }
 
