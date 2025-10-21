@@ -49,14 +49,12 @@
       color: white;
       transition: transform 0.2s ease;
     }
-
     #theme-toggle:hover { transform: scale(1.15); }
 
-    main { 
-      padding: 10px 20px 60px; 
+    main {
+      padding: 10px 20px 80px;
     }
 
-    /* === Carte === */
     iframe, #carte-container {
       width: 100%;
       max-width: 450px;
@@ -65,17 +63,14 @@
       border-radius: 0;
       overflow: hidden;
       background: transparent !important;
-      margin: 10px auto 0;
+      margin: 0 auto 10px;
       opacity: 0;
       transition: opacity 0.6s ease-in;
-      transform: translateY(-15px); /* ⬆️ carte un peu plus haut */
+      transform: translateY(-20px);
     }
 
-    iframe.loaded {
-      opacity: 1;
-    }
+    iframe.loaded { opacity: 1; }
 
-    /* === Boutons === */
     .btn {
       display: inline-block;
       margin: 12px 8px;
@@ -91,22 +86,16 @@
       font-size: 15px;
       cursor: pointer;
     }
-
     .btn:hover {
       transform: scale(1.04);
       box-shadow: 0 4px 10px rgba(0,0,0,0.25);
     }
-
     .wallet-btn { background: #96784b; }
     .install-btn { background: #34A853; }
     .refresh-btn { background: #6c757d; }
 
     .status {
-      position: fixed;
-      bottom: 40px;
-      left: 0;
-      width: 100%;
-      text-align: center;
+      margin-top: 5px;
       font-size: 14px;
       color: #c0872f;
     }
@@ -135,23 +124,19 @@
       transition: background 0.3s ease;
       z-index: 9999;
     }
-
     #net-status.offline { background: #b32626; }
 
-    /* === Vie de la MDL === */
+    /* Vie de la MDL */
     .mdl-info {
-      margin: 40px auto 60px; /* ⬆️ section un peu plus haute */
+      margin: 40px auto 60px;
       text-align: center;
       border-radius: 16px;
       padding: 10px;
       max-width: 420px;
       background: transparent;
+      transform: translateY(-25px);
     }
-
-    .mdl-info h3 {
-      color: #c0872f;
-      margin-bottom: 15px;
-    }
+    .mdl-info h3 { color: #c0872f; margin-bottom: 15px; }
 
     .instagram-feed iframe {
       width: 100%;
@@ -167,7 +152,6 @@
       flex-direction: column;
       gap: 8px;
     }
-
     .mdl-links .btn-link {
       text-decoration: none;
       background: #c0872f;
@@ -177,7 +161,6 @@
       font-weight: 600;
       transition: background 0.3s;
     }
-
     .mdl-links .btn-link:hover { background: #a47225; }
 
     /* 🌙 Mode sombre */
@@ -209,20 +192,16 @@
 
     <div class="status" id="status"></div>
 
-    <!-- === Section Vie de la MDL === -->
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
-
       <div class="instagram-feed">
         <iframe 
           src="https://www.instagram.com/mdlvaillant/embed"
           loading="lazy"
           allowtransparency="true"
           frameborder="0"
-          scrolling="no">
-        </iframe>
+          scrolling="no"></iframe>
       </div>
-
       <div class="mdl-links">
         <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
         <a href="https://edouard-vallaint-vierzon.ovh/" target="_blank" class="btn-link">🏫 Site du lycée</a>
@@ -235,7 +214,7 @@
   <div id="net-status">🟢 En ligne</div>
 
   <script>
-  // 🌗 Thème clair/sombre
+  // 🌗 Thème clair / sombre
   (function() {
     const toggle = document.getElementById('theme-toggle');
     const body = document.body;
@@ -259,6 +238,73 @@
     const iframe = document.getElementById("carte");
     iframe.addEventListener("load", () => iframe.classList.add("loaded"));
   });
+
+  // 🔄 Gestion carte fidélité
+  (function(){
+    const $ = s => document.querySelector(s);
+    const iframe=$("#carte"), walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
+          statusEl=$("#status"), netStatus=$("#net-status");
+
+    const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isStandalone=window.navigator.standalone===true;
+    let deferredPrompt=null;
+
+    window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBtn.style.display="inline-block";});
+    installBtn.addEventListener("click",()=>{if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});});
+
+    const saveCodeToDB=code=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onupgradeneeded=()=>r.result.createObjectStore("config");r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");tx.objectStore("config").put(code,"lastCode");tx.oncomplete=res;tx.onerror=rej;};r.onerror=rej;});
+    const getCodeFromDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");const g=tx.objectStore("config").get("lastCode");g.onsuccess=()=>res(g.result);g.onerror=rej;};r.onerror=rej;});
+
+    async function mountWithCode(code){
+      if(!code) code=await getCodeFromDB();
+      if(!code)return;
+      await saveCodeToDB(code);
+      localStorage.setItem("mdl_last_code",code);
+      walletBtn.href="/wallet/"+encodeURIComponent(code);
+      statusEl.textContent="Chargement de la carte…";
+
+      async function refreshCard(){
+        try{
+          const res=await fetch("/api/get-card/"+encodeURIComponent(code));
+          const data=await res.json();
+          if(data&&data.ok){
+            statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
+            iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
+          }else{
+            statusEl.textContent="⚠️ Carte introuvable";
+          }
+        }catch{
+          statusEl.textContent="⚠️ Hors ligne — carte en cache";
+          iframe.src="/c/"+encodeURIComponent(code);
+        }
+      }
+
+      refreshBtn.onclick=refreshCard;
+      await refreshCard();
+      setInterval(refreshCard,60000);
+    }
+
+    document.addEventListener("DOMContentLoaded",async()=>{
+      const params=new URLSearchParams(window.location.search);
+      let code=params.get("code")||localStorage.getItem("mdl_last_code")||await getCodeFromDB();
+      if(code){
+        await mountWithCode(code);
+      }
+    });
+
+    function updateNetworkStatus(){
+      if(navigator.onLine){
+        netStatus.textContent="🟢 En ligne";
+        netStatus.classList.remove("offline");
+      } else {
+        netStatus.textContent="🔴 Hors ligne";
+        netStatus.classList.add("offline");
+      }
+    }
+    window.addEventListener("online",updateNetworkStatus);
+    window.addEventListener("offline",updateNetworkStatus);
+    updateNetworkStatus();
+  })();
   </script>
 </body>
 </html>
