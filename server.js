@@ -254,7 +254,8 @@ app.get("/sw.js", (req, res) => {
   }
 });
 
-import jwt from "jsonwebtoken"; // npm install jsonwebtoken
+const jwt = require("jsonwebtoken");
+
 
 app.get("/wallet/:code", async (req, res) => {
   const code = req.params.code;
