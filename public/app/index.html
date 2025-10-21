@@ -29,6 +29,21 @@
     .status {margin-top:10px;font-size:14px;color:#0078D7;}
     #missing,#ios-help {max-width:520px;margin:20px auto;background:#fff;border:1px solid #ddd;border-radius:12px;padding:15px;}
     #missing input {width:calc(100% - 20px);padding:10px;margin:8px 0;border-radius:8px;border:1px solid #ccc;font-size:15px;}
+    /* 🔹 Indicateur connexion */
+    #net-status {
+      position:fixed;
+      bottom:8px; right:10px;
+      background:#0078D7;
+      color:white;
+      font-size:12px;
+      padding:5px 10px;
+      border-radius:10px;
+      box-shadow:0 2px 4px rgba(0,0,0,0.3);
+      opacity:0.85;
+      transition:background 0.3s ease;
+      z-index:9999;
+    }
+    #net-status.offline { background:#b32626; }
   </style>
 </head>
 <body>
@@ -65,6 +80,9 @@
   </main>
   <footer>© MDL Vaillant</footer>
 
+  <!-- 🟢🔴 Indicateur réseau -->
+  <div id="net-status">🟢 En ligne</div>
+
 <script>
 (function(){
   const $ = s => document.querySelector(s);
@@ -72,29 +90,20 @@
         walletBtn=$("#wallet"), installBtn=$("#install"), refreshBtn=$("#refresh"),
         missing=$("#missing"), iosHelp=$("#ios-help"),
         inputCode=$("#input-code"), saveCode=$("#save-code"),
-        statusEl=$("#status");
-
-  // Debug console
-  const debugBox=document.createElement("pre");
-  debugBox.style.cssText="background:#000;color:#0f0;font-size:11px;text-align:left;max-width:480px;margin:15px auto;padding:8px;border-radius:8px;white-space:pre-wrap;overflow:auto;max-height:180px;";
-  document.body.appendChild(debugBox);
-  const log=(...m)=>{console.log(...m);debugBox.textContent+="\n"+m.map(x=>typeof x=="object"?JSON.stringify(x):x).join(" ");debugBox.scrollTop=debugBox.scrollHeight;}
+        statusEl=$("#status"), netStatus=$("#net-status");
 
   const isIOS=/iPhone|iPad|iPod/i.test(navigator.userAgent);
   const isStandalone=window.navigator.standalone===true;
-  log("🧭 Détection appareil :",{isIOS,isStandalone});
   if(isIOS&&!isStandalone){iosHelp.style.display="block";}
 
-  // Installation PWA
   let deferredPrompt=null;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;installBtn.style.display="inline-block";});
   installBtn.addEventListener("click",()=>{if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;installBtn.style.display="none";});});
 
-  // IndexedDB pour le code
   const saveCodeToDB=code=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onupgradeneeded=()=>r.result.createObjectStore("config");r.onsuccess=()=>{const tx=r.result.transaction("config","readwrite");tx.objectStore("config").put(code,"lastCode");tx.oncomplete=res;tx.onerror=rej;};r.onerror=rej;});
   const getCodeFromDB=()=>new Promise((res,rej)=>{const r=indexedDB.open("mdl-db",1);r.onsuccess=()=>{const tx=r.result.transaction("config","readonly");const g=tx.objectStore("config").get("lastCode");g.onsuccess=()=>res(g.result);g.onerror=rej;};r.onerror=rej;});
 
-  // 🔁 Pré-cache carte sans query pour offline
+  // 🔁 Pré-cache carte sans query
   async function precacheCarte(code){
     if(!('caches' in window)) return;
     try{
@@ -103,43 +112,34 @@
       const cache = await caches.open(cacheName);
       const url = '/c/'+encodeURIComponent(code);
       const res = await fetch(url,{cache:'reload'});
-      if(res.ok){
-        await cache.put(url,res.clone());
-        log("💾 Carte précachée :",url);
-      }
-    }catch(e){log("⚠️ Erreur pré-cache",e);}
+      if(res.ok) await cache.put(url,res.clone());
+    }catch{}
   }
 
   async function mountWithCode(code){
-    log("🚀 mountWithCode()", code);
     if(!code) code=await getCodeFromDB();
-    if(!code){missing.style.display="block";log("❌ Aucun code trouvé");return;}
+    if(!code){missing.style.display="block";return;}
     await saveCodeToDB(code);
     localStorage.setItem("mdl_last_code",code);
     walletBtn.href="/wallet/"+encodeURIComponent(code);
     statusEl.textContent="Chargement de la carte…";
 
     async function refreshCard(){
-      log("🔄 refreshCard() → tentative fetch API");
       try{
         const res=await fetch("/api/get-card/"+encodeURIComponent(code));
-        log("📡 /api/get-card status:",res.status);
         const data=await res.json();
         if(data&&data.ok){
-          log("✅ Données carte OK");
           statusEl.textContent="✅ Dernière mise à jour : "+new Date().toLocaleTimeString();
           if(navigator.onLine){
             iframe.src="/c/"+encodeURIComponent(code)+"?t="+Date.now();
             await precacheCarte(code);
           }
-        } else {
-          log("⚠️ Carte introuvable côté serveur");
+        }else{
           statusEl.textContent="⚠️ Carte introuvable";
         }
-      }catch(e){
-        log("🚨 Erreur refreshCard()",e);
+      }catch{
         statusEl.textContent="⚠️ Hors ligne — carte en cache";
-        iframe.src="/c/"+encodeURIComponent(code); // force version cache
+        iframe.src="/c/"+encodeURIComponent(code);
       }
     }
 
@@ -148,13 +148,25 @@
     setInterval(refreshCard,60000);
   }
 
+  // 🔹 Indicateur en ligne/hors-ligne
+  function updateNetworkStatus(){
+    if(navigator.onLine){
+      netStatus.textContent="🟢 En ligne";
+      netStatus.classList.remove("offline");
+    } else {
+      netStatus.textContent="🔴 Hors ligne";
+      netStatus.classList.add("offline");
+    }
+  }
+  window.addEventListener("online",updateNetworkStatus);
+  window.addEventListener("offline",updateNetworkStatus);
+  updateNetworkStatus();
+
   document.addEventListener("DOMContentLoaded",async()=>{
-    log("🌐 DOMContentLoaded");
     const params=new URLSearchParams(window.location.search);
     let code=params.get("code");
     const stored=localStorage.getItem("mdl_last_code")||await getCodeFromDB();
     if(code){
-      log("💾 Code dans URL:",code);
       await saveCodeToDB(code);
       localStorage.setItem("mdl_last_code",code);
       const url=new URL(window.location.href);
@@ -162,7 +174,6 @@
       history.replaceState({},'',url);
     }else{
       code=stored||"";
-      log("📦 Code depuis stockage:",code);
     }
 
     if(code){
@@ -179,9 +190,7 @@
     }
 
     if("serviceWorker" in navigator){
-      navigator.serviceWorker.register("/sw.js")
-        .then(reg=>log("✅ SW actif:",reg.scope))
-        .catch(e=>log("❌ Erreur SW",e));
+      navigator.serviceWorker.register("/sw.js").catch(()=>{});
     }
   });
 })();
