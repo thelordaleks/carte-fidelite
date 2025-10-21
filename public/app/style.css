@@ -179,12 +179,13 @@ body.dark footer {
 .mdl-info {
   margin: 30px auto 80px;
   text-align: center;
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  background: transparent !important; /* ✅ supprime le fond blanc */
+  border-radius: 0 !important;
+  box-shadow: none !important;
   padding: 20px;
   max-width: 420px;
 }
+
 
 .mdl-info h3 {
   color: #c0872f;
