@@ -137,13 +137,18 @@ app.get("/c/:code", async (req, res) => {
     const card = r.rows[0];
     const tpl = readFileOrFallback(TEMPLATE_FILE, "<p>Template introuvable</p>");
     const html = replaceTokens(tpl, card, absoluteBaseUrl(req));
+
+    // ✅ Ajout : permettre la mise en cache par le Service Worker
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+
     res.send(html);
   } catch (e) {
     console.error(e);
     res.status(500).send("render-failed");
   }
 });
+
 
 app.get("/api/get-card/:code", async (req, res) => {
   try {
