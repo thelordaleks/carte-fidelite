@@ -254,6 +254,12 @@ app.get("/sw.js", (req, res) => {
   }
 });
 
+// ✅ Route temporaire /wallet/:code — redirige vers la carte
+app.get("/wallet/:code", (req, res) => {
+  const code = req.params.code;
+  const base = absoluteBaseUrl(req);
+  return res.redirect(`${base}/c/${encodeURIComponent(code)}`);
+});
 
 initDb().then(() => {
   app.listen(PORT, () => console.log("✅ Serveur MDL actif sur le port", PORT));
