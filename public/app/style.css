@@ -134,12 +134,17 @@ main {
 }
 
 iframe {
-  width: 320px;
-  height: 200px;
-  border-radius: 16px;
-  border: 2px solid #c0872f;
-  margin: 20px 0;
+  width: 100%;
+  max-width: 440px;
+  height: 270px;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  margin: 0 auto !important;
+  display: block;
+  box-shadow: none !important;
 }
+
 
 footer {
   text-align: center;
