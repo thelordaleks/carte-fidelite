@@ -69,23 +69,24 @@
     }
 
     iframe#carte {
-      width: 100%;
-      max-width: 440px;
-      min-height: 100px;
-      display: block;
-      margin: 0 auto;
-      background: transparent !important;
-      border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      border-radius: 0 !important;
-      padding: 0 !important;
-      filter: none !important;
-      -webkit-appearance: none !important;
-      appearance: none !important;
-      background-clip: padding-box !important;
-      transition: height 0.25s ease-out;
-    }
+  width: 100%;
+  max-width: 440px;
+  min-height: 100px; /* petite base provisoire, pas visible */
+  display: block;
+  margin: 0 auto;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  filter: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background-clip: padding-box !important;
+  transition: height 0.25s ease-out; /* animation douce */
+}
+
 
     .btn {
       display: inline-block;
@@ -111,25 +112,10 @@
     .wallet-btn { background: #96784b; }
     .install-btn { background: #34A853; }
 
-    /* ✅ Dernière mise à jour fixée en bas */
-    #status {
-      position: fixed;
-      bottom: 45px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.9);
-      color: #c0872f;
+    .status {
+      margin: 10px 0;
       font-size: 14px;
-      font-weight: 500;
-      padding: 6px 14px;
-      border-radius: 12px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-      z-index: 9998;
-    }
-
-    body.dark #status {
-      background: rgba(20, 20, 20, 0.9);
-      color: #f1c880;
+      color: #c0872f;
     }
 
     footer {
@@ -218,8 +204,7 @@
       <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
     </div>
 
-    <!-- ✅ le statut reste vide ici, affiché en bas -->
-    <div id="status"></div>
+    <div class="status" id="status"></div>
 
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
@@ -240,3 +225,152 @@
 
   <footer>© MDL Vaillant</footer>
   <div id="net-status">🟢 En ligne</div>
+
+  <script>
+  // 🌗 Thème clair / sombre
+  (() => {
+    const toggle = document.getElementById('theme-toggle');
+    const body = document.body;
+    const saved = localStorage.getItem('mdl_theme');
+    if (saved === 'dark') { body.classList.add('dark'); toggle.textContent = '☀️'; }
+    toggle.addEventListener('click', () => {
+      if (body.classList.contains('dark')) {
+        body.classList.remove('dark');
+        toggle.textContent = '🌙';
+        localStorage.setItem('mdl_theme', 'light');
+      } else {
+        body.classList.add('dark');
+        toggle.textContent = '☀️';
+        localStorage.setItem('mdl_theme', 'dark');
+      }
+    });
+  })();
+
+  // ✅ Si le lien vient d'un email, forcer le bandeau d'installation
+  if (location.search.includes('source=email')) {
+    setTimeout(() => window.dispatchEvent(new Event('beforeinstallprompt')), 2500);
+  }
+
+  // 🔄 Gestion de la carte + bouton refresh
+  (() => {
+    const $ = s => document.querySelector(s);
+    const iframe = $("#carte"), refreshIcon = $("#refresh-icon"),
+          statusEl = $("#status"), netStatus = $("#net-status");
+
+    let code = localStorage.getItem("mdl_last_code");
+    if (!code) {
+      const params = new URLSearchParams(location.search);
+      const fromUrl = params.get("code");
+      if (fromUrl) { code = fromUrl; localStorage.setItem("mdl_last_code", code); }
+    }
+    if (code) iframe.src = "/c/" + encodeURIComponent(code);
+
+    async function refreshCard(){
+      if(!code) return;
+      try {
+        const res = await fetch("/api/get-card/" + encodeURIComponent(code));
+        const data = await res.json();
+        if(data && data.ok){
+          statusEl.textContent = "✅ Dernière mise à jour : " + new Date().toLocaleTimeString();
+          iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
+        } else statusEl.textContent = "⚠️ Carte introuvable";
+      } catch {
+        statusEl.textContent = "⚠️ Hors ligne — carte en cache";
+        iframe.src = "/c/" + encodeURIComponent(code);
+      }
+    }
+    refreshIcon.onclick = refreshCard;
+    setInterval(refreshCard, 60000);
+    refreshCard();
+
+    function updateNetworkStatus(){
+      if(navigator.onLine){
+        netStatus.textContent="🟢 En ligne";
+        netStatus.classList.remove("offline");
+      } else {
+        netStatus.textContent="🔴 Hors ligne";
+        netStatus.classList.add("offline");
+      }
+    }
+    window.addEventListener("online",updateNetworkStatus);
+    window.addEventListener("offline",updateNetworkStatus);
+    updateNetworkStatus();
+  })();
+  </script>
+
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js')
+      .then(() => console.log('✅ Service Worker enregistré'))
+      .catch(err => console.error('❌ Erreur SW:', err));
+  }
+  </script>
+
+  <script>
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (document.getElementById('install-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'install-banner';
+    banner.innerHTML = `
+      <div style="
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        background: #c0872f;
+        color: white;
+        text-align: center;
+        padding: 14px 10px;
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
+        z-index: 10000;">
+        📱 <b>Installe la carte fidélité MDL</b><br>
+        <button id="install-yes" style="
+          background:white;
+          color:#c0872f;
+          font-weight:bold;
+          border:none;
+          padding:8px 16px;
+          border-radius:8px;
+          margin-top:8px;
+          cursor:pointer;">Installer</button>
+        <button id="install-no" style="
+          background:transparent;
+          color:white;
+          border:none;
+          margin-left:8px;
+          cursor:pointer;">Plus tard</button>
+      </div>`;
+    document.body.appendChild(banner);
+
+    document.getElementById('install-yes').addEventListener('click', async () => {
+      banner.remove();
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      console.log(choice.outcome === 'accepted' ? '✅ App installée !' : '❌ Installation refusée');
+      deferredPrompt = null;
+    });
+    document.getElementById('install-no').addEventListener('click', () => banner.remove());
+  });
+  </script>
+
+  <script>
+  // ✅ Ajustement automatique + déclenchement initial
+window.addEventListener('message', (event) => {
+  if (event.data.type === 'resizeCarte' && event.data.height) {
+    const iframe = document.getElementById('carte');
+    iframe.style.height = event.data.height + 'px';
+  }
+});
+
+// ⚡ Ajuste aussi dès que l'iframe a fini de charger
+const iframeCarte = document.getElementById('carte');
+iframeCarte.addEventListener('load', () => {
+  iframeCarte.contentWindow?.postMessage({ type: 'getCarteHeight' }, '*');
+});
+
+  </script>
+
+</body>
+</html>
