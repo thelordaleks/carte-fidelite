@@ -261,14 +261,57 @@ body:not(.dark) .instagram-feed::after {
     }
 
     .mdl-links .btn-link {
-      text-decoration: none;
-      background: #c0872f;
-      color: white;
-      padding: 10px 15px;
-      border-radius: 8px;
-      font-weight: 600;
-      transition: background 0.3s ease, transform 0.2s ease;
-    }
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-decoration: none;
+  background: rgba(192, 135, 47, 0.25); /* transparent doré doux */
+  color: white;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.5s ease;
+}
+
+/* ✅ effet holographique subtil (reflet mouvant) */
+.mdl-links .btn-link::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg,
+    rgba(255,255,255,0.15) 0%,
+    rgba(255,255,255,0.4) 50%,
+    rgba(255,255,255,0.15) 100%);
+  opacity: 0;
+  transform: translateX(-100%);
+  transition: opacity 0.4s ease, transform 0.8s ease;
+}
+
+.mdl-links .btn-link:hover::before {
+  opacity: 1;
+  transform: translateX(100%);
+}
+
+.mdl-links .btn-link:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+}
+
+/* ✅ icônes image */
+.icon-btn {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+
 
     .mdl-links .btn-link:hover {
       background: #a47225;
@@ -311,11 +354,22 @@ body:not(.dark) .instagram-feed::after {
               frameborder="0"
               scrolling="no"></iframe>
     </div>
-    <div class="mdl-links">
-      <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
-      <a href="https://edouard-vallaint-vierzon.ovh/" target="_blank" class="btn-link">🏫 Site du lycée</a>
-      <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement de la MDL</a>
-    </div>
+   <div class="mdl-links">
+  <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link hologram">
+    <img src="/static/icons/instagram.png" alt="Instagram" class="icon-btn">
+    <span>Instagram MDL</span>
+  </a>
+
+  <a href="https://edouard-vallaint-vierzon.ovh/" target="_blank" class="btn-link hologram">
+    <img src="/static/Logo-Lycée.png" alt="Lycée" class="icon-btn">
+    <span>Site du lycée</span>
+  </a>
+
+  <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link hologram">
+    📜 <span>Règlement de la MDL</span>
+  </a>
+</div>
+
   </section>
 
   <div id="status"></div>
