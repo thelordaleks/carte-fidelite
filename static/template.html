@@ -26,8 +26,62 @@
       overflow: hidden;
       border: none !important;
       border-radius: 0 !important;
+      transition: all 0.3s ease;
     }
 
+    .bg {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: contain;
+      background: transparent !important;
+      transition: all 0.3s ease;
+    }
+
+    .field {
+      position: absolute;
+      color: #1c2434;
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-weight: 700;
+      white-space: nowrap;
+      text-shadow: 0 1px 1px rgba(255,255,255,0.6);
+      transition: all 0.3s ease;
+    }
+
+    /* ✅ Calage fin par rapport à l’image */
+    .nom { left: 24%; top: 62%; font-size: 16px; }
+    .prenom { left: 24%; top: 72.5%; font-size: 16px; }
+    .points { left: 30%; top: 82.5%; font-size: 16px; font-weight: 800; }
+    .reduc { left: 44%; top: 82.5%; font-size: 16px; font-weight: 800; }
+
+    /* ✅ Code-barres calibré */
+    .barcode {
+      position: absolute;
+      top: 46%;
+      left: 40%;
+      transform: translateX(-50%) translateY(-50%);
+      z-index: 3;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .barcode img {
+      width: 120%;
+      height: auto;
+      transition: transform 0.25s ease, width 0.3s ease;
+      background: transparent !important;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* 🪄 Petit effet zoom au survol */
+    .barcode img:hover,
+    .barcode img:active {
+      transform: scale(1.04);
+    }
+
+    /* ✅ Mode plein écran corrigé */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
@@ -38,67 +92,30 @@
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
+      flex-direction: column !important;
+      overflow: hidden;
     }
 
-    .bg {
-      width: 100%;
-      height: auto;
-      display: block;
-      object-fit: contain;
-      background: transparent !important;
-    }
-
-    .field {
-      position: absolute;
-      color: #1c2434;
-      font-family: "Segoe UI", Arial, sans-serif;
-      font-weight: 700;
-      white-space: nowrap;
-      text-shadow: 0 1px 1px rgba(255,255,255,0.6);
-    }
-
-    /* ✅ Calage fin par rapport à l’image */
-    .nom { left: 24%; top: 62%; font-size: 16px; }
-    .prenom { left: 24%; top: 72.5%; font-size: 16px; }
-    .points { left: 30%; top: 82.5%; font-size: 16px; font-weight: 800; }
-    .reduc { left: 44%; top: 82.5%; font-size: 16px; font-weight: 800; }
-
-    /* ✅ Agrandissement code-barres */
-    .barcode {
-      position: absolute;
-      top: 47%;
-      left: 40%;
-      transform: translateX(-50%) translateY(-50%);
-      z-index: 3;
-      text-align: center;
-      cursor: pointer;
-    }
-
-    .barcode img {
-      width: 125%;  /* ← 115% = visiblement plus grand */
-      height: auto;
-      transition: transform 0.25s ease;
-      background: transparent !important;
-      user-select: none;
-      -webkit-user-drag: none;
-    }
-
-    /* 🪄 effet d’agrandissement au survol ou appui */
-    .barcode img:hover,
-    .barcode img:active {
-      transform: scale(1.05);
-    }
-
-    /* Zoom plein écran */
     .card.zoomed img.bg {
-      width: auto;
-      height: 90%;
-      max-height: 90%;
+      width: 95vw;
+      height: auto;
+      max-height: 85vh;
       object-fit: contain;
+    }
+
+    .card.zoomed .barcode {
+      top: 46%;
+      left: 40%;
+      transform: translate(-50%, -50%);
     }
 
     .card.zoomed .barcode img {
-      width: 130%; /* encore plus grand en plein écran */
+      width: 120%; /* même taille qu’avant : pas de déformation */
+      transform: none !important;
+    }
+
+    .card.zoomed .field {
+      font-size: 18px;
     }
   </style>
 </head>
@@ -114,7 +131,7 @@
   </div>
 
   <script>
-    // ✅ Ajuste la taille auto au parent (index.html)
+    // ✅ Ajuste la hauteur dans le parent
     function sendHeight() {
       const h = document.querySelector('.card').offsetHeight;
       window.parent.postMessage({ type: 'resizeCarte', height: h }, '*');
@@ -145,7 +162,7 @@
       });
     });
 
-    // Si le parent demande la hauteur
+    // Communication avec le parent
     window.addEventListener('message', (e) => {
       if (e.data.type === 'getCarteHeight') sendHeight();
     });
