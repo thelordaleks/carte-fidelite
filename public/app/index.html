@@ -111,26 +111,16 @@
     .wallet-btn { background: #96784b; }
     .install-btn { background: #34A853; }
 
-    /* ✅ Dernière mise à jour fixée en bas */
+    /* ✅ Dernière mise à jour — maintenant en bas de la page */
     #status {
-      position: fixed;
-      bottom: 45px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.9);
-      color: #c0872f;
+      margin-top: 20px;
+      margin-bottom: 10px;
       font-size: 14px;
+      color: #c0872f;
       font-weight: 500;
-      padding: 6px 14px;
-      border-radius: 12px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-      z-index: 9998;
     }
 
-    body.dark #status {
-      background: rgba(20, 20, 20, 0.9);
-      color: #f1c880;
-    }
+    body.dark #status { color: #f1c880; }
 
     footer {
       margin-top: 10px;
@@ -218,9 +208,6 @@
       <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
     </div>
 
-    <!-- ✅ statut déplacé -->
-    <div id="status"></div>
-
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
       <div class="instagram-feed">
@@ -236,6 +223,9 @@
         <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement de la MDL</a>
       </div>
     </section>
+
+    <!-- ✅ "Dernière mise à jour" maintenant juste au-dessus du footer -->
+    <div id="status"></div>
   </main>
 
   <footer>© MDL Vaillant</footer>
@@ -379,7 +369,6 @@
     }
   });
 
-  // ⚡ Ajuste aussi dès que l'iframe a fini de charger
   const iframeCarte = document.getElementById('carte');
   iframeCarte.addEventListener('load', () => {
     iframeCarte.contentWindow?.postMessage({ type: 'getCarteHeight' }, '*');
