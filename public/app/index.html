@@ -68,23 +68,24 @@
       background: transparent !important;
     }
 
+    /* ✅ Carte avec bord arrondi et relief */
     iframe#carte {
       width: 100%;
       max-width: 440px;
       min-height: 100px;
       display: block;
       margin: 0 auto;
-      background: transparent !important;
+      background: white;
       border: none !important;
-      outline: none !important;
-      box-shadow: none !important;
-      border-radius: 0 !important;
-      padding: 0 !important;
-      filter: none !important;
-      -webkit-appearance: none !important;
-      appearance: none !important;
-      background-clip: padding-box !important;
-      transition: height 0.25s ease-out;
+      border-radius: 16px;                 /* ← coins arrondis */
+      box-shadow: 0 6px 15px rgba(0,0,0,0.12); /* ← léger relief */
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    body.dark iframe#carte {
+      background: #1a1a1a;
+      box-shadow: 0 6px 15px rgba(255,255,255,0.06);
     }
 
     .btn {
@@ -111,7 +112,7 @@
     .wallet-btn { background: #96784b; }
     .install-btn { background: #34A853; }
 
-    /* ✅ Dernière mise à jour — maintenant en bas de la page */
+    /* ✅ Dernière mise à jour — en bas de la page */
     #status {
       margin-top: 20px;
       margin-bottom: 10px;
@@ -185,7 +186,6 @@
     .mdl-links .btn-link:hover { background: #a47225; }
 
     body.dark header { background: #1e1e1e; color: #c0872f; }
-    body.dark iframe#carte { filter: brightness(0.92); }
     body.dark .btn { background: #c0872f; color: white; }
     body.dark footer { color: #ccc; }
   </style>
@@ -224,7 +224,6 @@
       </div>
     </section>
 
-    <!-- ✅ "Dernière mise à jour" maintenant juste au-dessus du footer -->
     <div id="status"></div>
   </main>
 
@@ -232,7 +231,6 @@
   <div id="net-status">🟢 En ligne</div>
 
   <script>
-  // 🌗 Thème clair / sombre
   (() => {
     const toggle = document.getElementById('theme-toggle');
     const body = document.body;
@@ -251,12 +249,10 @@
     });
   })();
 
-  // ✅ Si le lien vient d'un email, forcer le bandeau d'installation
   if (location.search.includes('source=email')) {
     setTimeout(() => window.dispatchEvent(new Event('beforeinstallprompt')), 2500);
   }
 
-  // 🔄 Gestion de la carte + bouton refresh
   (() => {
     const $ = s => document.querySelector(s);
     const iframe = $("#carte"), refreshIcon = $("#refresh-icon"),
@@ -305,9 +301,7 @@
 
   <script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-      .then(() => console.log('✅ Service Worker enregistré'))
-      .catch(err => console.error('❌ Erreur SW:', err));
+    navigator.serviceWorker.register('/sw.js');
   }
   </script>
 
@@ -352,8 +346,7 @@
     document.getElementById('install-yes').addEventListener('click', async () => {
       banner.remove();
       deferredPrompt.prompt();
-      const choice = await deferredPrompt.userChoice;
-      console.log(choice.outcome === 'accepted' ? '✅ App installée !' : '❌ Installation refusée');
+      await deferredPrompt.userChoice;
       deferredPrompt = null;
     });
     document.getElementById('install-no').addEventListener('click', () => banner.remove());
@@ -361,7 +354,6 @@
   </script>
 
   <script>
-  // ✅ Ajustement automatique + déclenchement initial
   window.addEventListener('message', (event) => {
     if (event.data.type === 'resizeCarte' && event.data.height) {
       const iframe = document.getElementById('carte');
