@@ -84,6 +84,7 @@
       -webkit-appearance: none !important;
       appearance: none !important;
       background-clip: padding-box !important;
+      transition: height 0.3s ease;
     }
 
     .btn {
@@ -352,12 +353,16 @@
     document.getElementById('install-no').addEventListener('click', () => banner.remove());
   });
   </script>
+
+  <script>
+  // ✅ Ajustement automatique de la hauteur de l'iframe en fonction de la carte
   window.addEventListener('message', (event) => {
-  if (event.data.type === 'resizeCarte' && event.data.height) {
-    const iframe = document.getElementById('carte');
-    iframe.style.height = event.data.height + 'px';
-  }
-});
+    if (event.data.type === 'resizeCarte' && event.data.height) {
+      const iframe = document.getElementById('carte');
+      iframe.style.height = event.data.height + 'px';
+    }
+  });
+  </script>
 
 </body>
 </html>
