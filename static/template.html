@@ -14,7 +14,7 @@
       background: transparent !important;
       overflow: hidden !important;
       border: none !important;
-      touch-action: none; /* ✅ empêche le pinch zoom mobile */
+      touch-action: none;
     }
 
     .card {
@@ -25,8 +25,8 @@
       display: block;
       margin: 0 auto;
       background: #fff;
-      border-radius: 16px;              /* ✅ coins arrondis */
-      box-shadow: 0 6px 15px rgba(0,0,0,0.12); /* ✅ léger relief */
+      border-radius: 16px;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.12);
       overflow: hidden;
       border: none !important;
       transition: none !important;
@@ -86,10 +86,11 @@
       transform: scale(1.03);
     }
 
-    /* ✅ Plein écran doré/beige clair + relief */
+    /* ✅ Plein écran doré/beige clair + relief resserré */
     .card.zoomed {
       position: fixed !important;
-      inset: 0 !important;
+      top: 0;
+      left: 0;
       width: 100vw !important;
       height: 100vh !important;
       z-index: 9999 !important;
@@ -97,9 +98,7 @@
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      flex-direction: column !important;
       overflow: hidden;
-      padding: 2vh 2vw;
       transform: none !important;
       zoom: 1 !important;
       animation: fadeIn 0.25s ease-out;
@@ -120,13 +119,13 @@
     }
 
     .card.zoomed img.bg {
-      width: 95vw;
+      width: 96vw;  /* 🔧 plus large pour réduire les marges latérales */
+      max-width: 1100px; /* limite max sur grand écran */
       height: auto;
-      max-height: 85vh;
+      max-height: 87vh;
       object-fit: contain;
-      transform: none !important;
-      border-radius: 16px; /* ✅ mêmes coins arrondis */
-      box-shadow: 0 10px 25px rgba(0,0,0,0.25); /* ✅ relief accentué */
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
     }
 
     /* ✅ Réalignement en plein écran */
