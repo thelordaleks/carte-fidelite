@@ -16,14 +16,19 @@
   <link rel="apple-touch-icon" href="/static/logo-mdl.png">
 
   <style>
-    body {
-      font-family: "Segoe UI", Arial, sans-serif;
-      background: linear-gradient(to bottom, #f5e8cf 0%, #f9f5ef 40%, #ffffff 100%);
-      color: #333;
+    html, body {
       margin: 0;
       padding: 0;
+      background: linear-gradient(to bottom, #f5e8cf 0%, #f9f5ef 40%, #ffffff 100%) !important;
+      color: #333;
       text-align: center;
+      font-family: "Segoe UI", Arial, sans-serif;
       transition: background 0.4s ease, color 0.4s ease;
+    }
+
+    body.dark {
+      background: linear-gradient(to bottom, #0f0f0f 0%, #1a1a1a 100%) !important;
+      color: #f9f5ef;
     }
 
     header {
@@ -58,17 +63,27 @@
       fill: white;
     }
 
-    main { padding: 10px 20px 60px; }
+    main {
+      padding: 10px 20px 0;
+      background: transparent !important;
+    }
 
     iframe#carte {
       width: 100%;
       max-width: 440px;
       height: 270px;
-      border: none;
-      background: transparent !important;
-      box-shadow: none !important;
       display: block;
       margin: 0 auto;
+      background: transparent !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      filter: none !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      background-clip: padding-box !important;
     }
 
     .btn {
@@ -96,7 +111,7 @@
     .install-btn { background: #34A853; }
 
     .status {
-      margin: 20px 0 10px 0;
+      margin: 10px 0;
       font-size: 14px;
       color: #c0872f;
     }
@@ -106,6 +121,7 @@
       padding: 10px;
       font-size: 13px;
       color: #666;
+      background: transparent !important;
     }
 
     #net-status {
@@ -125,7 +141,7 @@
     #net-status.offline { background: #b32626; }
 
     .mdl-info {
-      margin: 10px auto 60px;
+      margin: 20px auto 60px;
       text-align: center;
       border-radius: 16px;
       padding: 10px;
@@ -162,38 +178,10 @@
 
     .mdl-links .btn-link:hover { background: #a47225; }
 
-    body.dark {
-      background: linear-gradient(to bottom, #1a1a1a 0%, #0f0f0f 100%);
-      color: #f9f5ef;
-    }
-
     body.dark header { background: #1e1e1e; color: #c0872f; }
     body.dark iframe#carte { filter: brightness(0.92); }
     body.dark .btn { background: #c0872f; color: white; }
     body.dark footer { color: #ccc; }
-    /* ✅ Corrige le fond blanc autour de la carte */
-iframe#carte {
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  display: block !important;
-  margin: 0 auto !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  filter: none !important;
-  -webkit-appearance: none !important;
-  appearance: none !important;
-  background-clip: padding-box !important;
-}
-
-html, body {
-  background: transparent !important;
-}
-
-
-
-
   </style>
 </head>
 
@@ -219,7 +207,11 @@ html, body {
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
       <div class="instagram-feed">
-        <iframe src="https://www.instagram.com/mdlvaillant/embed" loading="lazy" allowtransparency="true" frameborder="0" scrolling="no"></iframe>
+        <iframe src="https://www.instagram.com/mdlvaillant/embed"
+                loading="lazy"
+                allowtransparency="true"
+                frameborder="0"
+                scrolling="no"></iframe>
       </div>
       <div class="mdl-links">
         <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
@@ -234,7 +226,7 @@ html, body {
 
   <script>
   // 🌗 Thème clair / sombre
-  (function() {
+  (() => {
     const toggle = document.getElementById('theme-toggle');
     const body = document.body;
     const saved = localStorage.getItem('mdl_theme');
@@ -254,37 +246,26 @@ html, body {
 
   // ✅ Si le lien vient d'un email, forcer le bandeau d'installation
   if (location.search.includes('source=email')) {
-    setTimeout(() => {
-      window.dispatchEvent(new Event('beforeinstallprompt'));
-    }, 2500);
+    setTimeout(() => window.dispatchEvent(new Event('beforeinstallprompt')), 2500);
   }
 
   // 🔄 Gestion de la carte + bouton refresh
-  (function(){
+  (() => {
     const $ = s => document.querySelector(s);
-    const iframe=$("#carte"), refreshIcon=$("#refresh-icon"),
-          statusEl=$("#status"), netStatus=$("#net-status");
+    const iframe = $("#carte"), refreshIcon = $("#refresh-icon"),
+          statusEl = $("#status"), netStatus = $("#net-status");
 
     let code = localStorage.getItem("mdl_last_code");
-
-    // ✅ Si aucun code n’est en mémoire, on le récupère depuis l’URL
     if (!code) {
       const params = new URLSearchParams(location.search);
       const fromUrl = params.get("code");
-      if (fromUrl) {
-        code = fromUrl;
-        localStorage.setItem("mdl_last_code", code);
-      }
+      if (fromUrl) { code = fromUrl; localStorage.setItem("mdl_last_code", code); }
     }
-
-    // ✅ Si on a un code, on affiche la carte immédiatement
-    if (code) {
-      iframe.src = "/c/" + encodeURIComponent(code);
-    }
+    if (code) iframe.src = "/c/" + encodeURIComponent(code);
 
     async function refreshCard(){
       if(!code) return;
-      try{
+      try {
         const res = await fetch("/api/get-card/" + encodeURIComponent(code));
         const data = await res.json();
         if(data && data.ok){
@@ -296,7 +277,6 @@ html, body {
         iframe.src = "/c/" + encodeURIComponent(code);
       }
     }
-
     refreshIcon.onclick = refreshCard;
     setInterval(refreshCard, 60000);
     refreshCard();
@@ -329,57 +309,47 @@ html, body {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
+    if (document.getElementById('install-banner')) return;
 
-    if (!document.getElementById('install-banner')) {
-      const banner = document.createElement('div');
-      banner.id = 'install-banner';
-      banner.innerHTML = `
-        <div style="
-          position: fixed;
-          bottom: 0; left: 0; right: 0;
-          background: #c0872f;
-          color: white;
-          font-family: 'Segoe UI', Arial, sans-serif;
-          text-align: center;
-          padding: 14px 10px;
-          box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
-          z-index: 10000;
-        ">
-          📱 <b>Installe la carte fidélité MDL</b><br>
-          <button id="install-yes" style="
-            background:white;
-            color:#c0872f;
-            font-weight:bold;
-            border:none;
-            padding:8px 16px;
-            border-radius:8px;
-            margin-top:8px;
-            cursor:pointer;
-          ">Installer</button>
-          <button id="install-no" style="
-            background:transparent;
-            color:white;
-            border:none;
-            margin-left:8px;
-            cursor:pointer;
-          ">Plus tard</button>
-        </div>`;
-      document.body.appendChild(banner);
+    const banner = document.createElement('div');
+    banner.id = 'install-banner';
+    banner.innerHTML = `
+      <div style="
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        background: #c0872f;
+        color: white;
+        text-align: center;
+        padding: 14px 10px;
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
+        z-index: 10000;">
+        📱 <b>Installe la carte fidélité MDL</b><br>
+        <button id="install-yes" style="
+          background:white;
+          color:#c0872f;
+          font-weight:bold;
+          border:none;
+          padding:8px 16px;
+          border-radius:8px;
+          margin-top:8px;
+          cursor:pointer;">Installer</button>
+        <button id="install-no" style="
+          background:transparent;
+          color:white;
+          border:none;
+          margin-left:8px;
+          cursor:pointer;">Plus tard</button>
+      </div>`;
+    document.body.appendChild(banner);
 
-      document.getElementById('install-yes').addEventListener('click', async () => {
-        banner.remove();
-        deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
-        if (choice.outcome === 'accepted') {
-          console.log('✅ App installée !');
-        } else {
-          console.log('❌ Installation refusée');
-        }
-        deferredPrompt = null;
-      });
-
-      document.getElementById('install-no').addEventListener('click', () => banner.remove());
-    }
+    document.getElementById('install-yes').addEventListener('click', async () => {
+      banner.remove();
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      console.log(choice.outcome === 'accepted' ? '✅ App installée !' : '❌ Installation refusée');
+      deferredPrompt = null;
+    });
+    document.getElementById('install-no').addEventListener('click', () => banner.remove());
   });
   </script>
 </body>
