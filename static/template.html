@@ -14,7 +14,7 @@
       background: transparent !important;
       overflow: hidden !important;
       border: none !important;
-      touch-action: none; /* ✅ empêche le pinch zoom mobile */
+      touch-action: none;
     }
 
     .card {
@@ -25,8 +25,8 @@
       display: block;
       margin: 0 auto;
       background: #fff;
-      border-radius: 16px;              /* ✅ coins arrondis */
-      box-shadow: 0 6px 15px rgba(0,0,0,0.12); /* ✅ léger relief */
+      border-radius: 16px;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.12);
       overflow: hidden;
       border: none !important;
       transition: none !important;
@@ -54,7 +54,7 @@
       transition: none !important;
     }
 
-    /* ✅ Calage fin (vue normale) */
+    /* ✅ Positionnement normal */
     .nom { left: 24%; top: 62%; font-size: 16px; }
     .prenom { left: 24%; top: 72.5%; font-size: 16px; }
     .points { left: 30%; top: 82.5%; font-size: 16px; font-weight: 800; }
@@ -77,29 +77,22 @@
       background: transparent !important;
       user-select: none;
       -webkit-user-drag: none;
-      transform: none !important;
-      transition: none !important;
     }
 
-    .barcode img:hover,
-    .barcode img:active {
-      transform: scale(1.03);
-    }
-
-    /* ✅ Plein écran doré/beige clair + relief */
+    /* ✅ Mode plein écran corrigé */
     .card.zoomed {
       position: fixed !important;
-      inset: 0 !important;
+      top: 0;
+      left: 0;
       width: 100vw !important;
       height: 100vh !important;
       z-index: 9999 !important;
-      background: #f8eedc !important; /* 🎨 fond doré/beige clair */
+      background: #f8eedc !important; /* 🎨 fond doré clair */
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
       flex-direction: column !important;
-      overflow: hidden;
-      padding: 2vh 2vw;
+      overflow: hidden !important;
       transform: none !important;
       zoom: 1 !important;
       animation: fadeIn 0.25s ease-out;
@@ -110,26 +103,26 @@
       to { opacity: 1; }
     }
 
-    /* ✅ effet lumière douce */
+    /* ✅ effet doux autour */
     .card.zoomed::before {
       content: "";
       position: absolute;
       inset: 0;
-      background: radial-gradient(rgba(255,255,255,0.25), transparent 60%);
+      background: radial-gradient(rgba(255,255,255,0.3), transparent 60%);
       pointer-events: none;
     }
 
+    /* ✅ Image bien centrée sans zoom automatique */
     .card.zoomed img.bg {
-      width: 95vw;
-      height: auto;
-      max-height: 85vh;
+      width: auto;
+      height: 80vh;
+      max-width: 95vw;
       object-fit: contain;
-      transform: none !important;
-      border-radius: 16px; /* ✅ mêmes coins arrondis */
-      box-shadow: 0 10px 25px rgba(0,0,0,0.25); /* ✅ relief accentué */
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
     }
 
-    /* ✅ Réalignement en plein écran */
+    /* ✅ Réalignement texte en plein écran */
     .card.zoomed .nom { left: 32%; top: 61.5%; font-size: 18px; }
     .card.zoomed .prenom { left: 32%; top: 70%; font-size: 18px; }
     .card.zoomed .points { left: 37%; top: 78.5%; font-size: 18px; }
@@ -143,7 +136,6 @@
 
     .card.zoomed .barcode img {
       width: 85%;
-      transform: none !important;
     }
   </style>
 </head>
@@ -184,7 +176,7 @@
           } else if (card.webkitRequestFullscreen) {
             card.webkitRequestFullscreen();
           }
-          try { await screen.orientation.lock('landscape'); } catch(e) {}
+          // 🔧 on ne force plus le zoom ni l’orientation paysage
         }
         setTimeout(sendHeight, 300);
       });
