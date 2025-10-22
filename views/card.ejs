@@ -1,175 +1,28 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <title>Carte fidélité MDL</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <link rel="stylesheet" href="/static/card.css">
-
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      font-family: "Segoe UI", Arial, sans-serif;
-      color: #1c2434;
-      background: linear-gradient(to bottom right, #f7efe1 0%, #faf7f2 50%, #ffffff 100%);
-      transition: background 0.6s ease, color 0.6s ease;
-      overflow: hidden;
-      height: 100%;
-    }
-
-    body.dark {
-      background: linear-gradient(to bottom right, #121212 0%, #1a1a1a 50%, #0f0f0f 100%);
-      color: #f9f5ef;
-    }
-
-    .card {
-      position: relative;
-      width: 100%;
-      max-width: 860px;
-      display: block;
-      margin: 0 auto;
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
-      overflow: hidden;
-      transform-origin: center;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      animation: fadeIn 0.5s ease-in-out;
-    }
-
-    .card:hover {
-      transform: scale(1.01);
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
-    }
-
-    .bg {
-      width: 100%;
-      height: auto;
-      display: block;
-      object-fit: contain;
-      transition: opacity 0.4s ease;
-    }
-
-    .field {
-      position: absolute;
-      color: #1c2434;
-      font-family: "Segoe UI", Arial, sans-serif;
-      font-weight: 700;
-      white-space: nowrap;
-      text-shadow: 0 1px 1px rgba(255, 255, 255, 0.6);
-      transition: color 0.4s ease, transform 0.2s ease;
-    }
-
-    .field:hover {
-      transform: scale(1.03);
-    }
-
-    .nom { left: 24%; top: 62%; font-size: 16px; }
-    .prenom { left: 24%; top: 72.5%; font-size: 16px; }
-    .points { left: 30%; top: 82.5%; font-size: 16px; }
-    .reduc { left: 44%; top: 82.5%; font-size: 16px; }
-
-    .barcode {
-      position: absolute;
-      top: 47%;
-      left: 43%;
-      transform: translate(-50%, -50%);
-      cursor: pointer;
-      transition: transform 0.2s ease;
-    }
-
-    .barcode:hover {
-      transform: translate(-50%, -50%) scale(1.05);
-    }
-
-    .barcode img {
-      width: 125%;
-      height: auto;
-      user-select: none;
-      -webkit-user-drag: none;
-      transition: filter 0.4s ease;
-    }
-
-    /* Mode zoom (plein écran) */
-    .card.zoomed {
-      position: fixed !important;
-      top: 0;
-      left: 0;
-      width: 100vw !important;
-      height: 100vh !important;
-      z-index: 9999 !important;
-      background: #f8eedc;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      overflow: hidden;
-      transform: none !important;
-      animation: fadeIn 0.25s ease-out;
-      will-change: transform;
-    }
-
-    .card.zoomed img.bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 70vw;
-      height: auto;
-      max-height: 88vh;
-      border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
-      object-fit: contain;
-      background: #f8eedc;
-    }
-
-    .card.zoomed .nom { left: 32%; top: 61.5%; font-size: 18px; }
-    .card.zoomed .prenom { left: 32%; top: 70%; font-size: 18px; }
-    .card.zoomed .points { left: 37%; top: 78.5%; font-size: 18px; }
-    .card.zoomed .reduc { left: 48%; top: 78.5%; font-size: 18px; }
-
-    .card.zoomed .barcode {
-      top: 45%;
-      left: 48%;
-      transform: translate(-50%, -50%);
-    }
-
-    .card.zoomed .barcode img {
-      width: 105%;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    .truncate {
-      display: inline-block;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      vertical-align: middle;
-      font-size: var(--fs, 16px);
-      line-height: 1.2em;
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carte MDL</title>
+  <link rel="stylesheet" href="/css/card.css">
 </head>
-
 <body>
-  <div class="card" id="carte">
-    <img class="bg" src="/static/carte-mdl.png" alt="Fond de carte">
+  <div class="card">
+    <!-- Image de fond de la carte -->
+    <img src="/static/carte-mdl.png" class="bg" alt="Fond de carte">
 
+    <!-- Champs dynamiques -->
     <div class="field nom"><span class="truncate"><%= nom %></span></div>
     <div class="field prenom"><span class="truncate"><%= prenom %></span></div>
     <div class="field points"><%= points %></div>
     <div class="field reduc"><%= reduction %></div>
 
-    <div class="barcode" id="barcode">
-      <img src="<%= (baseUrl || '') %>/barcode/<%= encodeURIComponent(code) %>?t=<%= Date.now() %>" alt="Code-barres">
-    </div>
+    <!-- Code-barres -->
+    <img src="<%= barcode %>" class="barcode" alt="Code-barres">
   </div>
 
   <script>
+    // Ajustement automatique de la taille du texte
     function fitOne(el){
       const span = el.querySelector('.truncate');
       if (!span) return;
@@ -180,7 +33,10 @@
         el.style.setProperty('--fs', size+'px');
       }
     }
-    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
+
+    function fitAll(){
+      document.querySelectorAll('.nom, .prenom').forEach(fitOne);
+    }
 
     window.addEventListener('load', () => {
       fitAll();
@@ -199,6 +55,7 @@
           setTimeout(fitAll, 300);
         }
       });
+
       window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
     });
   </script>
