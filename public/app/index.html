@@ -191,6 +191,25 @@
       background: transparent;
       overflow: hidden;
     }
+    /* ✅ Assombrissement doux du flux Instagram en mode sombre sans casser le contenu */
+body.dark .instagram-feed {
+  position: relative;
+}
+
+body.dark .instagram-feed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35); /* voile transparent au-dessus du flux */
+  border-radius: 14px;
+  pointer-events: none; /* ne bloque pas les clics */
+  transition: opacity 0.4s ease;
+  opacity: 1;
+}
+
+body:not(.dark) .instagram-feed::after {
+  opacity: 0;
+}
 
     .mdl-links {
       display: flex;
