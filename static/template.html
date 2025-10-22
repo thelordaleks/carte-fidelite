@@ -18,7 +18,6 @@
       --max-fs: 24px; --min-fs: 10px;
     }
 
-    /* === ✅ Suppression complète du cadre/fond === */
     html, body {
       margin: 0 !important;
       padding: 0 !important;
@@ -27,6 +26,7 @@
       box-shadow: none !important;
       outline: none !important;
       overflow: hidden;
+      background: transparent !important;
     }
 
     body > * {
@@ -40,38 +40,31 @@
       aspect-ratio: var(--w) / var(--h);
       width: min(95vw, 860px);
       max-height: 92vh;
-      border-radius: 0 !important;
       overflow: hidden;
-      box-shadow: none !important;
       background: transparent !important;
-      isolation: isolate;
       transition: all 0.4s ease-in-out;
+      border-radius: 0 !important;
     }
 
-    /* ✅ Mode zoom plein écran fluide */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
-      max-height: none !important;
       z-index: 9999 !important;
       background: #000 !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      border-radius: 0 !important;
-      transform: scale(1) !important;
       transition: all 0.4s ease-in-out !important;
     }
 
-    /* ✅ Image de fond — on supprime les bandes haut/bas en couvrant + léger bleed */
     .card .bg {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;                 /* ← contain → cover */
+      object-fit: cover;
       object-position: center center;
       z-index: 0;
       user-select: none;
@@ -80,7 +73,7 @@
       will-change: transform;
       backface-visibility: hidden;
       background: transparent !important;
-      transform: scale(1.01);            /* léger débord pour éviter tout liseré */
+      transform: scale(1.01);
     }
 
     .field {
@@ -94,12 +87,10 @@
       overflow: hidden;
       text-overflow: ellipsis;
       font-size: var(--fs, clamp(12px, 2.2vw, 22px));
-      letter-spacing: .2px;
       transform: translateY(-50%);
       min-width: 0;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
       z-index: 2;
-      transition: opacity 0.3s ease;
     }
 
     .field > .truncate {
@@ -147,7 +138,6 @@
       .card { width: 100%; border-radius: 0 !important; }
     }
 
-    /* ✅ Zoom plein écran : centrage des champs + taille texte */
     .card.zoomed .nom,
     .card.zoomed .prenom {
       left: 60% !important;
@@ -158,7 +148,6 @@
       font-size: clamp(18px, 3vw, 28px) !important;
     }
 
-    /* ✅ Suppression totale de tout cadre fantôme */
     .stage, .frame, .outer, .container, .wrapper, .bg, .card-shadow {
       background: transparent !important;
       box-shadow: none !important;
@@ -186,14 +175,16 @@
       let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
       const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
       const boxW = el.clientWidth;
-      el.style.setProperty('--fs', size+'px');
+      el.style.setProperty('--fs', size + 'px');
       while (span.scrollWidth > boxW && size > min) {
         size -= 0.5;
-        el.style.setProperty('--fs', size+'px');
+        el.style.setProperty('--fs', size + 'px');
       }
     }
 
-    function fitAll() { document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
+    function fitAll() {
+      document.querySelectorAll('.nom, .prenom').forEach(fitOne);
+    }
 
     window.addEventListener('load', () => {
       fitAll();
@@ -208,7 +199,7 @@
         } else {
           card.classList.add('zoomed');
           if (card.requestFullscreen) {
-            await card.requestFullscreen().catch(()=>{});
+            await card.requestFullscreen().catch(() => {});
           } else if (card.webkitRequestFullscreen) {
             card.webkitRequestFullscreen();
           }
@@ -218,9 +209,11 @@
       });
 
       window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
+
+      // ✅ Envoie la hauteur réelle au parent pour ajuster l'iframe automatiquement
+      const height = document.body.scrollHeight;
+      window.parent.postMessage({ type: 'resizeCarte', height }, '*');
     });
   </script>
-  window.parent.postMessage({ type: 'resizeCarte', height: document.body.scrollHeight }, '*');
-
 </body>
 </html>
