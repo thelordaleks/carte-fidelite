@@ -78,6 +78,31 @@ html, body {
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
+/* === Bouton Ajouter au Wallet - Style MDL doré === */
+.wallet-btn.mdl-style {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #c0872f, #a77428);
+  border-radius: 14px;
+  text-decoration: none;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.25s ease;
+}
+
+.wallet-btn.mdl-style:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+.wallet-btn.mdl-style i {
+  font-size: 18px;
+}
 
 /* ✅ zoom plein écran (paysage) */
 .card.zoomed {
