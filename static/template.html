@@ -220,5 +220,7 @@
       window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
     });
   </script>
+  window.parent.postMessage({ type: 'resizeCarte', height: document.body.scrollHeight }, '*');
+
 </body>
 </html>

@@ -352,5 +352,12 @@
     document.getElementById('install-no').addEventListener('click', () => banner.remove());
   });
   </script>
+  window.addEventListener('message', (event) => {
+  if (event.data.type === 'resizeCarte' && event.data.height) {
+    const iframe = document.getElementById('carte');
+    iframe.style.height = event.data.height + 'px';
+  }
+});
+
 </body>
 </html>
