@@ -69,24 +69,23 @@
     }
 
     iframe#carte {
-  width: 100%;
-  max-width: 440px;
-  min-height: 100px; /* petite base provisoire, pas visible */
-  display: block;
-  margin: 0 auto;
-  background: transparent !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  filter: none !important;
-  -webkit-appearance: none !important;
-  appearance: none !important;
-  background-clip: padding-box !important;
-  transition: height 0.25s ease-out; /* animation douce */
-}
-
+      width: 100%;
+      max-width: 440px;
+      min-height: 100px;
+      display: block;
+      margin: 0 auto;
+      background: transparent !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      filter: none !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      background-clip: padding-box !important;
+      transition: height 0.25s ease-out;
+    }
 
     .btn {
       display: inline-block;
@@ -112,10 +111,25 @@
     .wallet-btn { background: #96784b; }
     .install-btn { background: #34A853; }
 
-    .status {
-      margin: 10px 0;
-      font-size: 14px;
+    /* ✅ Dernière mise à jour fixée en bas */
+    #status {
+      position: fixed;
+      bottom: 45px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9);
       color: #c0872f;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+      z-index: 9998;
+    }
+
+    body.dark #status {
+      background: rgba(20, 20, 20, 0.9);
+      color: #f1c880;
     }
 
     footer {
@@ -204,7 +218,8 @@
       <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
     </div>
 
-    <div class="status" id="status"></div>
+    <!-- ✅ statut déplacé -->
+    <div id="status"></div>
 
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
@@ -357,20 +372,18 @@
 
   <script>
   // ✅ Ajustement automatique + déclenchement initial
-window.addEventListener('message', (event) => {
-  if (event.data.type === 'resizeCarte' && event.data.height) {
-    const iframe = document.getElementById('carte');
-    iframe.style.height = event.data.height + 'px';
-  }
-});
+  window.addEventListener('message', (event) => {
+    if (event.data.type === 'resizeCarte' && event.data.height) {
+      const iframe = document.getElementById('carte');
+      iframe.style.height = event.data.height + 'px';
+    }
+  });
 
-// ⚡ Ajuste aussi dès que l'iframe a fini de charger
-const iframeCarte = document.getElementById('carte');
-iframeCarte.addEventListener('load', () => {
-  iframeCarte.contentWindow?.postMessage({ type: 'getCarteHeight' }, '*');
-});
-
+  // ⚡ Ajuste aussi dès que l'iframe a fini de charger
+  const iframeCarte = document.getElementById('carte');
+  iframeCarte.addEventListener('load', () => {
+    iframeCarte.contentWindow?.postMessage({ type: 'getCarteHeight' }, '*');
+  });
   </script>
-
 </body>
 </html>
