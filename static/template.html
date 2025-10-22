@@ -17,6 +17,7 @@
       touch-action: none;
       transform: none !important;
       zoom: 1 !important;
+      -webkit-text-size-adjust: none !important;
     }
 
     .card {
@@ -87,7 +88,7 @@
       zoom: 1 !important;
       animation: fadeIn 0.25s ease-out;
       will-change: transform;
-      -webkit-text-size-adjust: none;
+      -webkit-text-size-adjust: none !important;
     }
 
     .card.zoomed img.bg {
@@ -124,6 +125,15 @@
       from { opacity: 0; }
       to { opacity: 1; }
     }
+
+    /* ✅ Blocage anti-zoom temporaire */
+    .nozoom {
+      transform: none !important;
+      scale: 1 !important;
+      zoom: 1 !important;
+      -webkit-transform: none !important;
+      -webkit-text-size-adjust: none !important;
+    }
   </style>
 </head>
 
@@ -143,6 +153,15 @@
       window.parent.postMessage({ type: 'resizeCarte', height: h }, '*');
     }
 
+    function freezeZoom(duration = 5000) {
+      document.documentElement.classList.add('nozoom');
+      document.body.classList.add('nozoom');
+      setTimeout(() => {
+        document.documentElement.classList.remove('nozoom');
+        document.body.classList.remove('nozoom');
+      }, duration);
+    }
+
     window.addEventListener('load', () => {
       sendHeight();
       new ResizeObserver(sendHeight).observe(document.body);
@@ -158,7 +177,6 @@
         } else {
           card.classList.add('zoomed');
 
-          // ✅ plein écran + verrouillage orientation sans zoom navigateur
           if (card.requestFullscreen) {
             await card.requestFullscreen().catch(() => {});
           } else if (card.webkitRequestFullscreen) {
@@ -167,11 +185,10 @@
 
           try { await screen.orientation.lock('landscape'); } catch(e) {}
 
-          // ✅ correction anti-zoom du viewport
-          document.documentElement.style.transform = "none";
-          document.documentElement.style.zoom = "reset";
-          document.body.style.transform = "none";
-          document.body.style.zoom = "1";
+          // ✅ Bloque toute tentative de zoom après la rotation
+          freezeZoom();
+          document.body.style.transform = 'none';
+          document.documentElement.style.transform = 'none';
         }
         setTimeout(sendHeight, 300);
       });
