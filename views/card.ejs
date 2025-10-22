@@ -14,32 +14,44 @@
     <div class="field nom"><span class="truncate"><%= nom %></span></div>
     <div class="field prenom"><span class="truncate"><%= prenom %></span></div>
     <div class="field points"><%= points %></div>
-    <div class="field reduc"><%= reduction %></div>
+    <div class="field reduc"><%= reduction %>%</div>
 
-    <div class="barcode" id="barcode">
-      <img src="<%= (baseUrl || '') %>/barcode/<%= encodeURIComponent(code) %>?t=<%= Date.now() %>" alt="Code-barres">
-    </div>
+    <% if (barcode) { %>
+      <img class="barcode" src="<%= barcode %>" alt="Code barre">
+    <% } %>
   </div>
 
   <script>
-    function fitOne(el){
-      const span = el.querySelector('.truncate');
-      if (!span) return;
-      let size = 24, min = 10, w = el.clientWidth;
-      el.style.setProperty('--fs', size+'px');
-      while (span.scrollWidth > w && size > min) {
-        size -= 0.5;
-        el.style.setProperty('--fs', size+'px');
+    // Ajustement responsive + plein écran paysage
+    (function() {
+      function fitAll(){
+        const card = document.getElementById('carte');
+        if (!card) return;
+        // rien à faire ici : layout géré via CSS clamp + ratio variables
       }
-    }
-    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
 
-    window.addEventListener('load', () => {
-      fitAll();
-      const card = document.querySelector('.card');
-      const barcode = document.querySelector('.barcode');
+      window.addEventListener('load', fitAll);
+      window.addEventListener('resize', fitAll);
 
-      barcode.addEventListener('click', async () => {
+      // PostMessage : communiquer la hauteur au parent (auto-resize iframe)
+      function sendHeight(){
+        const r = document.body.getBoundingClientRect();
+        parent?.postMessage({ type: 'resizeCarte', height: Math.ceil(r.height) }, '*');
+      }
+      setTimeout(sendHeight, 200);
+      window.addEventListener('resize', () => setTimeout(sendHeight, 150));
+
+      // Double-tap : toggle zoom paysage (optionnel existant)
+      let lastTap = 0;
+      document.body.addEventListener('touchend', async () => {
+        const now = Date.now();
+        const delta = now - lastTap;
+        lastTap = now;
+        if (delta > 400) return;
+
+        const card = document.getElementById('carte');
+        if (!card) return;
+
         if (card.classList.contains('zoomed')) {
           card.classList.remove('zoomed');
           try { await screen.orientation.unlock(); } catch(e){}
