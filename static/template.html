@@ -57,12 +57,13 @@
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
     }
 
-    /* ✅ Repositionnement calibré à ton image */
+    /* ✅ Calage fin par rapport à l’image */
     .nom { left: 24%; top: 62%; font-size: 16px; }
     .prenom { left: 24%; top: 72.5%; font-size: 16px; }
-    .points { left: 27%; top: 82.5%; font-size: 16px; font-weight: 800; }
-    .reduc { left: 43%; top: 84.5%; font-size: 16px; font-weight: 800; }
+    .points { left: 30%; top: 82.5%; font-size: 16px; font-weight: 800; }
+    .reduc { left: 43.5%; top: 82.5%; font-size: 16px; font-weight: 800; }
 
+    /* ✅ Agrandissement code-barres */
     .barcode {
       position: absolute;
       top: 42%;
@@ -74,19 +75,30 @@
     }
 
     .barcode img {
-      width: 100%;
+      width: 115%;  /* ← 115% = visiblement plus grand */
       height: auto;
+      transition: transform 0.25s ease;
       background: transparent !important;
       user-select: none;
       -webkit-user-drag: none;
     }
 
-    /* Zoom : agrandit la carte entière */
+    /* 🪄 effet d’agrandissement au survol ou appui */
+    .barcode img:hover,
+    .barcode img:active {
+      transform: scale(1.05);
+    }
+
+    /* Zoom plein écran */
     .card.zoomed img.bg {
       width: auto;
       height: 90%;
       max-height: 90%;
       object-fit: contain;
+    }
+
+    .card.zoomed .barcode img {
+      width: 130%; /* encore plus grand en plein écran */
     }
   </style>
 </head>
