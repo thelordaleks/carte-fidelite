@@ -1,85 +1,142 @@
+:root {
+  --w: 1024;
+  --h: 585;
+  --nom-left: 23%; --nom-top: 66%; --nom-width: 64%; --nom-height: 9%;
+  --prenom-left: 23%; --prenom-top: 76.5%; --prenom-width: 64%; --prenom-height: 9%;
+  --points-left: 22%; --points-top: 86.2%; --points-width: 22%; --points-height: 10%;
+  --reduc-left: 39%; --reduc-top: 86.2%; --reduc-width: 22%; --reduc-height: 10%;
+  --bar-left: 10%; --bar-right: 10%; --bar-top: 42%;
+}
+
+/* 🚫 Nuke total de tout fond / bordure / ombre dans le document de l'iframe */
+html, body, div, img, canvas {
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html, body {
+  height: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+/* La carte elle-même: AUCUN fond, AUCUNE ombre, AUCUN radius */
 .card {
   position: relative;
   aspect-ratio: var(--w) / var(--h);
   width: min(95vw, 860px);
   max-height: 92vh;
 
-  /* ✅ Suppression du cadre blanc */
-  background-color: transparent !important;
-  background-image: url('/static/carte-mdl.png');
-  background-repeat: no-repeat;
-  background-position: center center;
-  background-size: contain;
-
+  background: transparent !important;
+  border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  overflow: hidden;
-  touch-action: none;
+
+  overflow: hidden !important;
   transform: translateZ(0);
+  isolation: isolate;
 }
 
-
-/* Variables de position (en %) – ajustables à chaud */
-:root {
-  --x-pad: 12%;     /* marge latérale commune */
-  --y-badge: 39%;   /* bandeau avec Nom/Prénom (descendu) */
-  --y-nom:   70%;   /* valeur du Nom dans le champ beige */
-  --y-pren:  70%;   /* valeur du Prénom dans le champ beige */
-  --y-bar:   90.5%; /* code-barres (remonté) */
-}
-
-.badge {
+/* L'image de fond de la carte */
+.card .bg {
   position: absolute;
-  left: var(--x-pad);
-  right: var(--x-pad);
-  top: var(--y-badge);
-  background: #fff;
-  border-radius: 12px;
-  padding: clamp(6px, 1.1vw, 10px) clamp(10px, 1.6vw, 14px);
-  box-shadow: 0 2px 6px rgba(0,0,0,.08);
-}
-
-.badge .fullname {
-  font-size: clamp(16px, 2.4vw, 22px);
-  font-weight: 800;
-}
-
-.badge .code {
-  display: none;
-  /* on retire “Code: …” sous le bandeau */
-}
-
-.field {
-  position: absolute;
-  left: calc(var(--x-pad) + 22%);
-  right: var(--x-pad);
-  height: clamp(18px, 2.2vw, 22px);
-  background: #f8d39f;
-  opacity: .8;
-  border-radius: 10px; /* visuel beige */
-  display: flex;
-  align-items: center;
-  padding: 0 10px;
-  font-size: clamp(12px, 1.8vw, 16px);
-  font-weight: 600;
-}
-
-.field--nom  { top: var(--y-nom); }
-.field--pren { top: var(--y-pren); }
-
-.barcode {
-  position: absolute;
-  left: var(--x-pad);
-  right: var(--x-pad);
-  top: var(--y-bar);
-  height: clamp(50px, 10vw, 90px); /* taille des barres */
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.barcode img {
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: contain;         /* respecte exactement ton PNG */
+  object-position: center;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  z-index: 0;
+}
+
+/* Champs */
+.field {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  padding: 0 1.2%;
+  color: #1c2434;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs, clamp(12px, 2.2vw, 22px));
+  transform: translateY(-50%);
+  z-index: 2;
+}
+
+.field > .truncate {
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nom    { left: var(--nom-left);    top: var(--nom-top);    width: var(--nom-width); }
+.prenom { left: var(--prenom-left); top: var(--prenom-top); width: var(--prenom-width); }
+.points { left: var(--points-left); top: var(--points-top); width: var(--points-width); justify-content: center; font-weight: 800; }
+.reduc  { left: var(--reduc-left);  top: var(--reduc-top);  width: var(--reduc-width);  justify-content: center; font-weight: 800; }
+
+/* Code-barres */
+.barcode {
+  position: absolute;
+  left: var(--bar-left);
+  right: var(--bar-right);
+  top: var(--bar-top);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  cursor: pointer;
+  z-index: 3;
+}
+.barcode img {
+  width: 80%;
+  max-width: 720px;
+  height: auto;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Plein écran paysage */
+.card.zoomed {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  z-index: 9999 !important;
+  background: #000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 0 !important;
+}
+
+.card.zoomed .field { font-size: clamp(18px, 3vw, 28px) !important; }
+.card.zoomed .nom,
+.card.zoomed .prenom {
+  left: 60% !important;
+  transform: translate(-50%, -50%) !important;
+}
+
+/* 🧹 Si d’anciens wrappers existent encore, on les rend inoffensifs */
+.stage, .frame, .outer, .container, .wrapper, .card-shadow {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
 }

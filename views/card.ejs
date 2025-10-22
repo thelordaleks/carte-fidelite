@@ -1,69 +1,64 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Carte fidélité</title>
-  <style>
-    /* fond totalement transparent dans l’iframe */
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: transparent !important;
-      color: #333;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-      -webkit-text-size-adjust: 100%;
-      text-size-adjust: 100%;
-    }
-
-    /* conteneur de la carte : AUCUNE bordure/ombre/padding */
-    .card {
-      border: none !important;
-      padding: 0 !important;
-      width: 100%;
-      max-width: none;
-      background: transparent !important;
-      box-shadow: none !important;
-      border-radius: 0 !important;
-      margin: 0 auto;
-    }
-
-    h1 { display: none; } /* on garde le balisage léger mais on n’affiche pas le titre */
-
-    .barcode {
-      margin-top: 12px;
-      max-width: 100%;
-      height: auto;
-      border: 0;
-      display: block;
-    }
-
-    .meta {
-      color: #666;
-      margin-top: 6px;
-      font-size: 13px;
-    }
-  </style>
+  <title>Carte de fidélité</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <link rel="stylesheet" href="/static/card.css" />
 </head>
 <body>
-  <div class="card" role="main" aria-live="polite">
-    <h1>Carte fidélité</h1>
+  <!-- ⚠️ Aucun wrapper avec fond / ombre / radius -->
+  <div class="card" id="carte" role="main" aria-live="polite">
+    <img class="bg" src="/static/carte-mdl.png" alt="Fond carte" />
 
-    <p><strong>Prénom :</strong> <%= typeof prenom !== 'undefined' ? prenom : '' %></p>
-    <p><strong>Nom :</strong> <%= typeof nom !== 'undefined' ? nom : '' %></p>
-    <p class="meta"><strong>Code :</strong> <%= typeof code !== 'undefined' ? code : '' %></p>
+    <div class="field nom"><span class="truncate"><%= nom %></span></div>
+    <div class="field prenom"><span class="truncate"><%= prenom %></span></div>
+    <div class="field points"><%= points %></div>
+    <div class="field reduc"><%= reduction %></div>
 
-    <div>
+    <div class="barcode" id="barcode">
       <img
-        class="barcode"
-        src="<%= (baseUrl || '') %>/barcode/<%= typeof code !== 'undefined' ? encodeURIComponent(code) : '' %>?t=<%= timestamp %>"
-        alt="code-barres"
-        onerror="this.style.display='none';"
-      />
+        src="<%= (baseUrl || '') %>/barcode/<%= encodeURIComponent(code) %>?t=<%= Date.now() %>"
+        alt="Code-barres" />
     </div>
-
-    <p class="meta">Généré le <%= new Date(timestamp).toLocaleString('fr-FR') %></p>
   </div>
+
+  <script>
+    // Ajustement auto des tailles Nom/Prénom (comme avant)
+    function fitOne(el){
+      const span = el.querySelector('.truncate');
+      if (!span) return;
+      let size = 24, min = 10, w = el.clientWidth;
+      el.style.setProperty('--fs', size+'px');
+      while (span.scrollWidth > w && size > min) {
+        size -= .5;
+        el.style.setProperty('--fs', size+'px');
+      }
+    }
+    function fitAll(){ document.querySelectorAll('.nom, .prenom').forEach(fitOne); }
+
+    window.addEventListener('load', () => {
+      fitAll();
+      const card = document.querySelector('.card');
+      const barcode = document.querySelector('.barcode');
+
+      // Zoom plein écran paysage sur le code-barres (comme tu avais)
+      barcode.addEventListener('click', async () => {
+        if (card.classList.contains('zoomed')) {
+          card.classList.remove('zoomed');
+          try { await screen.orientation.unlock(); } catch(e) {}
+          document.exitFullscreen?.();
+        } else {
+          card.classList.add('zoomed');
+          try { await (card.requestFullscreen?.() || card.webkitRequestFullscreen?.()); } catch(e) {}
+          try { await screen.orientation.lock('landscape'); } catch(e) {}
+          setTimeout(fitAll, 300);
+        }
+      });
+
+      window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
+    });
+  </script>
 </body>
 </html>
