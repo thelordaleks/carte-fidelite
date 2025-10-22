@@ -9,11 +9,11 @@
 
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      background: transparent;
-      overflow: hidden;
-      border: none;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: transparent !important;
+      overflow: hidden !important;
+      border: none !important;
       touch-action: none;
     }
 
@@ -28,6 +28,10 @@
       border-radius: 16px;
       box-shadow: 0 6px 15px rgba(0,0,0,0.12);
       overflow: hidden;
+      border: none !important;
+      transition: none !important;
+      transform: none !important;
+      zoom: 1 !important;
     }
 
     .bg {
@@ -35,6 +39,9 @@
       height: auto;
       display: block;
       object-fit: contain;
+      background: transparent !important;
+      transition: none !important;
+      transform: none !important;
     }
 
     .field {
@@ -44,31 +51,42 @@
       font-weight: 700;
       white-space: nowrap;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
+      transition: none !important;
     }
 
-    /* Position normale */
+    /* ✅ Calage fin (vue normale) */
     .nom { left: 24%; top: 62%; font-size: 16px; }
     .prenom { left: 24%; top: 72.5%; font-size: 16px; }
-    .points { left: 30%; top: 82.5%; font-size: 16px; }
-    .reduc { left: 44%; top: 82.5%; font-size: 16px; }
+    .points { left: 30%; top: 82.5%; font-size: 16px; font-weight: 800; }
+    .reduc { left: 44%; top: 82.5%; font-size: 16px; font-weight: 800; }
 
-    /* Code-barres */
+    /* ✅ Code-barres */
     .barcode {
       position: absolute;
       top: 46%;
       left: 40%;
       transform: translate(-50%, -50%);
+      z-index: 3;
+      text-align: center;
       cursor: pointer;
     }
 
     .barcode img {
       width: 120%;
       height: auto;
+      background: transparent !important;
       user-select: none;
       -webkit-user-drag: none;
+      transform: none !important;
+      transition: none !important;
     }
 
-    /* --- MODE PLEIN ÉCRAN --- */
+    .barcode img:hover,
+    .barcode img:active {
+      transform: scale(1.03);
+    }
+
+    /* ✅ Plein écran doré/beige clair + relief resserré */
     .card.zoomed {
       position: fixed !important;
       top: 0;
@@ -76,28 +94,41 @@
       width: 100vw !important;
       height: 100vh !important;
       z-index: 9999 !important;
-      background: #f8eedc !important; /* fond doré/beige clair */
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: #f8eedc !important; /* 🎨 fond doré/beige clair */
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
       overflow: hidden;
+      transform: none !important;
+      zoom: 1 !important;
+      animation: fadeIn 0.25s ease-out;
     }
 
-    /* ✅ carte bord à bord sans marges */
-    .card.zoomed img.bg {
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* ✅ effet lumière douce */
+    .card.zoomed::before {
+      content: "";
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 100vw;      /* occupe toute la largeur visible */
+      inset: 0;
+      background: radial-gradient(rgba(255,255,255,0.25), transparent 60%);
+      pointer-events: none;
+    }
+
+    .card.zoomed img.bg {
+      width: 96vw;  /* 🔧 plus large pour réduire les marges latérales */
+      max-width: 1100px; /* limite max sur grand écran */
       height: auto;
-      max-height: 100vh; /* jamais plus grand que l’écran */
+      max-height: 87vh;
+      object-fit: contain;
       border-radius: 16px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.25);
-      object-fit: contain;
     }
 
-    /* Réalignement plein écran */
+    /* ✅ Réalignement en plein écran */
     .card.zoomed .nom { left: 32%; top: 61.5%; font-size: 18px; }
     .card.zoomed .prenom { left: 32%; top: 70%; font-size: 18px; }
     .card.zoomed .points { left: 37%; top: 78.5%; font-size: 18px; }
@@ -111,16 +142,7 @@
 
     .card.zoomed .barcode img {
       width: 85%;
-    }
-
-    /* Animation douce à l'ouverture */
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
-    .card.zoomed {
-      animation: fadeIn 0.25s ease-out;
+      transform: none !important;
     }
   </style>
 </head>
@@ -136,6 +158,7 @@
   </div>
 
   <script>
+    // ✅ Ajustement de la hauteur parent
     function sendHeight() {
       const h = document.querySelector('.card').offsetHeight;
       window.parent.postMessage({ type: 'resizeCarte', height: h }, '*');
