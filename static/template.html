@@ -81,7 +81,7 @@
       transform: scale(1.04);
     }
 
-    /* ✅ Mode plein écran corrigé */
+        /* ✅ Mode plein écran corrigé */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
@@ -104,13 +104,13 @@
     }
 
     .card.zoomed .barcode {
-      top: 46%;
-      left: 40%;
+      top: 44%; /* ↓ un poil plus bas en plein écran */
+      left: 50%;
       transform: translate(-50%, -50%);
     }
 
     .card.zoomed .barcode img {
-      width: 120%; /* même taille qu’avant : pas de déformation */
+      width: 85%; /* 🟢 taille ajustée à la carte */
       transform: none !important;
     }
 
