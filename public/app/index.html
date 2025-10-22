@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Carte fidélité MDL</title>
@@ -16,38 +18,7 @@
   <link rel="apple-touch-icon" href="/static/logo-mdl.png">
 
   <style>
-    /* === Bouton Ajouter au Wallet - Style MDL doré === */
-.wallet-container {
-  text-align: center;
-  margin-top: 20px;
-}
-
-.wallet-btn.mdl-style {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 12px 20px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #c0872f, #a77428);
-  border-radius: 14px;
-  text-decoration: none;
-  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
-  transition: all 0.25s ease;
-}
-
-.wallet-btn.mdl-style:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
-}
-
-.wallet-btn.mdl-style i {
-  font-size: 18px;
-}
-
-    html, body {
+      html, body {
       margin: 0;
       padding: 0;
       background: linear-gradient(to bottom right, #f7efe1 0%, #faf7f2 50%, #ffffff 100%) !important;
@@ -68,6 +39,44 @@
     }
 
     header {
+      /* === Icône Wallet discrète dans le header === */
+#wallet-icon {
+  position: absolute;
+  right: 55px; /* juste à gauche du bouton 🌙 */
+  top: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  color: white;
+  font-size: 14px;
+  transition: transform 0.2s ease, opacity 0.3s ease;
+  opacity: 0.9;
+}
+
+#wallet-icon i {
+  font-size: 18px;
+  color: #f5d49c; /* doré clair et sobre */
+}
+
+#wallet-icon span {
+  font-size: 10px;
+  font-weight: 500;
+  margin-top: 2px;
+  color: #fff;
+  opacity: 0.8;
+  line-height: 1;
+}
+
+#wallet-icon:hover {
+  transform: scale(1.1);
+  opacity: 1;
+}
+
+body.dark #wallet-icon i {
+  color: #c0872f; /* doré plus chaud pour le mode sombre */
+}
+
       background: #c0872f;
       color: white;
       padding: 15px 10px;
@@ -271,23 +280,22 @@ body:not(.dark) .instagram-feed::after {
 </head>
 
 <body>
-  <header>
-    <button id="refresh-icon" title="Rafraîchir la carte">
-      <svg viewBox="0 0 24 24"><path d="M12 6V9L16 5L12 1V4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.64 20 18.64 17.67 19.66 14.33L17.57 13.67C16.89 15.96 14.64 17.5 12 17.5C8.96 17.5 6.5 15.04 6.5 12C6.5 8.96 8.96 6.5 12 6.5Z"/></svg>
-    </button>
-    Carte fidélité MDL
-    <button id="theme-toggle" title="Changer le thème">🌙</button>
-  </header>
+ <header>
+  <button id="refresh-icon" title="Rafraîchir la carte">
+    <svg viewBox="0 0 24 24"><path d="M12 6V9L16 5L12 1V4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.64 20 18.64 17.67 19.66 14.33L17.57 13.67C16.89 15.96 14.64 17.5 12 17.5C8.96 17.5 6.5 15.04 6.5 12C6.5 8.96 8.96 6.5 12 6.5Z"/></svg>
+  </button>
+  Carte fidélité MDL
+  <button id="theme-toggle" title="Changer le thème">🌙</button>
+  <!-- 💳 Lien discret vers le Wallet -->
+  <a href="/pass" id="wallet-icon" title="Ajouter au Wallet">
+    <i class="fa-solid fa-wallet"></i>
+    <span>Ajouter</span>
+  </a>
+</header>
+
 
   <main>
-    <iframe id="carte" src=""></iframe>
-
-    <div class="wallet-container">
-  <!-- Bouton Ajouter au Wallet (style MDL doré) -->
-  <a href="/pass" class="wallet-btn mdl-style">
-    <i class="fa-solid fa-wallet"></i> Ajouter à mon Wallet
-  </a>
-  <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
+    <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
 </div>
 
 
