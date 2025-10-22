@@ -4,17 +4,19 @@
   <meta charset="utf-8">
   <title>Carte de fidélité</title>
   <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#f5f7fb">
 
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      background: #f8eedc; /* ✅ fond beige partout, masque le noir */
+      background: #f8eedc;
       overflow: hidden;
       border: none;
       touch-action: none;
+      transform: none !important;
+      zoom: 1 !important;
     }
 
     .card {
@@ -73,29 +75,33 @@
       position: fixed !important;
       top: 0;
       left: 0;
-      width: 100vw;
-      height: 100vh;
-      z-index: 9999;
-      background: #f8eedc; /* ✅ fond beige doré clair */
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 9999 !important;
+      background: #f8eedc;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
       overflow: hidden;
+      transform: none !important;
+      zoom: 1 !important;
+      animation: fadeIn 0.25s ease-out;
+      will-change: transform;
+      -webkit-text-size-adjust: none;
     }
 
-    /* ✅ carte centrée, fond resserré */
     .card.zoomed img.bg {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 70vw;      /* 🔧 réduit un peu les marges horizontales */
+      width: 70vw;
       height: auto;
       max-height: 88vh;
       border-radius: 16px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.25);
       object-fit: contain;
-      background: #f8eedc; /* ✅ masque le bord noir de gauche */
+      background: #f8eedc;
     }
 
     /* Réalignement plein écran */
@@ -117,10 +123,6 @@
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
-    }
-
-    .card.zoomed {
-      animation: fadeIn 0.25s ease-out;
     }
   </style>
 </head>
@@ -155,12 +157,21 @@
           document.exitFullscreen?.();
         } else {
           card.classList.add('zoomed');
+
+          // ✅ plein écran + verrouillage orientation sans zoom navigateur
           if (card.requestFullscreen) {
             await card.requestFullscreen().catch(() => {});
           } else if (card.webkitRequestFullscreen) {
             card.webkitRequestFullscreen();
           }
+
           try { await screen.orientation.lock('landscape'); } catch(e) {}
+
+          // ✅ correction anti-zoom du viewport
+          document.documentElement.style.transform = "none";
+          document.documentElement.style.zoom = "reset";
+          document.body.style.transform = "none";
+          document.body.style.zoom = "1";
         }
         setTimeout(sendHeight, 300);
       });
