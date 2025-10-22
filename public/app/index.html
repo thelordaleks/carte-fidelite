@@ -19,16 +19,21 @@
     html, body {
       margin: 0;
       padding: 0;
-      background: linear-gradient(to bottom, #f5e8cf 0%, #f9f5ef 40%, #ffffff 100%) !important;
+      background: linear-gradient(to bottom right, #f7efe1 0%, #faf7f2 50%, #ffffff 100%) !important;
       color: #333;
       text-align: center;
       font-family: "Segoe UI", Arial, sans-serif;
-      transition: background 0.4s ease, color 0.4s ease;
+      transition: background 0.6s ease, color 0.6s ease, filter 0.5s ease;
     }
 
     body.dark {
-      background: linear-gradient(to bottom, #0f0f0f 0%, #1a1a1a 100%) !important;
+      background: linear-gradient(to bottom right, #121212 0%, #1a1a1a 50%, #0f0f0f 100%) !important;
       color: #f9f5ef;
+    }
+
+    /* ✅ transition douce sur tout le body */
+    body.fade-transition {
+      transition: background 0.6s ease, color 0.6s ease, filter 0.5s ease;
     }
 
     header {
@@ -66,9 +71,9 @@
     main {
       padding: 10px 20px 0;
       background: transparent !important;
+      transition: opacity 0.4s ease;
     }
 
-    /* ✅ Carte avec bord arrondi et relief */
     iframe#carte {
       width: 100%;
       max-width: 440px;
@@ -77,10 +82,15 @@
       margin: 0 auto;
       background: white;
       border: none !important;
-      border-radius: 16px;                 /* ← coins arrondis */
-      box-shadow: 0 6px 15px rgba(0,0,0,0.12); /* ← léger relief */
+      border-radius: 16px;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.12);
       overflow: hidden;
-      transition: all 0.3s ease;
+      transition: all 0.3s ease, transform 0.4s ease;
+    }
+
+    iframe#carte:hover {
+      transform: scale(1.005);
+      box-shadow: 0 8px 18px rgba(0,0,0,0.18);
     }
 
     body.dark iframe#carte {
@@ -98,27 +108,28 @@
       padding: 12px 22px;
       border-radius: 8px;
       box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.4s ease;
       border: none;
       font-size: 15px;
       cursor: pointer;
     }
 
     .btn:hover {
-      transform: scale(1.04);
-      box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+      transform: scale(1.05);
+      box-shadow: 0 5px 12px rgba(0,0,0,0.25);
+      background: #a47225;
     }
 
     .wallet-btn { background: #96784b; }
     .install-btn { background: #34A853; }
 
-    /* ✅ Dernière mise à jour — en bas de la page */
     #status {
       margin-top: 20px;
       margin-bottom: 10px;
       font-size: 14px;
       color: #c0872f;
       font-weight: 500;
+      transition: opacity 0.4s ease;
     }
 
     body.dark #status { color: #f1c880; }
@@ -129,6 +140,7 @@
       font-size: 13px;
       color: #666;
       background: transparent !important;
+      transition: color 0.3s ease;
     }
 
     #net-status {
@@ -141,10 +153,11 @@
       padding: 5px 10px;
       border-radius: 10px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      opacity: 0.85;
-      transition: background 0.3s ease;
+      opacity: 0.9;
+      transition: background 0.4s ease, opacity 0.3s ease;
       z-index: 9999;
     }
+
     #net-status.offline { background: #b32626; }
 
     .mdl-info {
@@ -153,10 +166,22 @@
       border-radius: 16px;
       padding: 10px;
       max-width: 420px;
-      background: transparent;
+      background: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(6px);
+      transition: background 0.4s ease;
     }
 
-    .mdl-info h3 { color: #c0872f; margin-bottom: 15px; }
+    body.dark .mdl-info {
+      background: rgba(30, 30, 30, 0.6);
+      backdrop-filter: blur(6px);
+    }
+
+    .mdl-info h3 {
+      color: #c0872f;
+      margin-bottom: 15px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
 
     .instagram-feed iframe {
       width: 100%;
@@ -180,10 +205,13 @@
       padding: 10px 15px;
       border-radius: 8px;
       font-weight: 600;
-      transition: background 0.3s;
+      transition: background 0.3s ease, transform 0.2s ease;
     }
 
-    .mdl-links .btn-link:hover { background: #a47225; }
+    .mdl-links .btn-link:hover {
+      background: #a47225;
+      transform: scale(1.03);
+    }
 
     body.dark header { background: #1e1e1e; color: #c0872f; }
     body.dark .btn { background: #c0872f; color: white; }
@@ -237,6 +265,7 @@
     const saved = localStorage.getItem('mdl_theme');
     if (saved === 'dark') { body.classList.add('dark'); toggle.textContent = '☀️'; }
     toggle.addEventListener('click', () => {
+      body.classList.add('fade-transition');
       if (body.classList.contains('dark')) {
         body.classList.remove('dark');
         toggle.textContent = '🌙';
@@ -246,6 +275,7 @@
         toggle.textContent = '☀️';
         localStorage.setItem('mdl_theme', 'dark');
       }
+      setTimeout(() => body.classList.remove('fade-transition'), 600);
     });
   })();
 
