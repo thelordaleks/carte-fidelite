@@ -24,10 +24,11 @@
       height: auto;
       display: block;
       margin: 0 auto;
-      background: transparent !important;
+      background: #fff;
+      border-radius: 16px;              /* ✅ coins arrondis */
+      box-shadow: 0 6px 15px rgba(0,0,0,0.12); /* ✅ léger relief */
       overflow: hidden;
       border: none !important;
-      border-radius: 0 !important;
       transition: none !important;
       transform: none !important;
       zoom: 1 !important;
@@ -85,14 +86,14 @@
       transform: scale(1.03);
     }
 
-    /* ✅ Plein écran stable */
+    /* ✅ Plein écran doré/beige clair + relief */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
       z-index: 9999 !important;
-      background: #000 !important;
+      background: #f8eedc !important; /* 🎨 fond doré/beige clair */
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -109,12 +110,23 @@
       to { opacity: 1; }
     }
 
+    /* ✅ effet lumière douce */
+    .card.zoomed::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(rgba(255,255,255,0.25), transparent 60%);
+      pointer-events: none;
+    }
+
     .card.zoomed img.bg {
       width: 95vw;
       height: auto;
       max-height: 85vh;
       object-fit: contain;
       transform: none !important;
+      border-radius: 16px; /* ✅ mêmes coins arrondis */
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25); /* ✅ relief accentué */
     }
 
     /* ✅ Réalignement en plein écran */
