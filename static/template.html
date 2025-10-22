@@ -5,19 +5,18 @@
   <title>Carte de fidélité</title>
   <meta name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#c0872f">
+  <meta name="theme-color" content="#f5f7fb">
 
   <style>
     html, body {
       margin: 0;
       padding: 0;
-      height: 100%;
-      background: linear-gradient(to bottom right, #f7efe1 0%, #faf7f2 50%, #ffffff 100%) !important;
-      font-family: "Segoe UI", Arial, sans-serif;
-      color: #1c2434;
+      background: #f8eedc;
       overflow: hidden;
       border: none;
-      transition: background 0.6s ease, color 0.6s ease;
+      touch-action: none;
+      transform: none !important;
+      zoom: 1 !important;
       -webkit-text-size-adjust: none !important;
     }
 
@@ -27,19 +26,11 @@
       max-width: 860px;
       height: auto;
       display: block;
-      margin: 20px auto;
-      background: white;
-      border-radius: 20px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
       box-shadow: 0 6px 15px rgba(0,0,0,0.12);
       overflow: hidden;
-      transform-origin: center;
-      animation: fadeIn 0.5s ease-in-out;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-
-    .card:hover {
-      transform: scale(1.01);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
     }
 
     .bg {
@@ -52,14 +43,10 @@
     .field {
       position: absolute;
       color: #1c2434;
+      font-family: "Segoe UI", Arial, sans-serif;
       font-weight: 700;
       white-space: nowrap;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
-      transition: color 0.4s ease, transform 0.2s ease;
-    }
-
-    .field:hover {
-      transform: scale(1.03);
     }
 
     /* Position normale */
@@ -75,11 +62,6 @@
       left: 43%;
       transform: translate(-50%, -50%);
       cursor: pointer;
-      transition: transform 0.25s ease;
-    }
-
-    .barcode:hover {
-      transform: translate(-50%, -50%) scale(1.05);
     }
 
     .barcode img {
@@ -87,10 +69,9 @@
       height: auto;
       user-select: none;
       -webkit-user-drag: none;
-      transition: filter 0.4s ease;
     }
 
-    /* Mode plein écran */
+    /* --- MODE PLEIN ÉCRAN --- */
     .card.zoomed {
       position: fixed !important;
       top: 0;
@@ -104,8 +85,10 @@
       justify-content: center !important;
       overflow: hidden;
       transform: none !important;
+      zoom: 1 !important;
       animation: fadeIn 0.25s ease-out;
       will-change: transform;
+      -webkit-text-size-adjust: none !important;
     }
 
     .card.zoomed img.bg {
@@ -139,8 +122,17 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: scale(0.98); }
-      to { opacity: 1; transform: scale(1); }
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* ✅ Blocage anti-zoom temporaire */
+    .nozoom {
+      transform: none !important;
+      scale: 1 !important;
+      zoom: 1 !important;
+      -webkit-transform: none !important;
+      -webkit-text-size-adjust: none !important;
     }
   </style>
 </head>
@@ -159,6 +151,15 @@
     function sendHeight() {
       const h = document.querySelector('.card').offsetHeight;
       window.parent.postMessage({ type: 'resizeCarte', height: h }, '*');
+    }
+
+    function freezeZoom(duration = 5000) {
+      document.documentElement.classList.add('nozoom');
+      document.body.classList.add('nozoom');
+      setTimeout(() => {
+        document.documentElement.classList.remove('nozoom');
+        document.body.classList.remove('nozoom');
+      }, duration);
     }
 
     window.addEventListener('load', () => {
@@ -183,6 +184,11 @@
           }
 
           try { await screen.orientation.lock('landscape'); } catch(e) {}
+
+          // ✅ Bloque toute tentative de zoom après la rotation
+          freezeZoom();
+          document.body.style.transform = 'none';
+          document.documentElement.style.transform = 'none';
         }
         setTimeout(sendHeight, 300);
       });
