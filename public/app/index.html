@@ -171,6 +171,29 @@
     body.dark iframe#carte { filter: brightness(0.92); }
     body.dark .btn { background: #c0872f; color: white; }
     body.dark footer { color: #ccc; }
+    /* ✅ Corrige le fond blanc autour de la carte */
+iframe#carte {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  display: block !important;
+  margin: 0 auto !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  filter: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  background-clip: padding-box !important;
+}
+
+html, body {
+  background: transparent !important;
+}
+
+
+
+
   </style>
 </head>
 

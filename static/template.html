@@ -18,16 +18,20 @@
       --max-fs: 24px; --min-fs: 10px;
     }
 
-    /* === ✅ Suppression complète du cadre/fond === */
+    /* ✅ Suppression complète du cadre/fond */
     html, body {
       margin: 0 !important;
       padding: 0 !important;
       height: 100%;
+      width: 100%;
+      background-color: transparent !important;
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
       outline: none !important;
       overflow: hidden;
+      -webkit-appearance: none !important;
+      appearance: none !important;
     }
 
     body > * {
@@ -49,7 +53,7 @@
       transition: all 0.4s ease-in-out;
     }
 
-    /* ✅ Mode zoom plein écran fluide */
+    /* ✅ Zoom plein écran fluide */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
@@ -66,13 +70,12 @@
       transition: all 0.4s ease-in-out !important;
     }
 
-    /* ✅ Image de fond — on supprime les bandes haut/bas en couvrant + léger bleed */
     .card .bg {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
-      object-fit: cover;                 /* ← contain → cover */
+      object-fit: cover;
       object-position: center center;
       z-index: 0;
       user-select: none;
@@ -81,7 +84,7 @@
       will-change: transform;
       backface-visibility: hidden;
       background: transparent !important;
-      transform: scale(1.01);            /* léger débord pour éviter tout liseré */
+      transform: scale(1.01);
     }
 
     .field {
@@ -148,18 +151,6 @@
       .card { width: 100%; border-radius: 0 !important; }
     }
 
-    /* ✅ Zoom plein écran : centrage des champs + taille texte */
-    .card.zoomed .nom,
-    .card.zoomed .prenom {
-      left: 60% !important;
-      transform: translate(-50%, -50%) !important;
-    }
-
-    .card.zoomed .field {
-      font-size: clamp(18px, 3vw, 28px) !important;
-    }
-
-    /* ✅ Suppression totale de tout cadre fantôme */
     .stage, .frame, .outer, .container, .wrapper, .bg, .card-shadow {
       background: transparent !important;
       box-shadow: none !important;
