@@ -16,9 +16,8 @@
   <link rel="apple-touch-icon" href="/static/logo-mdl.png">
 
   <style>
-    /* Global smooth theme transitions */
+    /* Transition douce globale (fade) sur couleur, fond, ombres, bordures */
     * { transition: background-color 0.45s ease, color 0.45s ease, box-shadow 0.45s ease, border-color 0.45s ease; }
-
     html, body {
       margin: 0;
       padding: 0;
@@ -113,9 +112,9 @@
       border: none;
       display: block;
       margin: 10px auto;
-      background: #fff;                 /* ← rendu propre si la carte ne charge pas */
-      border-radius: 16px;                 /* ← coins arrondis */
-      box-shadow: 0 6px 15px rgba(0,0,0,0.12); /* ← léger relief */
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 6px 15px rgba(0,0,0,0.12);
       overflow: hidden;
       transition: all 0.3s ease;
     }
@@ -315,7 +314,6 @@
   const fromUrl = urlParams.get("code");
   if (!code && fromUrl) code = fromUrl;
 
-  // Déterminer lien Wallet si code présent
   function updateWalletLink() {
     const wallet = document.getElementById("wallet");
     if (code) {
@@ -327,7 +325,6 @@
     }
   }
 
-  // Lecture du code via prompt si pas de code
   if (!code) {
     const fromStorage = localStorage.getItem("mdl_last_code");
     if (fromStorage) code = fromStorage;
@@ -376,13 +373,11 @@
   window.addEventListener("offline", updateNetworkStatus);
   updateNetworkStatus();
 
-  // Bascule thème (manuel)
   themeToggle.addEventListener("click", () => {
     document.body.classList.toggle("dark");
     themeToggle.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
   });
 
-  // Auto-height de l’iframe en fonction de la carte (pour les vieux écrans)
   window.addEventListener('message', (event) => {
     if (event.data.type === 'resizeCarte' && event.data.height) {
       const iframe = document.getElementById('carte');
