@@ -16,6 +16,37 @@
   <link rel="apple-touch-icon" href="/static/logo-mdl.png">
 
   <style>
+    /* === Bouton Ajouter au Wallet - Style MDL doré === */
+.wallet-container {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.wallet-btn.mdl-style {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #c0872f, #a77428);
+  border-radius: 14px;
+  text-decoration: none;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.25s ease;
+}
+
+.wallet-btn.mdl-style:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+}
+
+.wallet-btn.mdl-style i {
+  font-size: 18px;
+}
+
     html, body {
       margin: 0;
       padding: 0;
@@ -121,7 +152,8 @@
     }
 
     .wallet-btn { background: #96784b; }
-    .install-btn { background: #34A853; }
+    .install-btn { background: #3aa45d; }
+
 
     #status {
       margin-top: 20px;
@@ -250,14 +282,14 @@ body:not(.dark) .instagram-feed::after {
   <main>
     <iframe id="carte" src=""></iframe>
 
-    <div>
-      <!-- Bouton Ajouter au Wallet (style MDL doré) -->
-<a href="/pass" class="wallet-btn mdl-style">
-  <i class="fa-solid fa-wallet"></i> Ajouter à mon Wallet
-</a>
+    <div class="wallet-container">
+  <!-- Bouton Ajouter au Wallet (style MDL doré) -->
+  <a href="/pass" class="wallet-btn mdl-style">
+    <i class="fa-solid fa-wallet"></i> Ajouter à mon Wallet
+  </a>
+  <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
+</div>
 
-      <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
-    </div>
 
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
