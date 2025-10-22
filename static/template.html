@@ -7,83 +7,86 @@
   <meta name="theme-color" content="#f5f7fb">
 
   <style>
-    :root {
-      --w: 1024;
-      --h: 585;
-      --nom-left: 23%; --nom-top: 66%; --nom-width: 64%; --nom-height: 9%;
-      --prenom-left: 23%; --prenom-top: 76.5%; --prenom-width: 64%; --prenom-height: 9%;
-      --points-left: 22%; --points-top: 86.2%; --points-width: 22%; --points-height: 10%;
-      --reduc-left: 39%; --reduc-top: 86.2%; --reduc-width: 22%; --reduc-height: 10%;
-      --bar-left: 10%; --bar-right: 10%; --bar-top: 42%;
-      --max-fs: 24px; --min-fs: 10px;
-    }
-
     html, body {
       margin: 0 !important;
       padding: 0 !important;
-      height: auto !important;
-      min-height: 0 !important;
-      border: none !important;
-      box-shadow: none !important;
-      outline: none !important;
-      overflow: hidden !important;
       background: transparent !important;
+      overflow: hidden !important;
+      border: none !important;
     }
 
     .card {
       position: relative;
       width: 100%;
       max-width: 860px;
-      height: auto !important;
+      height: auto;
       display: block;
       margin: 0 auto;
       background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-      border-radius: 0 !important;
       overflow: hidden;
+      border: none !important;
+      border-radius: 0 !important;
     }
 
-    .card .bg {
+    .card.zoomed {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 9999 !important;
+      background: #000 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .bg {
       width: 100%;
       height: auto;
       display: block;
-      border: none !important;
-      margin: 0;
-      padding: 0;
       object-fit: contain;
       background: transparent !important;
     }
 
     .field {
       position: absolute;
-      font-family: "Segoe UI", Arial, sans-serif;
       color: #1c2434;
+      font-family: "Segoe UI", Arial, sans-serif;
       font-weight: 700;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      text-shadow: 0 1px 1px rgba(255,255,255,0.6);
     }
 
+    /* ✅ Repositionnement calibré à ton image */
     .nom { left: 23%; top: 66%; font-size: 16px; }
-    .prenom { left: 23%; top: 76%; font-size: 16px; }
-    .points { left: 22%; top: 86%; font-size: 16px; font-weight: 800; }
-    .reduc { left: 39%; top: 86%; font-size: 16px; font-weight: 800; }
+    .prenom { left: 23%; top: 76.5%; font-size: 16px; }
+    .points { left: 22%; top: 86.5%; font-size: 16px; font-weight: 800; }
+    .reduc { left: 39%; top: 86.5%; font-size: 16px; font-weight: 800; }
 
     .barcode {
       position: absolute;
-      left: 10%;
-      right: 10%;
       top: 42%;
-      text-align: center;
+      left: 50%;
+      transform: translateX(-50%) translateY(-50%);
       z-index: 3;
+      text-align: center;
+      cursor: pointer;
     }
 
     .barcode img {
       width: 80%;
       height: auto;
       background: transparent !important;
-      border: none !important;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* Zoom : agrandit la carte entière */
+    .card.zoomed img.bg {
+      width: auto;
+      height: 90%;
+      max-height: 90%;
+      object-fit: contain;
     }
   </style>
 </head>
@@ -91,48 +94,48 @@
 <body>
   <div class="card" id="carte">
     <img class="bg" src="/static/carte-mdl.png" alt="Fond carte">
-    <div class="field nom"><span class="truncate">{{NOM}}</span></div>
-    <div class="field prenom"><span class="truncate">{{PRENOM}}</span></div>
+    <div class="field nom">{{NOM}}</div>
+    <div class="field prenom">{{PRENOM}}</div>
     <div class="field points">{{POINTS}}</div>
     <div class="field reduc">{{REDUCTION}}</div>
     <div class="barcode" id="barcode"><img src="{{BARCODE_URL}}" alt="Code-barres"></div>
   </div>
 
   <script>
-    // Ajustement de la taille du texte
-    function fitOne(el) {
-      const span = el.querySelector('.truncate');
-      if (!span) return;
-      const cs = getComputedStyle(document.documentElement);
-      let size = parseFloat(cs.getPropertyValue('--max-fs')) || 24;
-      const min = parseFloat(cs.getPropertyValue('--min-fs')) || 10;
-      const boxW = el.clientWidth;
-      el.style.setProperty('--fs', size + 'px');
-      while (span.scrollWidth > boxW && size > min) {
-        size -= 0.5;
-        el.style.setProperty('--fs', size + 'px');
-      }
-    }
-
-    function fitAll() {
-      document.querySelectorAll('.nom, .prenom').forEach(fitOne);
-    }
-
-    // ✅ Envoi de la hauteur réelle au parent (index.html)
+    // ✅ Ajuste la taille auto au parent (index.html)
     function sendHeight() {
       const h = document.querySelector('.card').offsetHeight;
       window.parent.postMessage({ type: 'resizeCarte', height: h }, '*');
     }
 
     window.addEventListener('load', () => {
-      fitAll();
-      sendHeight(); // envoie la taille dès le chargement
+      sendHeight();
       new ResizeObserver(sendHeight).observe(document.body);
 
-      // réponse si le parent demande la taille
-      window.addEventListener('message', (e) => {
-        if (e.data.type === 'getCarteHeight') sendHeight();
+      const card = document.querySelector('.card');
+      const barcode = document.querySelector('#barcode');
+
+      barcode.addEventListener('click', async () => {
+        if (card.classList.contains('zoomed')) {
+          card.classList.remove('zoomed');
+          try { await screen.orientation.unlock(); } catch(e) {}
+          document.exitFullscreen?.();
+        } else {
+          card.classList.add('zoomed');
+          if (card.requestFullscreen) {
+            await card.requestFullscreen().catch(() => {});
+          } else if (card.webkitRequestFullscreen) {
+            card.webkitRequestFullscreen();
+          }
+          try { await screen.orientation.lock('landscape'); } catch(e) {}
+        }
+        setTimeout(sendHeight, 300);
       });
+    });
+
+    // Si le parent demande la hauteur
+    window.addEventListener('message', (e) => {
+      if (e.data.type === 'getCarteHeight') sendHeight();
     });
   </script>
 </body>
