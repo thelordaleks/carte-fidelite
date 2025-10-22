@@ -254,6 +254,7 @@ app.get("/sw.js", (req, res) => {
   }
 });
 
+<<<<<<< HEAD
 const jwt = require("jsonwebtoken");
 
 app.get("/wallet/:code", async (req, res) => {
@@ -313,6 +314,9 @@ app.get("/wallet/:code", async (req, res) => {
     return res.redirect(`/c/${encodeURIComponent(code)}`);
   }
 });
+=======
+
+>>>>>>> 1b944cd (fix: robust jwt verify + safe card template)
 
 initDb().then(() => {
   app.listen(PORT, () => console.log("✅ Serveur MDL actif sur le port", PORT));
