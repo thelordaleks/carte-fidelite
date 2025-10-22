@@ -48,7 +48,7 @@
       transition: all 0.3s ease;
     }
 
-    /* ✅ Calage fin par rapport à l’image */
+    /* ✅ Calage fin par rapport à l’image (vue normale) */
     .nom { left: 24%; top: 62%; font-size: 16px; }
     .prenom { left: 24%; top: 72.5%; font-size: 16px; }
     .points { left: 30%; top: 82.5%; font-size: 16px; font-weight: 800; }
@@ -75,13 +75,12 @@
       -webkit-user-drag: none;
     }
 
-    /* 🪄 Petit effet zoom au survol */
     .barcode img:hover,
     .barcode img:active {
       transform: scale(1.04);
     }
 
-        /* ✅ Mode plein écran corrigé */
+    /* ✅ Mode plein écran corrigé */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
@@ -94,6 +93,7 @@
       justify-content: center !important;
       flex-direction: column !important;
       overflow: hidden;
+      padding: 2vh 2vw; /* 🟡 marge douce autour de la carte */
     }
 
     .card.zoomed img.bg {
@@ -103,19 +103,21 @@
       object-fit: contain;
     }
 
+    /* ✅ Réalignement précis des éléments en plein écran */
+    .card.zoomed .nom { left: 24%; top: 60%; font-size: 18px; }
+    .card.zoomed .prenom { left: 24%; top: 70%; font-size: 18px; }
+    .card.zoomed .points { left: 30%; top: 79%; font-size: 18px; }
+    .card.zoomed .reduc { left: 44%; top: 79%; font-size: 18px; }
+
     .card.zoomed .barcode {
-      top: 44%; /* ↓ un poil plus bas en plein écran */
+      top: 44%;
       left: 50%;
       transform: translate(-50%, -50%);
     }
 
     .card.zoomed .barcode img {
-      width: 85%; /* 🟢 taille ajustée à la carte */
+      width: 85%;
       transform: none !important;
-    }
-
-    .card.zoomed .field {
-      font-size: 18px;
     }
   </style>
 </head>
