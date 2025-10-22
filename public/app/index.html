@@ -16,8 +16,6 @@
   <link rel="apple-touch-icon" href="/static/logo-mdl.png">
 
   <style>
-    /* Transition douce globale (fade) sur couleur, fond, ombres, bordures */
-    * { transition: background-color 0.45s ease, color 0.45s ease, box-shadow 0.45s ease, border-color 0.45s ease; }
     html, body {
       margin: 0;
       padding: 0;
@@ -46,75 +44,41 @@
       position: relative;
     }
 
-    header #refresh-icon {
+    #theme-toggle, #refresh-icon {
       position: absolute;
-      left: 10px;
-      background: transparent;
+      top: 10px;
+      background: none;
       border: none;
       cursor: pointer;
-      padding: 6px;
-      border-radius: 8px;
-      transition: background-color 0.2s ease;
+      transition: transform 0.2s ease;
     }
-    header #refresh-icon:hover { background: rgba(255,255,255,0.15); }
 
-    header svg { width: 26px; height: 26px; fill: white; }
+    #theme-toggle:hover, #refresh-icon:hover { transform: scale(1.15); }
+    #theme-toggle { right: 15px; }
+    #refresh-icon { left: 15px; }
 
-    header #theme-toggle {
-      position: absolute;
-      right: 10px;
-      background: rgba(255,255,255,0.15);
-      color: white;
-      border: none;
-      border-radius: 999px;
-      padding: 6px 10px;
-      cursor: pointer;
-      font-size: 16px;
-      font-weight: 700;
-      transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+    #refresh-icon svg {
+      width: 22px;
+      height: 22px;
+      fill: white;
     }
-    header #theme-toggle:hover { transform: scale(1.06); background: rgba(255,255,255,0.25); }
 
     main {
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      align-items: center;
+      padding: 10px 20px 0;
+      background: transparent !important;
     }
 
-    #status {
-      font-size: 14px;
-      color: #666;
-      margin: 0 auto 10px;
-      max-width: 430px;
-      padding: 8px 10px;
-      border-radius: 8px;
-      background: rgba(0,0,0,0.04);
-    }
-    body.dark #status { color: #ddd; background: rgba(255,255,255,0.06); }
-
-    #network {
-      font-size: 12px;
-      color: #fff;
-      background: #2a9d8f;
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 999px;
-      margin: 4px 0 10px;
-      transition: background 0.3s ease, color 0.3s ease;
-    }
-    #network.offline { background: #b00020; }
-
+    /* ✅ Carte avec bord arrondi et relief */
     iframe#carte {
-      width: min(420px, 92vw);
-      height: 380px;
-      border: none;
+      width: 100%;
+      max-width: 440px;
+      min-height: 100px;
       display: block;
-      margin: 10px auto;
-      background: #fff;
-      border-radius: 16px;
-      box-shadow: 0 6px 15px rgba(0,0,0,0.12);
+      margin: 0 auto;
+      background: white;
+      border: none !important;
+      border-radius: 16px;                 /* ← coins arrondis */
+      box-shadow: 0 6px 15px rgba(0,0,0,0.12); /* ← léger relief */
       overflow: hidden;
       transition: all 0.3s ease;
     }
@@ -145,38 +109,67 @@
       box-shadow: 0 4px 10px rgba(0,0,0,0.25);
     }
 
-    .wallet-btn { background: #2a7de1; }
-    .wallet-btn:hover { background: #1e63b6; }
+    .wallet-btn { background: #96784b; }
+    .install-btn { background: #34A853; }
 
-    .install-btn { background: #28a745; }
-    .install-btn:hover { background: #218838; }
+    /* ✅ Dernière mise à jour — en bas de la page */
+    #status {
+      margin-top: 20px;
+      margin-bottom: 10px;
+      font-size: 14px;
+      color: #c0872f;
+      font-weight: 500;
+    }
+
+    body.dark #status { color: #f1c880; }
+
+    footer {
+      margin-top: 10px;
+      padding: 10px;
+      font-size: 13px;
+      color: #666;
+      background: transparent !important;
+    }
+
+    #net-status {
+      position: fixed;
+      bottom: 8px;
+      right: 10px;
+      background: #c0872f;
+      color: white;
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      opacity: 0.85;
+      transition: background 0.3s ease;
+      z-index: 9999;
+    }
+    #net-status.offline { background: #b32626; }
 
     .mdl-info {
-      max-width: 500px;
-      margin: 12px auto 6px;
-      text-align: left;
-      background: rgba(255,255,255,0.6);
-      color: #333;
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid rgba(0,0,0,0.05);
-    }
-    body.dark .mdl-info {
-      background: rgba(0,0,0,0.35);
-      color: #eee;
-      border-color: rgba(255,255,255,0.06);
+      margin: 20px auto 60px;
+      text-align: center;
+      border-radius: 16px;
+      padding: 10px;
+      max-width: 420px;
+      background: transparent;
     }
 
-    .mdl-info h3 {
-      margin: 8px 0 8px;
-      font-size: 16px;
-      color: #c0872f;
+    .mdl-info h3 { color: #c0872f; margin-bottom: 15px; }
+
+    .instagram-feed iframe {
+      width: 100%;
+      height: 400px;
+      border: none;
+      border-radius: 14px;
+      background: transparent;
+      overflow: hidden;
     }
-    body.dark .mdl-info h3 { color: #d4a55a; }
 
     .mdl-links {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
 
@@ -201,7 +194,7 @@
 <body>
   <header>
     <button id="refresh-icon" title="Rafraîchir la carte">
-      <svg viewBox="0 0 24 24"><path d="M12 6V9L16 5L12 1V4C7.58 4 4 7.58 4 12C4 13.66 4.51 15.19 5.37 16.44L6.86 14.95C6.31 14.07 6 13.07 6 12C6 8.69 8.69 6 12 6M18.63 7.56L17.14 9.05C17.69 9.93 18 10.93 18 12C18 15.31 15.31 18 12 18V15L8 19L12 23V20C16.42 20 20 16.42 20 12C20 10.34 19.49 8.81 18.63 7.56Z"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M12 6V9L16 5L12 1V4C7.58 4 4 7.58 4 12C4 16.42 7.58 20 12 20C15.64 20 18.64 17.67 19.66 14.33L17.57 13.67C16.89 15.96 14.64 17.5 12 17.5C8.96 17.5 6.5 15.04 6.5 12C6.5 8.96 8.96 6.5 12 6.5Z"/></svg>
     </button>
     Carte fidélité MDL
     <button id="theme-toggle" title="Changer le thème">🌙</button>
@@ -217,23 +210,94 @@
 
     <section class="mdl-info">
       <h3>Vie de la MDL</h3>
-      <div id="status">Chargement de la carte…</div>
-      <div id="network">🟢 En ligne</div>
-
+      <div class="instagram-feed">
+        <iframe src="https://www.instagram.com/mdlvaillant/embed"
+                loading="lazy"
+                allowtransparency="true"
+                frameborder="0"
+                scrolling="no"></iframe>
+      </div>
       <div class="mdl-links">
-        <a class="btn-link" href="https://www.instagram.com/mdl_lycee_francois_v" target="_blank" rel="noopener">
-          📸 Instagram MDL
-        </a>
-        <a class="btn-link" href="https://mdlvaillant.fr" target="_blank" rel="noopener">
-          🌐 Site MDL
-        </a>
+        <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
+        <a href="https://edouard-vallaint-vierzon.ovh/" target="_blank" class="btn-link">🏫 Site du lycée</a>
+        <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement de la MDL</a>
       </div>
     </section>
+
+    <div id="status"></div>
   </main>
 
-  <footer style="margin: 10px 0 20px; font-size: 12px; opacity: 0.9;">
-    © MDL – Carte fidélité numérique
-  </footer>
+  <footer>© MDL Vaillant</footer>
+  <div id="net-status">🟢 En ligne</div>
+
+  <script>
+  (() => {
+    const toggle = document.getElementById('theme-toggle');
+    const body = document.body;
+    const saved = localStorage.getItem('mdl_theme');
+    if (saved === 'dark') { body.classList.add('dark'); toggle.textContent = '☀️'; }
+    toggle.addEventListener('click', () => {
+      if (body.classList.contains('dark')) {
+        body.classList.remove('dark');
+        toggle.textContent = '🌙';
+        localStorage.setItem('mdl_theme', 'light');
+      } else {
+        body.classList.add('dark');
+        toggle.textContent = '☀️';
+        localStorage.setItem('mdl_theme', 'dark');
+      }
+    });
+  })();
+
+  if (location.search.includes('source=email')) {
+    setTimeout(() => window.dispatchEvent(new Event('beforeinstallprompt')), 2500);
+  }
+
+  (() => {
+    const $ = s => document.querySelector(s);
+    const iframe = $("#carte"), refreshIcon = $("#refresh-icon"),
+          statusEl = $("#status"), netStatus = $("#net-status");
+
+    let code = localStorage.getItem("mdl_last_code");
+    if (!code) {
+      const params = new URLSearchParams(location.search);
+      const fromUrl = params.get("code");
+      if (fromUrl) { code = fromUrl; localStorage.setItem("mdl_last_code", code); }
+    }
+    if (code) iframe.src = "/c/" + encodeURIComponent(code);
+
+    async function refreshCard(){
+      if(!code) return;
+      try {
+        const res = await fetch("/api/get-card/" + encodeURIComponent(code));
+        const data = await res.json();
+        if(data && data.ok){
+          statusEl.textContent = "✅ Dernière mise à jour : " + new Date().toLocaleTimeString();
+          iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
+        } else statusEl.textContent = "⚠️ Carte introuvable";
+      } catch {
+        statusEl.textContent = "⚠️ Hors ligne — carte en cache";
+        iframe.src = "/c/" + encodeURIComponent(code);
+      }
+    }
+    refreshIcon.onclick = refreshCard;
+    setInterval(refreshCard, 60000);
+    refreshCard();
+
+    function updateNetworkStatus(){
+      if(navigator.onLine){
+        netStatus.textContent="🟢 En ligne";
+        netStatus.classList.remove("offline");
+      } else {
+        netStatus.textContent="🔴 Hors ligne";
+        netStatus.classList.add("offline");
+      }
+    }
+    window.addEventListener("online",updateNetworkStatus);
+    window.addEventListener("offline",updateNetworkStatus);
+    updateNetworkStatus();
+  })();
+  </script>
 
   <script>
   if ('serviceWorker' in navigator) {
@@ -264,120 +328,32 @@
         <button id="install-yes" style="
           background:white;
           color:#c0872f;
-          font-weight:700;
+          font-weight:bold;
           border:none;
-          border-radius:999px;
-          margin:10px 8px 6px;
-          padding:8px 12px;
+          padding:8px 16px;
+          border-radius:8px;
+          margin-top:8px;
           cursor:pointer;">Installer</button>
         <button id="install-no" style="
           background:transparent;
           color:white;
-          font-weight:600;
-          border:1px solid rgba(255,255,255,0.6);
-          border-radius:999px;
-          margin:10px 8px 6px;
-          padding:8px 12px;
+          border:none;
+          margin-left:8px;
           cursor:pointer;">Plus tard</button>
-      </div>
-    `;
+      </div>`;
     document.body.appendChild(banner);
 
-    document.getElementById('install-yes').onclick = async () => {
+    document.getElementById('install-yes').addEventListener('click', async () => {
       banner.remove();
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const choice = await deferredPrompt.userChoice;
-        deferredPrompt = null;
-      }
-    };
-    document.getElementById('install-no').onclick = () => banner.remove();
-  });
-
-  window.addEventListener('appinstalled', () => {
-    const b = document.getElementById('install-banner');
-    if (b) b.remove();
-    const btn = document.getElementById('install');
-    if (btn) btn.style.display = 'none';
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    });
+    document.getElementById('install-no').addEventListener('click', () => banner.remove());
   });
   </script>
 
   <script>
-  const iframe = document.getElementById("carte");
-  const statusEl = document.getElementById("status");
-  const netStatus = document.getElementById("network");
-  const refreshIcon = document.getElementById("refresh-icon");
-  const themeToggle = document.getElementById("theme-toggle");
-  const urlParams = new URLSearchParams(window.location.search);
-
-  let code = localStorage.getItem("mdl_last_code") || "";
-  const fromUrl = urlParams.get("code");
-  if (!code && fromUrl) code = fromUrl;
-
-  function updateWalletLink() {
-    const wallet = document.getElementById("wallet");
-    if (code) {
-      wallet.href = "/wallet/" + encodeURIComponent(code);
-      wallet.style.display = "inline-block";
-    } else {
-      wallet.href = "#";
-      wallet.style.display = "none";
-    }
-  }
-
-  if (!code) {
-    const fromStorage = localStorage.getItem("mdl_last_code");
-    if (fromStorage) code = fromStorage;
-    if (!code) {
-      const fromUrl2 = urlParams.get("code");
-      if (fromUrl2) code = fromUrl2;
-      if (!code) {
-        code = prompt("Entre ton code carte (fourni par la MDL) :") || "";
-        const fromUrl = urlParams.get("code");
-        if (fromUrl) { code = fromUrl; localStorage.setItem("mdl_last_code", code); }
-      }
-    }
-  }
-
-  if (code) iframe.src = "/c/" + encodeURIComponent(code);
-  updateWalletLink();
-
-  async function refreshCard(){
-    if(!code) return;
-    try {
-      const res = await fetch("/api/get-card/" + encodeURIComponent(code));
-      const data = await res.json();
-      if(data && data.ok){
-        statusEl.textContent = "✅ Dernière mise à jour : " + new Date().toLocaleTimeString();
-        iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
-      } else statusEl.textContent = "⚠️ Carte introuvable";
-    } catch {
-      statusEl.textContent = "⚠️ Hors ligne — carte en cache";
-      iframe.src = "/c/" + encodeURIComponent(code);
-    }
-  }
-  refreshIcon.onclick = refreshCard;
-  setInterval(refreshCard, 60000);
-  refreshCard();
-
-  function updateNetworkStatus(){
-    if(navigator.onLine){
-      netStatus.textContent="🟢 En ligne";
-      netStatus.classList.remove("offline");
-    } else {
-      netStatus.textContent="🔴 Hors ligne";
-      netStatus.classList.add("offline");
-    }
-  }
-  window.addEventListener("online", updateNetworkStatus);
-  window.addEventListener("offline", updateNetworkStatus);
-  updateNetworkStatus();
-
-  themeToggle.addEventListener("click", () => {
-    document.body.classList.toggle("dark");
-    themeToggle.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
-  });
-
   window.addEventListener('message', (event) => {
     if (event.data.type === 'resizeCarte' && event.data.height) {
       const iframe = document.getElementById('carte');
