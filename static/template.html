@@ -210,10 +210,14 @@
 
       window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
 
-      // ✅ Envoie la hauteur réelle au parent pour ajuster l'iframe automatiquement
-      const height = document.body.scrollHeight;
-      window.parent.postMessage({ type: 'resizeCarte', height }, '*');
-    });
+      // ✅ Si le parent demande la taille, on la renvoie
+window.addEventListener('message', (e) => {
+  if (e.data.type === 'getCarteHeight') {
+    const height = document.body.scrollHeight;
+    window.parent.postMessage({ type: 'resizeCarte', height }, '*');
+  }
+});
+
   </script>
 </body>
 </html>
