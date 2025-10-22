@@ -1,9 +1,9 @@
 {
   "name": "Carte fidélité MDL Vaillant",
-  "short_name": "MDL Vaillant",
+  "short_name": "Carte MDL",
   "description": "Application officielle de la carte de fidélité de la MDL Vaillant.",
   "start_url": "/app/?source=pwa",
-  "scope": "/app/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#f9f5ef",
   "theme_color": "#c0872f",
