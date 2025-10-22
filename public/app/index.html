@@ -275,6 +275,12 @@ iframe#carte {
       }
     });
   })();
+  // ✅ Si le lien vient d'un email, forcer le bandeau d'installation
+if (location.search.includes('source=email')) {
+  setTimeout(() => {
+    window.dispatchEvent(new Event('beforeinstallprompt'));
+  }, 2500);
+}
 
   // 🔄 Gestion de la carte + bouton refresh
   (function(){
@@ -328,5 +334,67 @@ iframe#carte {
       .catch(err => console.error('❌ Erreur SW:', err));
   }
   </script>
+<script>
+let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+
+  // ✅ Création du bandeau si pas déjà présent
+  if (!document.getElementById('install-banner')) {
+    const banner = document.createElement('div');
+    banner.id = 'install-banner';
+    banner.innerHTML = `
+      <div style="
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        background: #c0872f;
+        color: white;
+        font-family: 'Segoe UI', Arial, sans-serif;
+        text-align: center;
+        padding: 14px 10px;
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
+        z-index: 10000;
+      ">
+        📱 <b>Installe la carte fidélité MDL</b><br>
+        <button id="install-yes" style="
+          background:white;
+          color:#c0872f;
+          font-weight:bold;
+          border:none;
+          padding:8px 16px;
+          border-radius:8px;
+          margin-top:8px;
+          cursor:pointer;
+        ">Installer</button>
+        <button id="install-no" style="
+          background:transparent;
+          color:white;
+          border:none;
+          margin-left:8px;
+          cursor:pointer;
+        ">Plus tard</button>
+      </div>`;
+    document.body.appendChild(banner);
+
+    document.getElementById('install-yes').addEventListener('click', async () => {
+      banner.remove();
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        console.log('✅ App installée !');
+      } else {
+        console.log('❌ Installation refusée');
+      }
+      deferredPrompt = null;
+    });
+
+    document.getElementById('install-no').addEventListener('click', () => {
+      banner.remove();
+    });
+  }
+});
+</script>
 </body>
 </html>
