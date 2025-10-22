@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <title>Carte de fidélité</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#f5f7fb">
 
   <style>
@@ -13,6 +14,7 @@
       background: transparent !important;
       overflow: hidden !important;
       border: none !important;
+      touch-action: none; /* ✅ empêche le pinch zoom mobile */
     }
 
     .card {
@@ -26,7 +28,9 @@
       overflow: hidden;
       border: none !important;
       border-radius: 0 !important;
-      transition: all 0.3s ease;
+      transition: none !important;
+      transform: none !important;
+      zoom: 1 !important;
     }
 
     .bg {
@@ -35,7 +39,8 @@
       display: block;
       object-fit: contain;
       background: transparent !important;
-      transition: all 0.3s ease;
+      transition: none !important;
+      transform: none !important;
     }
 
     .field {
@@ -45,42 +50,42 @@
       font-weight: 700;
       white-space: nowrap;
       text-shadow: 0 1px 1px rgba(255,255,255,0.6);
-      transition: all 0.3s ease;
+      transition: none !important;
     }
 
-    /* ✅ Calage fin par rapport à l’image (vue normale) */
+    /* ✅ Calage fin (vue normale) */
     .nom { left: 24%; top: 62%; font-size: 16px; }
     .prenom { left: 24%; top: 72.5%; font-size: 16px; }
     .points { left: 30%; top: 82.5%; font-size: 16px; font-weight: 800; }
     .reduc { left: 44%; top: 82.5%; font-size: 16px; font-weight: 800; }
 
-    /* ✅ Code-barres calibré */
+    /* ✅ Code-barres */
     .barcode {
       position: absolute;
       top: 46%;
       left: 40%;
-      transform: translateX(-50%) translateY(-50%);
+      transform: translate(-50%, -50%);
       z-index: 3;
       text-align: center;
       cursor: pointer;
-      transition: all 0.3s ease;
     }
 
     .barcode img {
       width: 120%;
       height: auto;
-      transition: transform 0.25s ease, width 0.3s ease;
       background: transparent !important;
       user-select: none;
       -webkit-user-drag: none;
+      transform: none !important;
+      transition: none !important;
     }
 
     .barcode img:hover,
     .barcode img:active {
-      transform: scale(1.04);
+      transform: scale(1.03);
     }
 
-    /* ✅ Mode plein écran corrigé */
+    /* ✅ Plein écran stable */
     .card.zoomed {
       position: fixed !important;
       inset: 0 !important;
@@ -93,7 +98,15 @@
       justify-content: center !important;
       flex-direction: column !important;
       overflow: hidden;
-      padding: 2vh 2vw; /* 🟡 marge douce autour de la carte */
+      padding: 2vh 2vw;
+      transform: none !important;
+      zoom: 1 !important;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     .card.zoomed img.bg {
@@ -101,9 +114,10 @@
       height: auto;
       max-height: 85vh;
       object-fit: contain;
+      transform: none !important;
     }
 
-    /* ✅ Réalignement précis des éléments en plein écran */
+    /* ✅ Réalignement en plein écran */
     .card.zoomed .nom { left: 32%; top: 61.5%; font-size: 18px; }
     .card.zoomed .prenom { left: 32%; top: 70%; font-size: 18px; }
     .card.zoomed .points { left: 37%; top: 78.5%; font-size: 18px; }
@@ -133,7 +147,7 @@
   </div>
 
   <script>
-    // ✅ Ajuste la hauteur dans le parent
+    // ✅ Ajustement de la hauteur parent
     function sendHeight() {
       const h = document.querySelector('.card').offsetHeight;
       window.parent.postMessage({ type: 'resizeCarte', height: h }, '*');
@@ -164,7 +178,6 @@
       });
     });
 
-    // Communication avec le parent
     window.addEventListener('message', (e) => {
       if (e.data.type === 'getCarteHeight') sendHeight();
     });
