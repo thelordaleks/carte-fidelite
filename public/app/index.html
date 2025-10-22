@@ -290,6 +290,15 @@ if (location.search.includes('source=email')) {
           statusEl=$("#status"), netStatus=$("#net-status");
 
     let code = localStorage.getItem("mdl_last_code");
+    // ✅ Si aucun code n’est en mémoire, on le récupère depuis l’URL
+if (!code) {
+  const params = new URLSearchParams(location.search);
+  const fromUrl = params.get("code");
+  if (fromUrl) {
+    code = fromUrl;
+    localStorage.setItem("mdl_last_code", code);
+  }
+}
 
     async function refreshCard(){
       if(!code) return;
