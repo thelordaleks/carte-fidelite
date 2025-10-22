@@ -1,95 +1,75 @@
 :root {
   --w: 1024;
   --h: 585;
-  --nom-left: 23%; --nom-top: 66%; --nom-width: 64%; --nom-height: 9%;
-  --prenom-left: 23%; --prenom-top: 76.5%; --prenom-width: 64%; --prenom-height: 9%;
-  --points-left: 22%; --points-top: 86.2%; --points-width: 22%; --points-height: 10%;
-  --reduc-left: 39%; --reduc-top: 86.2%; --reduc-width: 22%; --reduc-height: 10%;
+  --nom-left: 23%; --nom-top: 66%; --nom-width: 64%;
+  --prenom-left: 23%; --prenom-top: 76.5%; --prenom-width: 64%;
+  --points-left: 22%; --points-top: 86.2%; --points-width: 22%;
+  --reduc-left: 39%; --reduc-top: 86.2%; --reduc-width: 22%;
   --bar-left: 10%; --bar-right: 10%; --bar-top: 42%;
 }
 
-/* 🚫 Nuke total de tout fond / bordure / ombre dans le document de l'iframe */
-html, body, div, img, canvas {
+/* ✅ suppression totale des fonds, bordures, marges par défaut */
+html, body {
   margin: 0 !important;
   padding: 0 !important;
   background: transparent !important;
-  border: 0 !important;
-  outline: 0 !important;
+  border: none !important;
   box-shadow: none !important;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
 }
 
-html, body {
-  height: 100% !important;
-  width: 100% !important;
-  overflow: hidden !important;
-  -webkit-appearance: none !important;
-  appearance: none !important;
-}
-
-/* La carte elle-même: AUCUN fond, AUCUNE ombre, AUCUN radius */
 .card {
   position: relative;
   aspect-ratio: var(--w) / var(--h);
   width: min(95vw, 860px);
   max-height: 92vh;
-
-  background: transparent !important;
   border: none !important;
   border-radius: 0 !important;
+  background: transparent !important;
   box-shadow: none !important;
-
-  overflow: hidden !important;
-  transform: translateZ(0);
+  overflow: hidden;
   isolation: isolate;
+  transform: translateZ(0);
 }
 
-/* L'image de fond de la carte */
+/* ✅ image sans fond blanc ajouté */
 .card .bg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;         /* respecte exactement ton PNG */
+  object-fit: contain;
   object-position: center;
-  background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-drag: none;
+  background: transparent !important;
   z-index: 0;
+  user-select: none;
+  pointer-events: none;
 }
 
-/* Champs */
+/* textes */
 .field {
   position: absolute;
   display: flex;
   align-items: center;
-  padding: 0 1.2%;
+  padding: 0 1%;
   color: #1c2434;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: var(--fs, clamp(12px, 2.2vw, 22px));
   transform: translateY(-50%);
   z-index: 2;
 }
 
-.field > .truncate {
-  min-width: 0;
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.nom    { left: var(--nom-left);    top: var(--nom-top);    width: var(--nom-width); }
+.nom    { left: var(--nom-left); top: var(--nom-top); width: var(--nom-width); }
 .prenom { left: var(--prenom-left); top: var(--prenom-top); width: var(--prenom-width); }
 .points { left: var(--points-left); top: var(--points-top); width: var(--points-width); justify-content: center; font-weight: 800; }
-.reduc  { left: var(--reduc-left);  top: var(--reduc-top);  width: var(--reduc-width);  justify-content: center; font-weight: 800; }
+.reduc  { left: var(--reduc-left); top: var(--reduc-top); width: var(--reduc-width); justify-content: center; font-weight: 800; }
 
-/* Code-barres */
 .barcode {
   position: absolute;
   left: var(--bar-left);
@@ -102,16 +82,16 @@ html, body {
   cursor: pointer;
   z-index: 3;
 }
+
 .barcode img {
   width: 80%;
   max-width: 720px;
   height: auto;
-  background: transparent !important;
   border: none !important;
-  box-shadow: none !important;
+  background: transparent !important;
 }
 
-/* Plein écran paysage */
+/* ✅ plein écran */
 .card.zoomed {
   position: fixed !important;
   inset: 0 !important;
@@ -122,21 +102,8 @@ html, body {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  border-radius: 0 !important;
 }
 
-.card.zoomed .field { font-size: clamp(18px, 3vw, 28px) !important; }
-.card.zoomed .nom,
-.card.zoomed .prenom {
-  left: 60% !important;
-  transform: translate(-50%, -50%) !important;
-}
-
-/* 🧹 Si d’anciens wrappers existent encore, on les rend inoffensifs */
-.stage, .frame, .outer, .container, .wrapper, .card-shadow {
-  background: transparent !important;
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  outline: none !important;
+.card.zoomed .field {
+  font-size: clamp(18px, 3vw, 28px) !important;
 }

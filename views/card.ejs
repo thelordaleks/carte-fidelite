@@ -1,16 +1,15 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <title>Carte de fidélité</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <meta name="theme-color" content="#000000" />
-  <link rel="stylesheet" href="/static/card.css" />
+  <meta charset="utf-8">
+  <title>Carte de fidélité MDL</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <link rel="stylesheet" href="/static/card.css">
 </head>
+
 <body>
-  <!-- ⚠️ Aucun wrapper avec fond / ombre / radius -->
-  <div class="card" id="carte" role="main" aria-live="polite">
-    <img class="bg" src="/static/carte-mdl.png" alt="Fond carte" />
+  <div class="card" id="carte">
+    <img class="bg" src="/static/carte-mdl.png" alt="Fond de carte">
 
     <div class="field nom"><span class="truncate"><%= nom %></span></div>
     <div class="field prenom"><span class="truncate"><%= prenom %></span></div>
@@ -18,21 +17,18 @@
     <div class="field reduc"><%= reduction %></div>
 
     <div class="barcode" id="barcode">
-      <img
-        src="<%= (baseUrl || '') %>/barcode/<%= encodeURIComponent(code) %>?t=<%= Date.now() %>"
-        alt="Code-barres" />
+      <img src="<%= (baseUrl || '') %>/barcode/<%= encodeURIComponent(code) %>?t=<%= Date.now() %>" alt="Code-barres">
     </div>
   </div>
 
   <script>
-    // Ajustement auto des tailles Nom/Prénom (comme avant)
     function fitOne(el){
       const span = el.querySelector('.truncate');
       if (!span) return;
       let size = 24, min = 10, w = el.clientWidth;
       el.style.setProperty('--fs', size+'px');
       while (span.scrollWidth > w && size > min) {
-        size -= .5;
+        size -= 0.5;
         el.style.setProperty('--fs', size+'px');
       }
     }
@@ -43,20 +39,18 @@
       const card = document.querySelector('.card');
       const barcode = document.querySelector('.barcode');
 
-      // Zoom plein écran paysage sur le code-barres (comme tu avais)
       barcode.addEventListener('click', async () => {
         if (card.classList.contains('zoomed')) {
           card.classList.remove('zoomed');
-          try { await screen.orientation.unlock(); } catch(e) {}
+          try { await screen.orientation.unlock(); } catch(e){}
           document.exitFullscreen?.();
         } else {
           card.classList.add('zoomed');
-          try { await (card.requestFullscreen?.() || card.webkitRequestFullscreen?.()); } catch(e) {}
-          try { await screen.orientation.lock('landscape'); } catch(e) {}
+          try { await card.requestFullscreen(); } catch(e){}
+          try { await screen.orientation.lock('landscape'); } catch(e){}
           setTimeout(fitAll, 300);
         }
       });
-
       window.addEventListener('orientationchange', () => setTimeout(fitAll, 300));
     });
   </script>
