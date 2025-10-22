@@ -294,28 +294,29 @@ body:not(.dark) .instagram-feed::after {
 
 
   <main>
-    <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
-</div>
+  <!-- ✅ Iframe carte rétablie -->
+  <iframe id="carte" src=""></iframe>
 
+  <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
 
-    <section class="mdl-info">
-      <h3>Vie de la MDL</h3>
-      <div class="instagram-feed">
-        <iframe src="https://www.instagram.com/mdlvaillant/embed"
-                loading="lazy"
-                allowtransparency="true"
-                frameborder="0"
-                scrolling="no"></iframe>
-      </div>
-      <div class="mdl-links">
-        <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
-        <a href="https://edouard-vallaint-vierzon.ovh/" target="_blank" class="btn-link">🏫 Site du lycée</a>
-        <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement de la MDL</a>
-      </div>
-    </section>
+  <section class="mdl-info">
+    <h3>Vie de la MDL</h3>
+    <div class="instagram-feed">
+      <iframe src="https://www.instagram.com/mdlvaillant/embed"
+              loading="lazy"
+              allowtransparency="true"
+              frameborder="0"
+              scrolling="no"></iframe>
+    </div>
+    <div class="mdl-links">
+      <a href="https://www.instagram.com/mdlvaillant" target="_blank" class="btn-link">📸 Instagram MDL</a>
+      <a href="https://edouard-vallaint-vierzon.ovh/" target="_blank" class="btn-link">🏫 Site du lycée</a>
+      <a href="/static/reglement-mdl.pdf" target="_blank" class="btn-link">📜 Règlement de la MDL</a>
+    </div>
+  </section>
 
-    <div id="status"></div>
-  </main>
+  <div id="status"></div>
+</main>
 
   <footer>© MDL Vaillant</footer>
   <div id="net-status">🟢 En ligne</div>
