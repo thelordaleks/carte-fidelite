@@ -72,8 +72,13 @@ self.addEventListener('fetch', (event) => {
           // console.log('[SW] 💾 Carte depuis cache (orig):', keyOrig);
           return cached;
         }
-        // dernier recours : une image (l'iframe affichera au moins quelque chose)
-        return caches.match('/static/carte-mdl.png');
+        // 💤 Serveur endormi → on affiche le dernier cache si dispo
+const offlineFallback = await caches.match(keyNorm) || await caches.match(keyOrig);
+if (offlineFallback) return offlineFallback;
+
+// dernier recours : une image si aucun cache HTML
+return caches.match('/static/carte-mdl.png');
+
       }
     })());
     return;
@@ -118,7 +123,11 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       cached = await cache.match(keyOrig);
       if (cached) return cached;
-      return new Response('offline', { status: 503 });
+      // 🔁 Serveur endormi → garde l'ancien code-barres en cache
+const cached = await cache.match(keyNorm) || await cache.match(keyOrig);
+if (cached) return cached;
+return new Response('💤 serveur en veille', { status: 503 });
+
     }
   })());
 });

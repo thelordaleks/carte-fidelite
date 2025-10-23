@@ -426,10 +426,11 @@ body:not(.dark) .instagram-feed::after {
           statusEl.textContent = "✅ Dernière mise à jour : " + new Date().toLocaleTimeString();
           iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
         } else statusEl.textContent = "⚠️ Carte introuvable";
-      } catch {
-        statusEl.textContent = "⚠️ Hors ligne — carte en cache";
-        iframe.src = "/c/" + encodeURIComponent(code);
-      }
+      catch {
+  statusEl.textContent = "💤 Serveur en veille — affichage hors ligne...";
+  iframe.src = "/c/" + encodeURIComponent(code);
+}
+
     }
     refreshIcon.onclick = refreshCard;
     setInterval(refreshCard, 60000);
