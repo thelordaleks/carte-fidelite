@@ -1,5 +1,5 @@
-// ✅ Service Worker – v18 (offline carte robuste)
-const CACHE_NAME = 'mdl-carte-v18';
+// ✅ Service Worker – v19 (offline + mode veille Render invisible)
+const CACHE_NAME = 'mdl-carte-v19';
 const STATIC_ASSETS = [
   '/app/index.html',
   '/app/manifest.json',
@@ -11,7 +11,7 @@ const STATIC_ASSETS = [
   '/static/icons/instagram.png'
 ];
 
-// 🧩 Clés normalisées
+// 🧩 Normalisation d’URL
 function normalizedUrl(url) {
   try {
     const u = new URL(url);
@@ -22,6 +22,7 @@ function normalizedUrl(url) {
   } catch { return url; }
 }
 
+// 🪣 Installation
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -30,6 +31,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// ♻️ Activation
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
@@ -38,6 +40,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// 📡 Interception des requêtes
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -46,45 +49,32 @@ self.addEventListener('fetch', (event) => {
   const keyNorm = normalizedUrl(req.url);
   const keyOrig = req.url;
 
-  // Laisse passer l'API au réseau
+  // ⛔ Laisse passer l’API en direct
   if (url.pathname.startsWith('/api/')) return;
 
-  // 🃏 Carte HTML
+  // 🎴 Carte MDL
   if (url.pathname.startsWith('/c/')) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       try {
-        // en ligne → on met à jour le cache sous deux clés (avec et sans query)
+        // Online → maj du cache
         const res = await fetch(req);
         await cache.put(keyNorm, res.clone());
         await cache.put(keyOrig, res.clone());
-        // console.log('[SW] ✅ Carte MAJ cache:', keyNorm, 'et', keyOrig);
         return res;
       } catch {
-        // hors ligne → on tente d'abord la clé normalisée, puis la clé originale
-        let cached = await cache.match(keyNorm);
-        if (cached) {
-          // console.log('[SW] 💾 Carte depuis cache (norm):', keyNorm);
-          return cached;
-        }
-        cached = await cache.match(keyOrig);
-        if (cached) {
-          // console.log('[SW] 💾 Carte depuis cache (orig):', keyOrig);
-          return cached;
-        }
-        // 💤 Serveur endormi → on affiche le dernier cache si dispo
-const offlineFallback = await caches.match(keyNorm) || await caches.match(keyOrig);
-if (offlineFallback) return offlineFallback;
+        // Offline ou Render en veille → on sert direct le cache
+        const cached = await cache.match(keyNorm) || await cache.match(keyOrig);
+        if (cached) return cached;
 
-// dernier recours : une image si aucun cache HTML
-return caches.match('/static/carte-mdl.png');
-
+        // dernier recours : fond statique
+        return caches.match('/static/carte-mdl.png');
       }
     })());
     return;
   }
 
-  // 🧾 Code-barres
+  // 📊 Code-barres
   if (url.pathname.startsWith('/barcode/')) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -94,23 +84,20 @@ return caches.match('/static/carte-mdl.png');
         await cache.put(keyOrig, res.clone());
         return res;
       } catch {
-        let cached = await cache.match(keyNorm);
-        if (cached) return cached;
-        cached = await cache.match(keyOrig);
-        if (cached) return cached;
-        return new Response('offline', { status: 503 });
+        const cached = await cache.match(keyNorm) || await cache.match(keyOrig);
+        return cached || new Response('offline', { status: 503 });
       }
     })());
     return;
   }
 
-  // 🧱 Statiques → cache-first
+  // 🧱 Ressources statiques → cache-first
   if (STATIC_ASSETS.includes(url.pathname)) {
     event.respondWith(caches.match(req).then(c => c || fetch(req)));
     return;
   }
 
-  // 🌐 Général → network, fallback cache
+  // 🌍 Tout le reste → online-first, sinon cache
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     try {
@@ -119,15 +106,14 @@ return caches.match('/static/carte-mdl.png');
       await cache.put(keyOrig, res.clone());
       return res;
     } catch {
-      let cached = await cache.match(keyNorm);
+      const cached = await cache.match(keyNorm) || await cache.match(keyOrig);
       if (cached) return cached;
-      cached = await cache.match(keyOrig);
-      if (cached) return cached;
-      // 🔁 Serveur endormi → garde l'ancien code-barres en cache
-const cached = await cache.match(keyNorm) || await cache.match(keyOrig);
-if (cached) return cached;
-return new Response('💤 serveur en veille', { status: 503 });
 
+      // Serveur endormi → réponse silencieuse
+      return new Response('<body style="font-family:sans-serif;text-align:center;padding:40px;color:#c0872f;">💤 Serveur en veille<br><small>Affichage hors ligne</small></body>', {
+        headers: { 'Content-Type': 'text/html' },
+        status: 200
+      });
     }
   })());
 });
