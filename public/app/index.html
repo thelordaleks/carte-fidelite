@@ -345,7 +345,7 @@ body:not(.dark) .instagram-feed::after {
   <iframe id="carte" src=""></iframe>
 
   <button id="install" class="btn install-btn" style="display:none;">📱 Installer</button>
-  <iframe id="carte" src="" allowfullscreen></iframe>
+
   <section class="mdl-info">
     <h3>Vie de la MDL</h3>
     <div class="instagram-feed">
@@ -426,11 +426,10 @@ body:not(.dark) .instagram-feed::after {
           statusEl.textContent = "✅ Dernière mise à jour : " + new Date().toLocaleTimeString();
           iframe.src = "/c/" + encodeURIComponent(code) + "?t=" + Date.now();
         } else statusEl.textContent = "⚠️ Carte introuvable";
-      catch {
-  statusEl.textContent = "💤 Serveur en veille — affichage hors ligne...";
-  iframe.src = "/c/" + encodeURIComponent(code);
-}
-
+      } catch {
+        statusEl.textContent = "⚠️ Hors ligne — carte en cache";
+        iframe.src = "/c/" + encodeURIComponent(code);
+      }
     }
     refreshIcon.onclick = refreshCard;
     setInterval(refreshCard, 60000);
