@@ -96,6 +96,15 @@ const dataFile = path.join(__dirname, "data", "lastCodes.json");
 
 app.post("/api/create-card", async (req, res) => {
   try {
+        // 🔒 Protection : si ADMIN_TOKEN défini, on exige Authorization: Bearer <token>
+    if (ADMIN_TOKEN) {
+      const auth = String(req.headers.authorization || "");
+      const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : auth.trim();
+      if (token !== ADMIN_TOKEN) {
+        return res.status(401).json({ error: "unauthorized" });
+      }
+    }
+
     let { code, nom = "", prenom = "", email, mail, reduction = "", points } = req.body || {};
     email = (email || mail || "").trim().toLowerCase();
     code = String(code || "ADH" + Math.random().toString(36).substring(2, 10).toUpperCase());
@@ -290,6 +299,8 @@ app.get("/wallet/:code", async (req, res) => {
           classId: `${issuerId}.mdlcard`,
           accountId: card.code,
           accountName: `${card.prenom} ${card.nom}`,
+          state: "ACTIVE",
+
           loyaltyPoints: {
             balance: { string: `${card.points} pts` },
           },
