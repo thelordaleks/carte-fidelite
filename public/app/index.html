@@ -378,12 +378,15 @@
   const iframe = $("#carte"), refreshIcon = $("#refresh-icon"),
         statusEl = $("#status"), netStatus = $("#net-status");
 
-  let code = localStorage.getItem("mdl_last_code");
-  if (!code) {
-    const params = new URLSearchParams(location.search);
-    const fromUrl = params.get("code");
-    if (fromUrl) { code = fromUrl; localStorage.setItem("mdl_last_code", code); }
-  }
+ const params = new URLSearchParams(location.search);
+const fromUrl = params.get("code");
+
+// ✅ priorité à l'URL, sinon on garde le dernier code connu
+let code = fromUrl || localStorage.getItem("mdl_last_code");
+
+// si un code est fourni dans l'URL, on l'enregistre (même si un ancien existe)
+if (fromUrl) localStorage.setItem("mdl_last_code", fromUrl);
+
   if (code) iframe.src = "/c/" + encodeURIComponent(code);
 
   async function refreshCard(){
