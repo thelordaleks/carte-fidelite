@@ -1,0 +1,270 @@
+/* ============================================================
+   Carte fidélité MDL — styles PWA
+   ============================================================ */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", Arial, sans-serif;
+  color: #333;
+  background: linear-gradient(to bottom right, #f7efe1 0%, #faf7f2 50%, #ffffff 100%);
+  transition: background .5s ease, color .5s ease;
+}
+
+body.dark {
+  color: #f9f5ef;
+  background: linear-gradient(to bottom right, #121212 0%, #1a1a1a 50%, #0f0f0f 100%);
+}
+
+/* ---------- En-tête ---------- */
+header {
+  background: #c0872f;
+  color: #fff;
+  padding: 14px 10px;
+  font-size: 20px;
+  font-weight: bold;
+  box-shadow: 0 2px 5px rgba(0,0,0,.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+body.dark header { background: #1e1e1e; color: #c0872f; }
+
+.header-title { pointer-events: none; }
+
+#theme-toggle, #refresh-icon {
+  position: absolute;
+  top: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  transition: transform .2s ease;
+}
+#theme-toggle { right: 15px; font-size: 22px; }
+#refresh-icon { left: 15px; }
+#theme-toggle:hover, #refresh-icon:hover { transform: scale(1.15); }
+#refresh-icon svg { width: 22px; height: 22px; fill: #fff; }
+.spin { animation: spin .8s linear; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#wallet-icon {
+  position: absolute;
+  right: 52px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  color: #f5d49c;
+  opacity: .9;
+  transition: transform .2s ease, opacity .3s ease;
+}
+#wallet-icon span { font-size: 10px; color: #fff; opacity: .85; margin-top: 1px; }
+#wallet-icon:hover { transform: scale(1.1); opacity: 1; }
+body.dark #wallet-icon { color: #c0872f; }
+
+/* ---------- Zone principale ---------- */
+main { padding: 16px 18px 0; text-align: center; }
+
+/* ---------- Ta carte (image + champs superposés) ---------- */
+.card-wrap { max-width: 460px; margin: 6px auto 0; }
+
+.fid-card {
+  position: relative;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #f8eedc;
+  box-shadow: 0 8px 20px rgba(0,0,0,.18);
+  container-type: inline-size;
+}
+body.dark .fid-card { box-shadow: 0 8px 20px rgba(0,0,0,.5); }
+
+.fid-bg { width: 100%; height: auto; display: block; }
+
+.fid-field {
+  position: absolute;
+  color: #1c2434;
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: 0 1px 1px rgba(255,255,255,.6);
+  font-size: clamp(12px, 3.7cqw, 22px);
+  line-height: 1;
+}
+/* Positions reprises de template.html */
+.fid-nom    { left: 24%; top: 62%; }
+.fid-prenom { left: 24%; top: 72.5%; }
+.fid-points { left: 30%; top: 82.5%; }
+.fid-reduc  { left: 44%; top: 82.5%; }
+
+.fid-barcode {
+  position: absolute;
+  top: 47%;
+  left: 43%;
+  transform: translate(-50%, -50%);
+  width: 46%;
+  text-align: center;
+  cursor: pointer;
+}
+.fid-barcode img { width: 100%; height: auto; display: block; }
+.fid-code {
+  margin-top: 2px;
+  font-size: clamp(9px, 2.4cqw, 13px);
+  letter-spacing: 1px;
+  color: #1c2434;
+  font-weight: 700;
+}
+
+.card-hint {
+  font-size: 12px;
+  color: #998b6f;
+  margin: 8px 0 0;
+}
+body.dark .card-hint { color: #b3a583; }
+
+/* ---------- Overlay plein écran du code-barres ---------- */
+.bc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: #f8eedc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bc-overlay[hidden] { display: none; }
+.bc-overlay-inner { text-align: center; padding: 16px; }
+#bc-overlay-img { width: 92vw; max-width: 92vw; height: auto; }
+#bc-overlay-code {
+  margin-top: 12px;
+  font-size: 20px;
+  letter-spacing: 3px;
+  font-weight: 700;
+  color: #1c2434;
+}
+.bc-hint { margin-top: 18px; font-size: 14px; color: #8a7a55; }
+
+/* ---------- Saisie du code ---------- */
+.code-entry {
+  max-width: 460px;
+  margin: 20px auto 0;
+  background: rgba(255,255,255,.65);
+  border-radius: 16px;
+  padding: 18px;
+  backdrop-filter: blur(6px);
+}
+body.dark .code-entry { background: rgba(30,30,30,.6); }
+.code-entry p { margin: 0 0 12px; font-weight: 600; }
+.code-entry small { color: #777; display: block; margin-top: 10px; }
+body.dark .code-entry small { color: #aaa; }
+.code-entry-row { display: flex; gap: 8px; }
+.code-entry input {
+  flex: 1;
+  padding: 11px 12px;
+  border: 1px solid #d9c7a3;
+  border-radius: 10px;
+  font-size: 15px;
+  text-transform: uppercase;
+}
+
+/* ---------- Boutons ---------- */
+.btn {
+  background: #c0872f;
+  color: #fff;
+  border: none;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .3s ease, transform .2s ease;
+}
+.btn:hover { background: #a56f1c; transform: translateY(-1px); }
+
+/* ---------- Statut ---------- */
+#status {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #c0872f;
+  min-height: 18px;
+}
+body.dark #status { color: #f1c880; }
+
+/* ---------- Bloc MDL ---------- */
+.mdl-info {
+  margin: 22px auto 70px;
+  max-width: 460px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.6);
+  backdrop-filter: blur(6px);
+}
+body.dark .mdl-info { background: rgba(30,30,30,.6); }
+.mdl-info h3 { color: #c0872f; margin: 4px 0 14px; font-weight: 600; }
+
+.instagram-feed iframe {
+  width: 100%;
+  height: 400px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+}
+body.dark .instagram-feed { position: relative; }
+body.dark .instagram-feed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(61,61,61,.45);
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.mdl-links { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.mdl-links .btn-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-decoration: none;
+  background: rgba(192,135,47,.9);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  transition: transform .3s ease, background .4s ease;
+}
+.mdl-links .btn-link:hover { transform: scale(1.04); background: #a47225; }
+.icon-btn { width: 24px; height: 24px; object-fit: contain; }
+
+/* ---------- Pied + état réseau ---------- */
+footer {
+  text-align: center;
+  padding: 12px;
+  font-size: 13px;
+  color: #666;
+}
+body.dark footer { color: #ccc; }
+
+#net-status {
+  position: fixed;
+  bottom: 8px;
+  right: 10px;
+  background: #2e7d32;
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,.3);
+  opacity: .92;
+  z-index: 9999;
+  transition: background .4s ease;
+}
+#net-status.offline { background: #b32626; }

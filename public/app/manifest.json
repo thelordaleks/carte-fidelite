@@ -1,4 +1,5 @@
 {
+  "id": "/app/",
   "name": "Carte fidélité MDL Vaillant",
   "short_name": "Carte MDL",
   "description": "Application officielle de la carte de fidélité de la MDL Vaillant.",
@@ -12,12 +13,14 @@
     {
       "src": "/static/logo-mdl.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/static/logo-mdl.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "screenshots": [
